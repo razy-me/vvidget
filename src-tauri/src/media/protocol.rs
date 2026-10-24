@@ -7,24 +7,35 @@ pub struct AlbumArtData {
     pub mime_type: String,
 }
 
-static ALBUM_ART_CACHE: OnceLock<Mutex<HashMap<String, AlbumArtData>>> = OnceLock::new();
+#[derive(Default)]
+struct CacheState {
+    entries: HashMap<String, AlbumArtData>,
+    order: Vec<String>,
+}
 
-fn get_cache() -> &'static Mutex<HashMap<String, AlbumArtData>> {
-    ALBUM_ART_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+static ALBUM_ART_CACHE: OnceLock<Mutex<CacheState>> = OnceLock::new();
+
+fn get_cache() -> &'static Mutex<CacheState> {
+    ALBUM_ART_CACHE.get_or_init(|| Mutex::new(CacheState::default()))
 }
 
 pub fn set_cached_album_art(track_id: &str, bytes: Vec<u8>, mime_type: String) {
     if let Ok(mut cache) = get_cache().lock() {
-        if cache.len() > 30 {
-            cache.clear();
+        if !cache.entries.contains_key(track_id) {
+            // Evict oldest entry if at capacity (max 30 items)
+            if cache.entries.len() >= 30 && !cache.order.is_empty() {
+                let oldest_id = cache.order.remove(0);
+                cache.entries.remove(&oldest_id);
+            }
+            cache.order.push(track_id.to_string());
         }
-        cache.insert(track_id.to_string(), AlbumArtData { bytes, mime_type });
+        cache.entries.insert(track_id.to_string(), AlbumArtData { bytes, mime_type });
     }
 }
 
 pub fn get_cached_album_art(track_id: &str) -> Option<AlbumArtData> {
     if let Ok(cache) = get_cache().lock() {
-        cache.get(track_id).cloned()
+        cache.entries.get(track_id).cloned()
     } else {
         None
     }
@@ -32,7 +43,8 @@ pub fn get_cached_album_art(track_id: &str) -> Option<AlbumArtData> {
 
 pub fn clear_cached_album_art() {
     if let Ok(mut cache) = get_cache().lock() {
-        cache.clear();
+        cache.entries.clear();
+        cache.order.clear();
     }
 }
 
@@ -66,10 +78,12 @@ pub fn handle_album_art_protocol<R: tauri::Runtime>(
                 .status(StatusCode::OK)
                 .header(header::CONTENT_TYPE, art.mime_type)
                 .header(header::CACHE_CONTROL, "public, max-age=3600")
+                .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
                 .body(std::borrow::Cow::Owned(art.bytes))
                 .unwrap_or_else(|_| {
                     Response::builder()
                         .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
                         .body(std::borrow::Cow::Borrowed(EMPTY))
                         .unwrap()
                 });
@@ -79,6 +93,7 @@ pub fn handle_album_art_protocol<R: tauri::Runtime>(
     // 404 Not Found if no art or invalid track id
     Response::builder()
         .status(StatusCode::NOT_FOUND)
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
         .body(std::borrow::Cow::Borrowed(EMPTY))
         .unwrap()
 }
@@ -101,5 +116,22 @@ mod tests {
 
         clear_cached_album_art();
         assert!(get_cached_album_art("test-id").is_none());
+    }
+
+    #[test]
+    fn test_album_art_cache_fifo_eviction() {
+        clear_cached_album_art();
+        for i in 0..35 {
+            set_cached_album_art(&format!("id-{}", i), vec![i as u8], "image/jpeg".to_string());
+        }
+
+        // The first 5 should be evicted
+        for i in 0..5 {
+            assert!(get_cached_album_art(&format!("id-{}", i)).is_none());
+        }
+        // id-5 to id-34 should be present
+        for i in 5..35 {
+            assert!(get_cached_album_art(&format!("id-{}", i)).is_some());
+        }
     }
 }

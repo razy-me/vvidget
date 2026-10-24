@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FC } from "react";
 import { Music, Radio, RefreshCw, AlertCircle } from "lucide-react";
 import { Card, Badge } from "@/components/ui";
@@ -22,6 +22,11 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
   const { playPause, nextTrack, previousTrack, refresh, isLoading, error } = hookResult;
 
   const [imgError, setImgError] = useState(false);
+
+  // Reset imgError when track or album art changes
+  useEffect(() => {
+    setImgError(false);
+  }, [session.album_art_url, session.track_id]);
 
   const isSpotify = session.source_app.toLowerCase().includes("spotify");
   const hasMetadata = Boolean(session.title || session.artist);
@@ -93,6 +98,7 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
             <div className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] shadow-sm group">
               {session.album_art_url && !imgError ? (
                 <img
+                  key={session.album_art_url}
                   src={session.album_art_url}
                   alt={`${session.title} cover`}
                   onError={() => setImgError(true)}

@@ -36,7 +36,8 @@ export const TrackProgress: FC<TrackProgressProps> = ({
 
     const tick = () => {
       const now = Date.now();
-      const elapsed = Math.max(0, now - last_updated_system_time_ms);
+      const elapsed =
+        last_updated_system_time_ms > 0 ? Math.max(0, now - last_updated_system_time_ms) : 0;
       const interpolated = Math.min(position_ms + elapsed, duration_ms);
       setCurrentMs(interpolated);
 
@@ -59,7 +60,7 @@ export const TrackProgress: FC<TrackProgressProps> = ({
   return (
     <div className={`w-full flex flex-col gap-1 select-none ${className}`} data-testid="track-progress">
       <div
-        className="w-full h-1 bg-[var(--fluent-stroke)] rounded-full overflow-hidden relative cursor-pointer group"
+        className="w-full h-1 bg-[var(--fluent-stroke)] rounded-full overflow-hidden relative cursor-default group"
         role="progressbar"
         aria-valuenow={Math.round(percent)}
         aria-valuemin={0}

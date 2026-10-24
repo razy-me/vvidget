@@ -1,0 +1,19 @@
+# TOFIX WP-04 — Round 1
+Diff: 4d05d82d14bca7029247aa0d4960716909bddb52..19c13f03acc267c01ce9d9908d211ca19910b1b8   Verdict: CHANGES_REQUESTED
+
+| # | Sev | File:Line | Finding | Suggested fix | Status |
+|---|-----|-----------|---------|---------------|--------|
+| 1 | MAJOR | src-tauri/src/media/gsmtc.rs:150-167 | Redundant thumbnail stream reading and memory allocation on every 500ms background poll. `read_session_data` re-reads the thumbnail stream via WinRT COM and allocates a new `Vec<u8>` every tick without checking if `track_id` is already cached. | Check `if get_cached_album_art(&track_id).is_some()` before opening `media_props.Thumbnail()`, assigning `album_art_url = Some(format!("widgetz://album-art?t={}", track_id));` directly if present. | fixed |
+| 2 | MAJOR | src/widgets/spotify/SpotifyWidget.tsx:24,94-106 | `imgError` state is permanently sticky across track changes. Once any track triggers `onError`, `imgError` remains `true` indefinitely because it is never reset when `session.album_art_url` or `session.track_id` changes, permanently breaking artwork for all future tracks. | Add `useEffect(() => { setImgError(false); }, [session.album_art_url, session.track_id])` or attach `key={session.album_art_url ?? "fallback"}` to reset image error state on track transition. | fixed |
+| 3 | MINOR | src/hooks/useMediaPlayback.ts:60-81 | Event unlisten race condition and subscription leak on rapid unmount. `setupListener` is an async function that imports and awaits `listen()`. If unmounted before completion, cleanup runs while `unlisten` is undefined. | Track an `isMounted` boolean inside the effect and immediately invoke `unlisten()` if the promise resolves after unmount. | fixed |
+| 4 | MINOR | src/widgets/spotify/TrackProgress.tsx:38-40 | Uninitialized `last_updated_system_time_ms <= 0` causes `elapsed` to calculate against epoch zero (~1.7e12 ms), instantly clamping interpolated progress to 100% (`duration_ms`). | Guard timestamp calculation: `const elapsed = last_updated_system_time_ms > 0 ? Math.max(0, now - last_updated_system_time_ms) : 0;`. | fixed |
+| 5 | ENHANCEMENT | src-tauri/src/media/protocol.rs:18-20 | Cache eviction flushes all entries (`cache.clear()`) when reaching 30 items, instantly evicting the active track's cover art if re-requested. | Evict the oldest entry or implement FIFO/LRU rather than clearing the entire HashMap. | fixed |
+| 6 | ENHANCEMENT | src/widgets/spotify/TrackProgress.tsx:62 | Progress bar element has `cursor-pointer` class despite seeking not being supported by GSMTC. | Replace `cursor-pointer` with `cursor-default` to reflect non-seekable playback display. | fixed |
+| 7 | ENHANCEMENT | src/hooks/useMediaPlayback.ts:90-97 | Optimistic `playPause` toggling to paused state retains the original `position_ms` rather than advancing it by elapsed playback time, causing progress to visibly jump backward until the next backend sync. | Advance `position_ms` by elapsed time when optimistically setting `is_playing: false`. | fixed |
+| 8 | ENHANCEMENT | src-tauri/src/media/protocol.rs:65-69 | Custom URI scheme protocol response builder omits CORS header `Access-Control-Allow-Origin: *`. | Add `.header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")` to support canvas/palette extraction and cross-origin resource requests. | fixed |
+
+## Questioned Decisions
+- **D-026 (GSMTC Priority Session Arbitration & Binary URI Protocol Streaming)**: Strongly agree with binary URI streaming (`widgetz://album-art`) to bypass Base64 IPC JSON overhead and 60fps client-side timeline interpolation. However, the in-memory cache should be checked before reading the WinRT thumbnail stream in `gsmtc.rs` to avoid redundant COM I/O and continuous memory allocation on every 500ms monitor tick.
+
+## Previously rejected items — judgement
+None (Round 1).

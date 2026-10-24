@@ -40,6 +40,24 @@ describe("TrackProgress Component", () => {
     const progressbar = screen.getByRole("progressbar");
     expect(progressbar).toBeInTheDocument();
     expect(progressbar).toHaveAttribute("aria-valuenow", "25");
+    expect(progressbar).toHaveClass("cursor-default");
+  });
+
+  it("guards against epoch zero when last_updated_system_time_ms is 0 and isPlaying is true", () => {
+    render(
+      <TrackProgress
+        timeline={{
+          position_ms: 10000,
+          duration_ms: 100000,
+          last_updated_system_time_ms: 0,
+        }}
+        isPlaying={true}
+      />
+    );
+
+    const progressbar = screen.getByRole("progressbar");
+    // Should be 10%, NOT clamped to 100%
+    expect(progressbar).toHaveAttribute("aria-valuenow", "10");
   });
 
   it("handles zero duration gracefully without NaN", () => {
@@ -185,5 +203,42 @@ describe("SpotifyWidget Component", () => {
 
     // img should be replaced by fallback icon container
     expect(screen.queryByAltText("Blinding Lights cover")).not.toBeInTheDocument();
+  });
+
+  it("resets imgError when track or album_art_url changes", () => {
+    const errorSession: MediaSession = {
+      is_active: true,
+      is_playing: false,
+      title: "Broken Track",
+      artist: "Unknown",
+      album: "",
+      track_id: "err-1",
+      timeline: {
+        position_ms: 0,
+        duration_ms: 100000,
+        last_updated_system_time_ms: Date.now(),
+      },
+      album_art_url: "widgetz://album-art?t=err-1",
+      can_play_pause: true,
+      can_skip_next: true,
+      can_skip_previous: true,
+      source_app: "Spotify.exe",
+    };
+
+    const { rerender } = render(<SpotifyWidget sessionOverride={errorSession} />);
+    const img = screen.getByAltText("Broken Track cover");
+    fireEvent.error(img);
+    expect(screen.queryByAltText("Broken Track cover")).not.toBeInTheDocument();
+
+    // Now transition to a new track with new album art
+    const newSession: MediaSession = {
+      ...errorSession,
+      title: "Fixed Track",
+      track_id: "fixed-2",
+      album_art_url: "widgetz://album-art?t=fixed-2",
+    };
+
+    rerender(<SpotifyWidget sessionOverride={newSession} />);
+    expect(screen.getByAltText("Fixed Track cover")).toBeInTheDocument();
   });
 });

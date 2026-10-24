@@ -1,5 +1,5 @@
 use super::model::{MediaSession, MediaTimeline};
-use super::protocol::set_cached_album_art;
+use super::protocol::{get_cached_album_art, set_cached_album_art};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -145,9 +145,11 @@ mod win {
         let track_hash = calculate_hash(&(title.clone(), artist.clone(), album.clone(), app_id.clone()));
         let track_id = format!("{:016x}", track_hash);
 
-        // Thumbnail extraction
+        // Thumbnail extraction: check in-memory cache first to prevent redundant COM I/O & allocations
         let mut album_art_url = None;
-        if let Ok(thumb_ref) = media_props.Thumbnail() {
+        if get_cached_album_art(&track_id).is_some() {
+            album_art_url = Some(format!("widgetz://album-art?t={}", track_id));
+        } else if let Ok(thumb_ref) = media_props.Thumbnail() {
             if let Ok(stream_op) = thumb_ref.OpenReadAsync() {
                 if let Ok(stream) = stream_op.get() {
                     if let Ok(size) = stream.Size() {

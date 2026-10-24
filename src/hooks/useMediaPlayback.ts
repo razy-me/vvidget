@@ -56,16 +56,25 @@ export function useMediaPlayback(): UseMediaPlaybackReturn {
   // Listen for media-metadata-update events from Rust backend
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    let isMounted = true;
 
     const setupListener = async () => {
       if (!isTauri()) return;
 
       try {
         const { listen } = await import("@tauri-apps/api/event");
-        unlisten = await listen<MediaSession>("media-metadata-update", (event) => {
-          setSession(event.payload);
-          setError(null);
+        const fn = await listen<MediaSession>("media-metadata-update", (event) => {
+          if (isMounted) {
+            setSession(event.payload);
+            setError(null);
+          }
         });
+
+        if (!isMounted) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
       } catch (err) {
         console.error("Failed to bind media-metadata-update listener:", err);
       }
@@ -75,6 +84,7 @@ export function useMediaPlayback(): UseMediaPlaybackReturn {
     void refresh();
 
     return () => {
+      isMounted = false;
       if (unlisten) {
         unlisten();
       }
@@ -86,15 +96,27 @@ export function useMediaPlayback(): UseMediaPlaybackReturn {
     const prev = sessionRef.current;
     if (!prev.is_active && !prev.title) return;
 
-    // Optimistic UI update
-    setSession((s) => ({
-      ...s,
-      is_playing: !s.is_playing,
-      timeline: {
-        ...s.timeline,
-        last_updated_system_time_ms: Date.now(),
-      },
-    }));
+    // Optimistic UI update: advance position by elapsed time when pausing
+    const now = Date.now();
+    setSession((s) => {
+      let nextPosition = s.timeline.position_ms;
+      if (s.is_playing && s.timeline.last_updated_system_time_ms > 0) {
+        const elapsed = Math.max(0, now - s.timeline.last_updated_system_time_ms);
+        nextPosition = s.timeline.duration_ms > 0
+          ? Math.min(s.timeline.duration_ms, s.timeline.position_ms + elapsed)
+          : s.timeline.position_ms + elapsed;
+      }
+
+      return {
+        ...s,
+        is_playing: !s.is_playing,
+        timeline: {
+          ...s.timeline,
+          position_ms: nextPosition,
+          last_updated_system_time_ms: now,
+        },
+      };
+    });
 
     try {
       await safeInvoke("media_play_pause");
