@@ -1,4 +1,6 @@
+pub mod media;
 pub mod config;
+pub mod geo;
 pub mod sysinfo;
 pub mod tray;
 pub mod window;
@@ -7,6 +9,7 @@ use config::{
     get_autostart_status, load_config, open_logs_folder, resolve_config_path, save_config,
     save_config_immediate, set_autostart, set_widgets_locked, ConfigManager,
 };
+use geo::get_windows_location;
 use sysinfo::{get_system_metrics, start_metrics_worker, MetricsCollector};
 use tauri::Manager;
 use tray::{open_settings, setup_tray};
@@ -50,6 +53,7 @@ pub fn run() {
             open_logs_folder,
             open_settings,
             get_system_metrics,
+            get_windows_location,
         ])
         .setup(move |app| {
             start_metrics_worker(

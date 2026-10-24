@@ -108,6 +108,7 @@ describe("WeatherWidget Component", () => {
 
     expect(screen.getByTestId("daily-forecast-container")).toBeInTheDocument();
     expect(screen.getByText("Today")).toBeInTheDocument();
+    expect(screen.getByText("Mon")).toBeInTheDocument();
     expect(screen.getByText("15°")).toBeInTheDocument();
   });
 

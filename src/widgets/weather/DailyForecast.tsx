@@ -11,7 +11,7 @@ function formatDayName(dateString: string, index: number): string {
   try {
     const date = new Date(dateString);
     if (!isNaN(date.getTime())) {
-      return date.toLocaleDateString("en-US", { weekday: "short" });
+      return date.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
     }
   } catch {
     // Fallback if parsing fails

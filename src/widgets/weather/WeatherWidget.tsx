@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { FC } from "react";
 import { Card, Badge } from "@/components/ui";
 import { useWeather } from "@/hooks/useWeather";
@@ -23,13 +23,25 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
   const { weather, loading, error, refresh, isOffline } = useWeather();
   const [activeTab, setActiveTab] = useState<"hourly" | "daily">("hourly");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     try {
       await refresh();
     } finally {
-      setTimeout(() => setIsRefreshing(false), 500);
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+      refreshTimeoutRef.current = setTimeout(() => setIsRefreshing(false), 500);
     }
   };
 
