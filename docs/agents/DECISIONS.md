@@ -86,3 +86,56 @@
   1. *Standard stdout/eprintln*: Logs are lost when running as a detached GUI process without a console.
   2. *Crash on malformed config*: Bricks the app until user manually deletes AppData files.
 - **Reason / trade-offs**: Production-grade diagnostics and resilient self-healing.
+
+
+## D-013 Realistic WebView2 Memory Footprint & Dual-Mode / Lazy-Loading (Plan Review, Orchestrator)
+- **Decision**: Update RAM budgets to realistic levels (<90 MB RAM for docked/single-window mode, <180 MB for independent multi-window mode), lazy-load and destroy the Settings window (`window.destroy()`), and configure `ICoreWebView2_13::MemoryUsageTargetLevel = Low`.
+- **Alternatives considered**:
+  1. *Keeping rigid <60MB for multi-window*: Unrealistic with Chromium architecture, leads to false test failures.
+  2. *Keeping Settings window hidden in memory*: Wastes 40MB+ RAM permanently for a window rarely opened.
+- **Reason / trade-offs**: Reflects real-world WebView2 process model realities while keeping background resource usage strictly minimal.
+
+## D-014 Win+D Desktop Anchoring & Scoped Focus Activation (Plan Review, Orchestrator)
+- **Decision**: Hook `WM_WINDOWPOSCHANGING` / anchor to Progman/WorkerW to prevent `Win + D` minimization. Apply `WS_EX_NOACTIVATE` strictly to background display widgets, never to SettingsModal.
+- **Alternatives considered**:
+  1. *Unconditional WS_EX_NOACTIVATE*: Blocks user text input for city search in weather and settings.
+  2. *Standard popup window*: Completely minimized every time user presses Win+D.
+- **Reason / trade-offs**: Allows widgets to live permanently on the desktop without losing keyboard interactivity in modal inputs.
+
+## D-015 DWM Acrylic Material via window-vibrancy (Plan Review, Orchestrator)
+- **Decision**: Use `window-vibrancy` to activate Windows 11 DWM Acrylic blur backdrop rather than Mica or CSS-simulated blur.
+- **Alternatives considered**:
+  1. *Mica*: Windows 11 disables Mica blur on unfocused/inactive (`WS_EX_NOACTIVATE`) windows, causing them to turn into flat gray panels.
+  2. *CSS backdrop-filter*: Only blurs inside the WebView2 canvas, cannot blur the desktop behind transparent window chrome.
+- **Reason / trade-offs**: Acrylic provides consistent translucent frosted glass effect regardless of window focus state.
+
+## D-016 Album Art Custom URI Protocol & Client-Side Timeline Interpolation (Plan Review, Orchestrator)
+- **Decision**: Serve album art through a custom Tauri protocol (`widgetz://album-art?t=<trackId>`) and interpolate playback progress in React from `lastUpdatedSystemTimeMs` + `positionMs`.
+- **Alternatives considered**:
+  1. *Base64 serialization over JSON IPC every second*: Massive JSON serialization overhead and GC pressure.
+  2. *High-frequency GSMTC polling*: GSMTC does not fire regular progress ticks, wasting CPU.
+- **Reason / trade-offs**: Smooth 60fps progress bar animation with near-zero IPC overhead and zero memory churn.
+
+## D-017 Type Generation via tauri-specta (Plan Review, Orchestrator)
+- **Decision**: Use `specta` / `tauri-specta` in `Cargo.toml` to automatically export TypeScript definitions from Rust models on build.
+- **Alternatives considered**:
+  1. *Manual parallel TS type authoring*: High risk of field naming or optionality drift across parallel work packages.
+- **Reason / trade-offs**: Compile-time guarantee of type contract alignment between Rust backend and React frontend.
+
+## D-018 Upfront Complete Cargo.toml Dependencies in WP-00 (Plan Review, Orchestrator)
+- **Decision**: Specify all required crates and `windows` feature flags upfront in WP-00 Scaffolding.
+- **Alternatives considered**:
+  1. *Letting each WP modify Cargo.toml*: Causes git merge conflicts during parallel execution of Group B and Group C.
+- **Reason / trade-offs**: Zero parallel merge friction; coder subagents only work on their assigned Rust source modules.
+
+## D-019 Tailwind CSS v4 via @tailwindcss/vite (Plan Review, Orchestrator)
+- **Decision**: Adopt Tailwind CSS v4 using `@tailwindcss/vite` without legacy `postcss.config.js` or `tailwind.config.ts`.
+- **Alternatives considered**:
+  1. *Tailwind CSS v3*: Requires separate config files and slower PostCSS pipeline.
+- **Reason / trade-offs**: Simpler project root, faster build times, native CSS-first configuration.
+
+## D-020 Native Win32 WM_MOVING Snapping (Plan Review, Orchestrator)
+- **Decision**: Perform screen edge and widget-to-widget snapping inside the Win32 window procedure by intercepting `WM_MOVING` and adjusting `LPRECT`.
+- **Alternatives considered**:
+  1. *React hook dragging*: Suffers from IPC latency and jitter during active mouse drag.
+- **Reason / trade-offs**: Instantaneous, hardware-smooth snapping handled directly by the OS window manager.
