@@ -113,4 +113,10 @@ describe("ResourceWidget component", () => {
     fireEvent.click(lockBtn);
     expect(onToggleLock).toHaveBeenCalledTimes(1);
   });
+
+  it("defaults active disk display to system drive C: even when multiple drives present", () => {
+    render(<ResourceWidget />);
+    // MOCK_SYSTEM_METRICS has drive C:
+    expect(screen.getByText("Storage (C:)")).toBeDefined();
+  });
 });

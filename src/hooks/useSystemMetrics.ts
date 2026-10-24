@@ -101,26 +101,35 @@ export function useSystemMetrics(): UseSystemMetricsReturn {
 
   useEffect(() => {
     isMountedRef.current = true;
-    void refresh();
+    let isDisposed = false;
+    let unlistenFn: (() => void) | undefined;
 
     if (!isTauri()) {
       return () => {
+        isDisposed = true;
         isMountedRef.current = false;
       };
     }
 
-    let unlistenFn: (() => void) | undefined;
+    void refresh();
+
     void import("@tauri-apps/api/event").then(({ listen }) => {
-      void listen<SystemMetrics>("metrics-update", (event) => {
-        if (!isMountedRef.current || !event.payload) return;
+      if (isDisposed) return;
+      return listen<SystemMetrics>("metrics-update", (event) => {
+        if (isDisposed || !isMountedRef.current || !event.payload) return;
         setMetrics(event.payload);
         appendCpuSample(event.payload.cpu_usage_percent);
       }).then((unlisten) => {
-        unlistenFn = unlisten;
+        if (isDisposed) {
+          unlisten();
+        } else {
+          unlistenFn = unlisten;
+        }
       });
     });
 
     return () => {
+      isDisposed = true;
       isMountedRef.current = false;
       if (unlistenFn) {
         unlistenFn();

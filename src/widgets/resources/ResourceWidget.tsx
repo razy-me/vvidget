@@ -27,24 +27,29 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
   className,
 }) => {
   const { metrics, cpuHistory, error, refresh } = useSystemMetrics();
-  const [selectedDiskIndex, setSelectedDiskIndex] = useState<number>(0);
 
-  // Identify system drive (typically C:) or default to primary disk
-  const primaryDisk = useMemo(() => {
-    if (!metrics || metrics.disks.length === 0) return null;
-    const cDrive = metrics.disks.find(
-      (d) => d.mount_point.toUpperCase().startsWith("C:") || d.mount_point.toUpperCase().includes("C:")
+  // Identify system drive (typically C:) index in disks array, fallback to 0
+  const systemDiskIndex = useMemo(() => {
+    if (!metrics || metrics.disks.length === 0) return 0;
+    const idx = metrics.disks.findIndex(
+      (d) =>
+        d.mount_point.toUpperCase().startsWith("C:") ||
+        d.mount_point.toUpperCase().includes("C:")
     );
-    return cDrive ?? metrics.disks[0];
+    return idx >= 0 ? idx : 0;
   }, [metrics]);
+
+  const [userSelectedDiskIndex, setUserSelectedDiskIndex] = useState<number | null>(null);
+
+  const activeDiskIndex =
+    userSelectedDiskIndex !== null && userSelectedDiskIndex < (metrics?.disks.length ?? 0)
+      ? userSelectedDiskIndex
+      : systemDiskIndex;
 
   const activeDisk = useMemo(() => {
     if (!metrics || metrics.disks.length === 0) return null;
-    if (selectedDiskIndex >= 0 && selectedDiskIndex < metrics.disks.length) {
-      return metrics.disks[selectedDiskIndex];
-    }
-    return primaryDisk;
-  }, [metrics, selectedDiskIndex, primaryDisk]);
+    return metrics.disks[activeDiskIndex] ?? metrics.disks[0];
+  }, [metrics, activeDiskIndex]);
 
   const cpuPercent = metrics ? Math.round(metrics.cpu_usage_percent) : 0;
   const cpuVariant = getMetricVariant(cpuPercent);
@@ -155,9 +160,9 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
                     {metrics.disks.map((d, idx) => (
                       <button
                         key={d.mount_point}
-                        onClick={() => setSelectedDiskIndex(idx)}
+                        onClick={() => setUserSelectedDiskIndex(idx)}
                         className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
-                          selectedDiskIndex === idx
+                          activeDiskIndex === idx
                             ? "bg-[var(--fluent-accent)] text-white font-medium"
                             : "bg-[var(--fluent-card-bg)] text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)]"
                         }`}

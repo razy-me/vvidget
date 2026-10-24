@@ -18,11 +18,13 @@ pub type SharedMetricsState = Arc<RwLock<SystemMetrics>>;
 pub async fn get_system_metrics<R: Runtime>(app: AppHandle<R>) -> Result<SystemMetrics, String> {
     if let Some(state) = app.try_state::<SharedMetricsState>() {
         if let Ok(guard) = state.read() {
-            return Ok(guard.clone());
+            if guard.timestamp_ms > 0 {
+                return Ok(guard.clone());
+            }
         }
     }
 
-    // Fallback if worker state not yet initialized
+    // Fallback if worker state not yet initialized or unpopulated
     let mut collector = MetricsCollector::new();
     Ok(collector.collect_metrics(true))
 }
@@ -32,12 +34,11 @@ pub async fn get_system_metrics<R: Runtime>(app: AppHandle<R>) -> Result<SystemM
 pub fn start_metrics_worker<R: Runtime>(
     app: AppHandle<R>,
     config_manager: ConfigManager,
-    shared_metrics: SharedMetricsState,
+    mut collector: MetricsCollector,
 ) -> std::thread::JoinHandle<()> {
     std::thread::Builder::new()
         .name("widgetz-sysinfo-worker".to_string())
         .spawn(move || {
-            let mut collector = MetricsCollector::new();
             let mut last_disk_check = std::time::Instant::now();
 
             log::info!("System metrics background worker started");
@@ -57,10 +58,6 @@ pub fn start_metrics_worker<R: Runtime>(
                 }
 
                 let metrics = collector.collect_metrics(should_refresh_disks);
-
-                if let Ok(mut lock) = shared_metrics.write() {
-                    *lock = metrics.clone();
-                }
 
                 if let Err(err) = app.emit("metrics-update", &metrics) {
                     log::trace!("Could not emit metrics-update event: {}", err);
