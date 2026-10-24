@@ -34,29 +34,37 @@ export function useMediaPlayback(): UseMediaPlaybackReturn {
   const [isLoading, setIsLoading] = useState<boolean>(isTauri());
   const [error, setError] = useState<string | null>(null);
 
+  const isMountedRef = useRef(true);
   const sessionRef = useRef<MediaSession>(session);
   sessionRef.current = session;
 
   const refresh = useCallback(async () => {
+    if (!isTauri()) {
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
       const state = await safeInvoke<MediaSession>("get_media_state");
-      setSession(state);
+      if (isMountedRef.current) {
+        setSession(state);
+      }
     } catch (err) {
-      if (isTauri()) {
+      if (isMountedRef.current) {
         const msg = err instanceof Error ? err.message : String(err);
         setError(msg);
       }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
   // Listen for media-metadata-update events from Rust backend
   useEffect(() => {
+    isMountedRef.current = true;
     let unlisten: (() => void) | undefined;
-    let isMounted = true;
 
     const setupListener = async () => {
       if (!isTauri()) return;
@@ -64,13 +72,13 @@ export function useMediaPlayback(): UseMediaPlaybackReturn {
       try {
         const { listen } = await import("@tauri-apps/api/event");
         const fn = await listen<MediaSession>("media-metadata-update", (event) => {
-          if (isMounted) {
+          if (isMountedRef.current) {
             setSession(event.payload);
             setError(null);
           }
         });
 
-        if (!isMounted) {
+        if (!isMountedRef.current) {
           fn();
         } else {
           unlisten = fn;
@@ -80,11 +88,13 @@ export function useMediaPlayback(): UseMediaPlaybackReturn {
       }
     };
 
-    void setupListener();
-    void refresh();
+    if (isTauri()) {
+      void setupListener();
+      void refresh();
+    }
 
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
       if (unlisten) {
         unlisten();
       }
@@ -122,9 +132,11 @@ export function useMediaPlayback(): UseMediaPlaybackReturn {
       await safeInvoke("media_play_pause");
     } catch (err) {
       // Rollback on failure
-      setSession(prev);
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg);
+      if (isMountedRef.current) {
+        setSession(prev);
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(msg);
+      }
     }
   }, []);
 
@@ -133,8 +145,10 @@ export function useMediaPlayback(): UseMediaPlaybackReturn {
     try {
       await safeInvoke("media_next_track");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg);
+      if (isMountedRef.current) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(msg);
+      }
     }
   }, []);
 
@@ -143,8 +157,10 @@ export function useMediaPlayback(): UseMediaPlaybackReturn {
     try {
       await safeInvoke("media_previous_track");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg);
+      if (isMountedRef.current) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(msg);
+      }
     }
   }, []);
 
