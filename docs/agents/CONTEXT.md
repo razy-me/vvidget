@@ -134,14 +134,16 @@ c:\Widgetz\
 - `SpotifyWidget`: Fluent Card featuring album art with fallback, track title, artist, album, live progress, controls, and polished idle state when media is inactive.
 - **Gotchas**: Reading `GetSessions` on WinRT requires the `"Foundation_Collections"` feature on the `windows` crate. Thumbnails are read via `DataReader` and cached in-memory with a 30-entry cap to prevent memory bloat.
 
-## Module: Weather Widget & Geolocation (`src-tauri/src/geo`, `src/widgets/weather`, `src/services/weather`, `src/types/weather.ts`, `src/hooks/useWeather.ts`)
-- `get_windows_location() -> Result<(f64, f64), String>`: Asynchronous query via native WinRT `Windows.Devices.Geolocation::Geolocator`.
-- `fetchWeather(lat, lon, city, country)`: Queries Open-Meteo Forecast API with local `localStorage` caching and offline fallback (`isOffline = true`).
-- `searchCity(query, count)`: Fast, keyless city search and coordinate resolution via Open-Meteo Geocoding API (`geocoding-api.open-meteo.com`).
-- `getWeatherCondition(wmoCode)`: Maps official WMO weather codes (0-99) to human-readable labels and Lucide icon names.
-- `useWeather()`: React hook managing native WinRT/geocoded location resolution, polling interval, offline caching, and manual refresh.
-- `WeatherWidget`: Fluent Acrylic card displaying current temperature, feels-like, WMO weather icon/label, humidity %, wind speed km/h, location name, offline badge, and toggleable Hourly Trend (next 12h) and 5-Day Daily Forecast.
-- **Gotchas**: In `windows` 0.58, `Geocoordinate` retrieves position via `coordinate.Point()?.Position()?` (deprecated direct `Latitude`/`Longitude` properties were removed). If Windows location services are disabled, `useWeather` falls back to manual city geocoding or default coordinates without crashing.
+## Module: Fluent Design Theme, Snapping & Integration (`src/theme`, `src/components/docking`, `src/App.tsx`, `src-tauri/src/lib.rs`)
+- `ThemeProvider`: Context provider auto-detecting Windows 11 light/dark mode via `window.matchMedia` with manual override ("auto" | "light" | "dark") and applying `.theme-light` / `.theme-dark` DOM tokens.
+- `useTheme()`: React hook returning `{ theme, resolvedTheme, setTheme, toggleTheme }`.
+- `DockContainer`: Unified desktop dock surface hosting active widgets (`resources`, `spotify`, `weather`), draggable via header with `data-tauri-drag-region`, lock toggle, layout switcher, and individual collapsible `DockItem` sections.
+- `AppContent` & `App`: Multi-window query route dispatcher (`?widget=resources`, `?widget=spotify`, `?widget=weather`, `?view=settings`, or default dock/surface).
+- `open_widget_window(app, widget_id)`: Launches independent WebviewWindow for specified widget with acrylic blur, Win+D protection, and magnetic snapping.
+- `close_widget_window(app, widget_id)`: Destroys independent widget window and unregisters Win32 snapping tracker.
+- `sync_widget_windows(app)`: Coordinates active windows between Docked mode (single window) and Independent mode (multi-window), keeping working set RAM strictly within budget (<90 MB docked, <180 MB independent).
+- **Gotchas**: To avoid macro export collisions in `lib.rs`, IPC commands are contained within `pub mod integration` and re-exported. All display windows apply transparent background to allow OS DWM Acrylic blur backdrop through.
+
 
 
 

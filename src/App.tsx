@@ -1,98 +1,228 @@
-import { useMemo } from "react";
-import type { FC } from "react";
-import { Card, ProgressBar, Badge } from "@/components/ui";
-import { WIDGET_REGISTRY, getAllWidgetMetadata } from "@/widgets/registry";
+import { useMemo, useCallback, type FC } from "react";
+import { ThemeProvider } from "@/theme";
+import { useConfig } from "@/hooks/useConfig";
 import { SettingsModal } from "@/pages/settings";
-import { Cpu, Music, CloudSun, ShieldCheck } from "lucide-react";
+import { DockContainer } from "@/components/docking";
+import { WidgetContainer } from "@/components/layout/WidgetContainer";
+import { ResourceWidget } from "@/widgets/resources/ResourceWidget";
+import { SpotifyWidget } from "@/widgets/spotify/SpotifyWidget";
+import { WeatherWidget } from "@/widgets/weather/WeatherWidget";
+import {
+  Music,
+  CloudSun,
+  LayoutGrid,
+  Layers,
+  Settings,
+  Lock,
+  Unlock,
+} from "lucide-react";
 
-export const App: FC = () => {
-  // Query param allows multi-window view (e.g. /?widget=resources or /?view=settings)
+export const AppContent: FC = () => {
+  const { config, setWidgetsLocked, setLayoutMode } = useConfig();
+
+  // Query parameter parsing allows multi-window routing in Tauri:
+  // e.g. /?widget=resources, /?widget=spotify, /?widget=weather, /?view=settings
   const { widgetId, isSettingsView } = useMemo(() => {
+    if (typeof window === "undefined") {
+      return { widgetId: null, isSettingsView: false };
+    }
     const params = new URLSearchParams(window.location.search);
     return {
       widgetId: params.get("widget"),
-      isSettingsView: params.get("view") === "settings" || params.get("widget") === "settings",
+      isSettingsView:
+        params.get("view") === "settings" || params.get("widget") === "settings",
     };
   }, []);
 
+  const handleOpenSettings = useCallback(async () => {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("open_settings");
+    } catch {
+      window.location.search = "?view=settings";
+    }
+  }, []);
+
+  const handleToggleLock = useCallback(async () => {
+    await setWidgetsLocked(!config.lock_positions);
+  }, [config.lock_positions, setWidgetsLocked]);
+
+  // 1. Settings Window View
   if (isSettingsView) {
     return <SettingsModal />;
   }
 
-  const registeredWidgets = getAllWidgetMetadata();
+  // 2. Dedicated Single-Widget Window Views (Independent Multi-Window Mode)
+  if (widgetId === "resources") {
+    return (
+      <div className="w-full h-full min-h-screen p-2 flex items-center justify-center bg-transparent">
+        <ResourceWidget
+          isLocked={config.lock_positions}
+          layoutMode="independent"
+          onToggleLock={handleToggleLock}
+          onOpenSettings={handleOpenSettings}
+          className="w-full max-w-[340px]"
+        />
+      </div>
+    );
+  }
+
+  if (widgetId === "spotify") {
+    return (
+      <div className="w-full h-full min-h-screen p-2 flex items-center justify-center bg-transparent">
+        <WidgetContainer
+          id="spotify"
+          title="Spotify Controls"
+          icon={<Music className="w-4 h-4 text-emerald-400" />}
+          isLocked={config.lock_positions}
+          layoutMode="independent"
+          onToggleLock={handleToggleLock}
+          onOpenSettings={handleOpenSettings}
+          className="w-full max-w-[340px]"
+        >
+          <SpotifyWidget className="border-0 shadow-none bg-transparent p-0" />
+        </WidgetContainer>
+      </div>
+    );
+  }
+
+  if (widgetId === "weather") {
+    return (
+      <div className="w-full h-full min-h-screen p-2 flex items-center justify-center bg-transparent">
+        <WidgetContainer
+          id="weather"
+          title="Weather Forecast"
+          icon={<CloudSun className="w-4 h-4 text-amber-400" />}
+          isLocked={config.lock_positions}
+          layoutMode="independent"
+          onToggleLock={handleToggleLock}
+          onOpenSettings={handleOpenSettings}
+          className="w-full max-w-[340px]"
+        >
+          <WeatherWidget className="border-0 shadow-none bg-transparent p-0" />
+        </WidgetContainer>
+      </div>
+    );
+  }
+
+  // 3. Main Window: Docked Mode or Independent Desktop Canvas
+  if (config.layout_mode === "docked") {
+    return (
+      <main className="min-h-screen p-3 flex flex-col items-center justify-start bg-transparent">
+        <DockContainer onOpenSettings={handleOpenSettings} />
+      </main>
+    );
+  }
+
+  // 4. Main Window (Independent Preview / Multi-Widget Canvas)
+  const isResourcesVisible = config.widgets.resources?.visible ?? true;
+  const isSpotifyVisible = config.widgets.spotify?.visible ?? true;
+  const isWeatherVisible = config.widgets.weather?.visible ?? true;
 
   return (
-    <main className="min-h-screen p-4 flex flex-col items-center justify-start text-[var(--fluent-text-primary)]">
-      {widgetId && WIDGET_REGISTRY[widgetId as keyof typeof WIDGET_REGISTRY] ? (
-        <Card variant="acrylic" className="w-full max-w-sm">
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="text-sm font-semibold tracking-wide">
-              {WIDGET_REGISTRY[widgetId as keyof typeof WIDGET_REGISTRY].name}
-            </h1>
-            <Badge variant="accent">Active</Badge>
-          </div>
-          <p className="text-xs text-[var(--fluent-text-secondary)]">
-            {WIDGET_REGISTRY[widgetId as keyof typeof WIDGET_REGISTRY].description}
-          </p>
-        </Card>
-      ) : (
-        <div className="w-full max-w-sm flex flex-col gap-3">
-          <Card variant="acrylic" className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-[var(--fluent-accent)]" />
-                <h1 className="text-sm font-semibold tracking-wide">Widgetz Desktop</h1>
-              </div>
-              <Badge variant="accent">Windows 11</Badge>
-            </div>
-            <p className="text-xs text-[var(--fluent-text-secondary)] mb-4">
-              Native Fluent Design widget engine initialized.
-            </p>
-
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs text-[var(--fluent-text-secondary)]">
-                  <span>Engine Readiness</span>
-                  <span>100%</span>
-                </div>
-                <ProgressBar value={100} variant="accent" />
-              </div>
-            </div>
-          </Card>
-
-          <Card variant="subtle" className="p-3">
-            <h2 className="text-xs font-semibold text-[var(--fluent-text-secondary)] uppercase tracking-wider mb-2">
-              Available Starter Widgets ({registeredWidgets.length})
-            </h2>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--fluent-card-bg)]">
-                <div className="flex items-center gap-2 text-xs">
-                  <CloudSun className="w-4 h-4 text-amber-400" />
-                  <span>Weather</span>
-                </div>
-                <Badge size="sm" variant="default">Open-Meteo</Badge>
-              </div>
-
-              <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--fluent-card-bg)]">
-                <div className="flex items-center gap-2 text-xs">
-                  <Music className="w-4 h-4 text-emerald-400" />
-                  <span>Spotify Controls</span>
-                </div>
-                <Badge size="sm" variant="default">GSMTC</Badge>
-              </div>
-
-              <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--fluent-card-bg)]">
-                <div className="flex items-center gap-2 text-xs">
-                  <Cpu className="w-4 h-4 text-sky-400" />
-                  <span>System Resources</span>
-                </div>
-                <Badge size="sm" variant="default">sysinfo</Badge>
-              </div>
-            </div>
-          </Card>
+    <main className="min-h-screen p-4 flex flex-col items-center justify-start text-[var(--fluent-text-primary)] bg-transparent">
+      {/* Top Workspace Controls Bar */}
+      <header className="w-full max-w-5xl mb-4 flex items-center justify-between px-3 py-2 rounded-xl border border-[var(--fluent-stroke)] bg-[var(--fluent-acrylic-bg)] backdrop-blur-xl shadow-lg">
+        <div className="flex items-center gap-2">
+          <Layers className="w-4 h-4 text-[var(--fluent-accent)]" />
+          <h1 className="text-xs font-bold tracking-wide">Widgetz Desktop Surface</h1>
+          <span className="text-[11px] text-[var(--fluent-text-tertiary)]">
+            (Independent Multi-Window Mode)
+          </span>
         </div>
-      )}
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleToggleLock}
+            className="px-2.5 py-1 rounded-lg border border-[var(--fluent-stroke)] hover:bg-[var(--fluent-card-hover)] text-xs flex items-center gap-1.5 transition-colors"
+          >
+            {config.lock_positions ? (
+              <>
+                <Lock className="w-3.5 h-3.5 text-[var(--fluent-accent)]" />
+                <span>Locked</span>
+              </>
+            ) : (
+              <>
+                <Unlock className="w-3.5 h-3.5 text-[var(--fluent-text-secondary)]" />
+                <span>Unlocked</span>
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void setLayoutMode("docked")}
+            className="px-2.5 py-1 rounded-lg border border-[var(--fluent-stroke)] hover:bg-[var(--fluent-card-hover)] text-xs flex items-center gap-1.5 transition-colors"
+          >
+            <LayoutGrid className="w-3.5 h-3.5 text-[var(--fluent-accent)]" />
+            <span>Switch to Dock</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenSettings}
+            className="p-1 rounded-lg border border-[var(--fluent-stroke)] hover:bg-[var(--fluent-card-hover)] text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] transition-colors"
+            aria-label="Open settings"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+        </div>
+      </header>
+
+      {/* Grid of Independent Widgets */}
+      <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+        {isResourcesVisible && (
+          <ResourceWidget
+            isLocked={config.lock_positions}
+            layoutMode="independent"
+            onToggleLock={handleToggleLock}
+            onOpenSettings={handleOpenSettings}
+            className="w-full"
+          />
+        )}
+
+        {isSpotifyVisible && (
+          <WidgetContainer
+            id="spotify"
+            title="Spotify Controls"
+            icon={<Music className="w-4 h-4 text-emerald-400" />}
+            isLocked={config.lock_positions}
+            layoutMode="independent"
+            onToggleLock={handleToggleLock}
+            onOpenSettings={handleOpenSettings}
+            className="w-full"
+          >
+            <SpotifyWidget className="border-0 shadow-none bg-transparent p-0" />
+          </WidgetContainer>
+        )}
+
+        {isWeatherVisible && (
+          <WidgetContainer
+            id="weather"
+            title="Weather Forecast"
+            icon={<CloudSun className="w-4 h-4 text-amber-400" />}
+            isLocked={config.lock_positions}
+            layoutMode="independent"
+            onToggleLock={handleToggleLock}
+            onOpenSettings={handleOpenSettings}
+            className="w-full"
+          >
+            <WeatherWidget className="border-0 shadow-none bg-transparent p-0" />
+          </WidgetContainer>
+        )}
+      </div>
     </main>
+  );
+};
+
+export const App: FC = () => {
+  const { config, setTheme } = useConfig();
+
+  return (
+    <ThemeProvider initialTheme={config.theme} onThemeChange={setTheme}>
+      <AppContent />
+    </ThemeProvider>
   );
 };
 

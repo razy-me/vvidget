@@ -475,7 +475,7 @@ pub async fn set_widgets_locked(app: AppHandle, locked: bool) -> Result<(), Stri
   - UI uses `Card`, `Badge` from WP-00; displays hourly trend and high/low daily temperatures.
   - Unit tests for WMO code mapping, weather response parser, and temperature formatting.
 
-### WP-06 Fluent Design Theme, Snapping & Integration  [ ] status: pending
+### WP-06 Fluent Design Theme, Snapping & Integration  [ ] status: in-progress
 - **Covers**: R1, R6, R7, R9
 - **Owns**: `src-tauri/src/lib.rs` (integration pass), `src/App.tsx` (route integration), `src/components/docking/**`, `src/theme/**`
 - **Depends on**: WP-01, WP-02, WP-03, WP-04, WP-05
