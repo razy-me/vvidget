@@ -1,5 +1,5 @@
 # TODO
-Plan Status: DRAFT — awaiting user approval   <!-- or: APPROVED <date> -->
+Plan Status: APPROVED 2026-10-25   <!-- or: APPROVED <date> -->
 
 ## Stack (with justification)
 - **Desktop Runtime**: **Tauri v2 (Rust 2021 + Evergreen WebView2)**
@@ -383,7 +383,7 @@ pub async fn set_widgets_locked(app: AppHandle, locked: bool) -> Result<(), Stri
 
 ## Work Packages
 
-### WP-00 Scaffolding, Complete Dependencies & UI Primitives  [ ] status: pending
+### WP-00 Scaffolding, Complete Dependencies & UI Primitives  [ ] status: in-review
 - **Covers**: R6, R7, R8, R9
 - **Owns**:
   - Root config files: `package.json`, `tsconfig.json`, `tsconfig.node.json`, `vite.config.ts`, `.gitignore`, `.env.example`

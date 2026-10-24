@@ -1,0 +1,44 @@
+[package]
+name = "widgetz"
+version = "0.1.0"
+description = "Native Windows 11 Desktop Widgets"
+authors = ["Widgetz Team"]
+edition = "2021"
+
+[lib]
+name = "widgetz_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = ["protocol-asset", "devtools"] }
+tauri-plugin-log = "2.0"
+tauri-plugin-autostart = "2.0"
+window-vibrancy = "0.5.2"
+sysinfo = "0.33"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+specta = { version = "=2.0.0-rc.20", features = ["derive"] }
+tauri-specta = { version = "=2.0.0-rc.20", features = ["javascript", "typescript"] }
+
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.58"
+features = [
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_Shell",
+    "Media_Control",
+    "Storage_Streams",
+    "Devices_Geolocation",
+]
+
+[profile.release]
+opt-level = "z"
+lto = true
+panic = "abort"
+strip = true

@@ -139,3 +139,10 @@
 - **Alternatives considered**:
   1. *React hook dragging*: Suffers from IPC latency and jitter during active mouse drag.
 - **Reason / trade-offs**: Instantaneous, hardware-smooth snapping handled directly by the OS window manager.
+
+## D-021 Asset Protocol and Icon Manifest Resource Provisioning (WP-00, Coder)
+- **Decision**: Enabled `security.assetProtocol = { enable: true }` in `tauri.conf.json` to align with the `tauri` `protocol-asset` feature flag, and generated compliant Windows multi-size `.ico` icon assets in `src-tauri/icons/icon.ico` via `System.Drawing`.
+- **Alternatives considered**:
+  1. *Removing protocol-asset*: Breaks binary album art custom protocol streaming required in WP-04.
+  2. *Leaving icon.ico missing until packaging*: Causes `tauri-build` to fail immediately on Windows during resource generation.
+- **Reason / trade-offs**: Allows both custom protocol asset serving and Windows PE binary resource compilation to proceed without warnings or build errors.

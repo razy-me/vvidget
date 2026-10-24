@@ -1,0 +1,66 @@
+/* Windows 11 Fluent Design Design Tokens and Primitives */
+
+:root {
+  --fluent-font-family: "Segoe UI Variable Text", "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
+  
+  /* Fluent Acrylic Surface Tokens - Dark Theme (Default) */
+  --fluent-acrylic-bg: rgba(30, 30, 30, 0.72);
+  --fluent-card-bg: rgba(255, 255, 255, 0.04);
+  --fluent-card-hover: rgba(255, 255, 255, 0.08);
+  --fluent-card-active: rgba(255, 255, 255, 0.06);
+  --fluent-stroke: rgba(255, 255, 255, 0.08);
+  --fluent-stroke-subtle: rgba(255, 255, 255, 0.05);
+  --fluent-text-primary: rgba(255, 255, 255, 0.92);
+  --fluent-text-secondary: rgba(255, 255, 255, 0.65);
+  --fluent-text-tertiary: rgba(255, 255, 255, 0.45);
+  
+  /* Accent Colors */
+  --fluent-accent: #60cdff;
+  --fluent-accent-dark: #0078d4;
+  --fluent-accent-subtle: rgba(96, 205, 255, 0.15);
+  
+  /* Status Colors */
+  --fluent-success: #6ccb5f;
+  --fluent-warning: #fce100;
+  --fluent-error: #ff99a4;
+  
+  /* Elevation Shadows */
+  --fluent-shadow-flyout: 0 8px 16px rgba(0, 0, 0, 0.28), 0 0 1px rgba(0, 0, 0, 0.14);
+}
+
+.theme-light {
+  --fluent-acrylic-bg: rgba(243, 243, 243, 0.85);
+  --fluent-card-bg: rgba(255, 255, 255, 0.7);
+  --fluent-card-hover: rgba(255, 255, 255, 0.9);
+  --fluent-card-active: rgba(255, 255, 255, 0.8);
+  --fluent-stroke: rgba(0, 0, 0, 0.08);
+  --fluent-stroke-subtle: rgba(0, 0, 0, 0.04);
+  --fluent-text-primary: rgba(0, 0, 0, 0.90);
+  --fluent-text-secondary: rgba(0, 0, 0, 0.62);
+  --fluent-text-tertiary: rgba(0, 0, 0, 0.40);
+  
+  --fluent-accent: #0067c0;
+  --fluent-accent-dark: #003e92;
+  --fluent-accent-subtle: rgba(0, 103, 192, 0.12);
+}
+
+/* Acrylic backdrop filter class for web preview / fallback */
+.fluent-acrylic {
+  background-color: var(--fluent-acrylic-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+.fluent-border {
+  border: 1px solid var(--fluent-stroke);
+}
+
+.fluent-card {
+  background-color: var(--fluent-card-bg);
+  border: 1px solid var(--fluent-stroke);
+  transition: background-color 150ms cubic-bezier(0, 0, 0, 1), border-color 150ms ease;
+}
+
+.fluent-card:hover {
+  background-color: var(--fluent-card-hover);
+}

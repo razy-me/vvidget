@@ -1,0 +1,37 @@
+@import "tailwindcss";
+@import "./styles/fluent.css";
+
+html, body {
+  font-family: var(--fluent-font-family);
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  background-color: transparent;
+  color: var(--fluent-text-primary);
+  overflow: hidden;
+  height: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Custom scrollbars for Fluent look */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--fluent-stroke);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fluent-text-secondary);
+}
