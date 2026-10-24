@@ -432,7 +432,7 @@ pub async fn set_widgets_locked(app: AppHandle, locked: bool) -> Result<(), Stri
   - Autostart with Windows toggle powered by `tauri-plugin-autostart`.
   - Unit tests for JSON config serialization/deserialization and corrupt file recovery.
 
-### WP-03 System Resource Utilization Widget  [ ] status: in-progress
+### WP-03 System Resource Utilization Widget  [x] status: approved
 - **Covers**: R5, R6, R7, R9
 - **Owns**: `src-tauri/src/sysinfo/**`, `src/widgets/resources/**`, `src/types/resources.ts`, `src/hooks/useSystemMetrics.ts`
 - **Depends on**: WP-00
@@ -448,7 +448,7 @@ pub async fn set_widgets_locked(app: AppHandle, locked: bool) -> Result<(), Stri
   - Idle CPU footprint < 0.2%.
   - Unit tests for sysinfo collector data transformations and byte-to-GB formatting.
 
-### WP-04 Spotify Playback Controls Widget (GSMTC & Custom Protocol)  [x] status: ready-for-review
+### WP-04 Spotify Playback Controls Widget (GSMTC & Custom Protocol)  [x] status: approved
 - **Covers**: R4, R6, R7, R8, R9
 - **Owns**: `src-tauri/src/media/**`, `src/widgets/spotify/**`, `src/types/media.ts`, `src/hooks/useMediaPlayback.ts`
 - **Depends on**: WP-00
@@ -462,7 +462,7 @@ pub async fn set_widgets_locked(app: AppHandle, locked: bool) -> Result<(), Stri
   - Polished idle state when Spotify/media is closed or inactive.
   - Unit/mock tests verifying media session state machine and playback commands.
 
-### WP-05 Weather Widget (Open-Meteo & Geolocation)  [ ] status: in-progress
+### WP-05 Weather Widget (Open-Meteo & Geolocation)  [x] status: approved
 - **Covers**: R3, R7, R8, R9
 - **Owns**: `src-tauri/src/geo/**`, `src/widgets/weather/**`, `src/services/weather/**`, `src/types/weather.ts`, `src/hooks/useWeather.ts`
 - **Depends on**: WP-00

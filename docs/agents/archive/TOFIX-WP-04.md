@@ -1,5 +1,5 @@
-# TOFIX WP-04 — Round 1
-Diff: 4d05d82d14bca7029247aa0d4960716909bddb52..19c13f03acc267c01ce9d9908d211ca19910b1b8   Verdict: CHANGES_REQUESTED
+# TOFIX WP-04 — Round 2
+Diff: 19c13f03acc267c01ce9d9908d211ca19910b1b8..f8a7c6eb959bc32590f4c4b54a68511ef9402b3c   Verdict: APPROVED
 
 | # | Sev | File:Line | Finding | Suggested fix | Status |
 |---|-----|-----------|---------|---------------|--------|
@@ -13,7 +13,7 @@ Diff: 4d05d82d14bca7029247aa0d4960716909bddb52..19c13f03acc267c01ce9d9908d211ca1
 | 8 | ENHANCEMENT | src-tauri/src/media/protocol.rs:65-69 | Custom URI scheme protocol response builder omits CORS header `Access-Control-Allow-Origin: *`. | Add `.header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")` to support canvas/palette extraction and cross-origin resource requests. | fixed |
 
 ## Questioned Decisions
-- **D-026 (GSMTC Priority Session Arbitration & Binary URI Protocol Streaming)**: Strongly agree with binary URI streaming (`widgetz://album-art`) to bypass Base64 IPC JSON overhead and 60fps client-side timeline interpolation. However, the in-memory cache should be checked before reading the WinRT thumbnail stream in `gsmtc.rs` to avoid redundant COM I/O and continuous memory allocation on every 500ms monitor tick.
+- **D-026**: Verified. Cache pre-check avoids redundant COM allocations; FIFO eviction retains current track art; CORS and lifecycle race conditions are resolved.
 
 ## Previously rejected items — judgement
-None (Round 1).
+None. All 8 items from Round 1 were accepted and successfully fixed.
