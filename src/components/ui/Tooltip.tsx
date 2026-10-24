@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { FC, ReactNode } from "react";
 import { cn } from "@/utils/cn";
 
@@ -19,6 +19,14 @@ export const Tooltip: FC<TooltipProps> = ({
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const showTooltip = () => {
     timeoutRef.current = setTimeout(() => {

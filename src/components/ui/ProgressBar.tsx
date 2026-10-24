@@ -27,8 +27,8 @@ export const ProgressBar = forwardRef<HTMLDivElement, ProgressBarProps>(
     },
     ref
   ) => {
-    const clampedValue = Math.min(Math.max(value, min), max);
-    const percentage = Math.round(((clampedValue - min) / (max - min)) * 100);
+    const clampedValue = max <= min ? min : Math.min(Math.max(value, min), max);
+    const percentage = max <= min ? 0 : Math.round(((clampedValue - min) / (max - min)) * 100);
 
     const heightClasses = {
       xs: "h-1",

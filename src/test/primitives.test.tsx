@@ -42,6 +42,11 @@ describe("ProgressBar Primitive", () => {
     render(<ProgressBar value={75} showLabel />);
     expect(screen.getByText("75%")).toBeInTheDocument();
   });
+
+  it("handles min === max without division by zero NaN", () => {
+    render(<ProgressBar value={50} max={50} min={50} showLabel />);
+    expect(screen.getByText("0%")).toBeInTheDocument();
+  });
 });
 
 describe("Badge Primitive", () => {
@@ -86,6 +91,19 @@ describe("Tooltip Primitive", () => {
     fireEvent.mouseLeave(button.parentElement!);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
+    vi.useRealTimers();
+  });
+
+  it("cleans up timeout on unmount without throwing", () => {
+    vi.useFakeTimers();
+    const { unmount } = render(
+      <Tooltip content="Tooltip Hint" delay={200}>
+        <button>Hover</button>
+      </Tooltip>
+    );
+    fireEvent.mouseEnter(screen.getByText("Hover").parentElement!);
+    expect(() => unmount()).not.toThrow();
+    vi.advanceTimersByTime(300);
     vi.useRealTimers();
   });
 });
