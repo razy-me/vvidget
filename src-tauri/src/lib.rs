@@ -56,8 +56,6 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_skeleton() {
         assert_eq!(2 + 2, 4);

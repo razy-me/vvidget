@@ -98,3 +98,18 @@ c:\Widgetz\
 - `open_settings_window(app: &AppHandle)`: Lazily creates or focuses settings window. Window is fully destroyed on close (`window.destroy()`) to release WebView2 RAM.
 - `SettingsModal`: Fluent UI modal for system preferences, widget toggles, weather city search, and polling rates.
 - **Gotchas**: Settings window retains standard focus and activation (never `WS_EX_NOACTIVATE`) so text input focus works properly for city search.
+
+## Module: Desktop Window Engine & Magnetic Snapping (`src-tauri/src/window`, `src/components/layout`, `src/types/window.ts`)
+- `WindowManager::new() -> WindowManager`: Coordinates window lifecycle, active widget registry, coordinate clamping, and snapping.
+- `WindowManager::setup_widget_window(window: &WebviewWindow, options: WindowSetupOptions) -> Result<(), String>`:
+  - Applies native DWM Acrylic blur backdrop via `window-vibrancy`.
+  - Applies `WS_EX_TOOLWINDOW` and `WS_EX_NOACTIVATE` via Win32 API.
+  - Subclasses `WM_WINDOWPOSCHANGING` to suppress `SWP_HIDEWINDOW` for `Win + D` (Show Desktop) protection.
+  - Hooks `WM_MOVING` for zero-IPC OS-level magnetic edge and widget-to-widget snapping.
+  - Clamps initial coordinates against active displays via `available_monitors()`.
+- `apply_magnetic_snapping(moving: &mut Rect, work_area: &Rect, other_widgets: &[Rect], config: &SnapConfig) -> SnapResult`: Pure magnetic snapping calculation modifying RECT in OS memory.
+- `clamp_to_monitors(target: PhysicalRect, monitors: &[MonitorBounds]) -> PhysicalRect`: Multi-monitor DPI aware position clamping preventing off-screen widgets.
+- `HeaderBar`: Fluent header with `data-tauri-drag-region` when unlocked, lock/unlock toggle button, and action controls.
+- `WidgetContainer`: Fluent container wrapping widgets with Acrylic material, HeaderBar, and docked/independent layout styling.
+- **Gotchas**: Common Controls v6 manifest must be linked via `cargo:rustc-link-arg` in `build.rs` to satisfy `TaskDialogIndirect` symbol requirement in MinGW test harness.
+

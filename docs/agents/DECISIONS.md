@@ -160,3 +160,12 @@
   1. *Hiding the settings window instead of destroying*: Retains ~40MB RAM resident in WebView2 indefinitely.
   2. *Applying WS_EX_NOACTIVATE to settings*: Prevents keyboard focus for text inputs such as manual city search.
 - **Reason / trade-offs**: Conforms strictly to memory footprint guidelines while ensuring full keyboard usability.
+
+## D-024 Native MinGW Linker Resource Manifest & Subclassing Snapping (WP-01, Coder)
+- **Decision**: Link the Windows application resource archive `libresource.a` containing the Common Controls v6 manifest via `cargo:rustc-link-arg` in `build.rs` to satisfy `TaskDialogIndirect` symbol requirements across both bin and test executables on `x86_64-pc-windows-gnu`. Implement magnetic edge and inter-widget snapping inside `WM_MOVING` directly in Win32 memory and suppress `SWP_HIDEWINDOW` in `WM_WINDOWPOSCHANGING` for `Win + D` desktop permanence.
+- **Alternatives considered**:
+  1. *React IPC dragging/snapping*: Introduces 16-50ms IPC round-trip latency and visual jitter during active mouse drag.
+  2. *Standard popup window*: Minimized on `Win + D` and shows in Alt+Tab switcher.
+  3. *Embedding manifest only in release packaging*: Causes `cargo test` to fail at process initialization with `0xc0000139 (STATUS_ENTRYPOINT_NOT_FOUND)` on MinGW toolchains.
+- **Reason / trade-offs**: Delivers 60fps tear-free native drag snapping with zero IPC overhead, protects desktop permanence, and enables automated unit test execution on Windows GNU toolchains.
+

@@ -405,7 +405,7 @@ pub async fn set_widgets_locked(app: AppHandle, locked: bool) -> Result<(), Stri
   - `npm.cmd run build` and `cargo check` compile cleanly.
   - `docs/agents/CONTEXT.md` populated with stack versions, commands, conventions, module registration patterns, and folder structure.
 
-### WP-01 Desktop Window Engine, Win32 Hooks & Magnetic Snapping  [ ] status: in-progress
+### WP-01 Desktop Window Engine, Win32 Hooks & Magnetic Snapping  [x] status: ready-for-review
 - **Covers**: R1, R6, R7
 - **Owns**: `src-tauri/src/window/**`, `src/components/layout/**`, `src/types/window.ts`
 - **Depends on**: WP-00
