@@ -187,12 +187,20 @@
   3. *Unbounded album artwork caching*: Memory leak if hundreds of songs are played over days.
 - **Reason / trade-offs**: Zero IPC overhead for smooth 60fps timeline progression, native binary image streaming directly into standard HTML `<img>` elements with browser HTTP cache headers, and priority control of Spotify without requiring OAuth tokens.
 
+## D-027 Open-Meteo & Native Windows Geolocation with Offline Cache Resilience (WP-05, Coder)
+- **Decision**: Use WinRT `Windows.Devices.Geolocation::Geolocator` via `tokio::task::spawn_blocking` extracting coordinates through `coordinate.Point()?.Position()?` with graceful error fallback to Open-Meteo Geocoding API (`searchCity`) or saved coordinates. Cache latest successful weather forecast in `localStorage` under `widgetz_weather_cache` and automatically serve cached forecast with `isOffline = true` and visual warning badge when network or API fails.
+- **Alternatives considered**:
+  1. *Third-party IP geolocation API (ipinfo/ip-api)*: Rate limited, sends device IP to external ad/analytics networks, and inaccurate on VPNs.
+  2. *Failing completely on network outage*: Widget disappears or shows an uninformative crash error.
+  3. *Blocking main UI thread during WinRT Geolocation*: Freezes window frame if Windows Location prompt or permission check waits.
+- **Reason / trade-offs**: Privacy-first zero-key architecture using OS-level geolocation, instant offline resilience showing last known temperatures, and non-blocking asynchronous execution.
+
 ## D-028 Windows 11 Fluent Theme System & Unified Docking Surface Integration (WP-06, Coder)
-- **Decision**: Integrate automatic theme detection using `window.matchMedia("(prefers-color-scheme: dark)")` with manual theme override ("auto" | "light" | "dark") and dynamic `.theme-light` / `.theme-dark` DOM token toggling. Provide a dual-layout execution model supporting both a unified single-window `DockContainer` (<90 MB RAM working set) and independent multi-window mode (<180 MB RAM working set) coordinated via `sync_widget_windows` in Rust and responsive `AppContent` route dispatching (`?widget=<id>` or default). Group integration IPC commands in `pub mod integration` in `lib.rs` to prevent macro namespace conflicts while registering all media, sysinfo, geo, config, and window commands.
+- **Decision**: Integrate automatic theme detection using `window.matchMedia("(prefers-color-scheme: dark)")` with manual theme override ("auto" | "light" | "dark") and dynamic `.theme-light` / `.theme-dark` DOM token toggling. Provide a dual-layout execution model supporting both a unified single-window `DockContainer` (<90 MB RAM working set) and independent multi-window mode (<180 MB RAM working set) coordinated via `sync_widget_windows` in Rust and responsive `AppContent` route dispatching (`?widget=<id>` or default). In independent mode, the `main` window is explicitly hidden to eliminate duplicate widget rendering and prevent exceeding the RAM budget. Group integration IPC commands in `pub mod integration` in `lib.rs` to prevent macro namespace conflicts while registering all media, sysinfo, geo, config, and window commands.
 - **Alternatives considered**:
   1. *Hardcoding Dark theme only*: Fails Windows 11 Fluent Design guidelines for users using Light mode or high contrast.
   2. *Forcing only independent multi-window mode*: Exceeds RAM budgets on low-spec systems running multiple WebView2 instances when a unified dock fits comfortably under 90MB.
-  3. *Uncoordinated window opening*: Results in duplicate windows or disconnected snap tracking across layout switches.
+  3. *Leaving main window open in independent mode*: Renders duplicate widgets in both the main window and floating windows, wasting resident WebView2 memory.
 - **Reason / trade-offs**: Delivers authentic Windows 11 Fluent aesthetic and adaptability, satisfies memory constraints, and provides seamless switching between desktop dock and floating widgets.
 
 

@@ -1,4 +1,4 @@
-import { useState, type FC, type ReactNode } from "react";
+import { useState, useEffect, type FC, type ReactNode } from "react";
 import { ChevronDown, ChevronUp, EyeOff } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -24,6 +24,10 @@ export const DockItem: FC<DockItemProps> = ({
   children,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
+
+  useEffect(() => {
+    setIsCollapsed(defaultCollapsed);
+  }, [defaultCollapsed]);
 
   return (
     <Card

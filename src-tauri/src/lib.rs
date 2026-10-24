@@ -73,7 +73,7 @@ pub mod integration {
                     id: widget_id,
                     is_widget: true,
                     no_activate: true,
-                    dark_mode: true,
+                    dark_mode: config.theme != "light",
                     target_x: Some(placement.logical_x),
                     target_y: Some(placement.logical_y),
                     width: placement.logical_width,
@@ -117,7 +117,11 @@ pub mod integration {
                 let _ = close_widget_window(app.clone(), id.to_string()).await;
             }
         } else {
-            // Independent multi-window mode: launch separate floating windows for visible widgets
+            // Independent multi-window mode: hide main window to avoid duplicate rendering and RAM waste
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.hide();
+            }
+            // Launch separate floating windows for visible widgets
             for (id, placement) in &config.widgets {
                 if placement.visible {
                     let _ = open_widget_window(app.clone(), id.clone()).await;
@@ -198,14 +202,15 @@ pub fn run() {
             }
 
             // Setup main window with DWM Acrylic backdrop, tool window styles, and snapping
+            let initial_config = config::load_or_recover_config(&config::resolve_config_path()).0;
             if let Some(main_win) = app.get_webview_window("main") {
                 let _ = window_manager_setup.setup_widget_window(
                     &main_win,
                     WindowSetupOptions {
                         id: "main".to_string(),
                         is_widget: true,
-                        no_activate: false,
-                        dark_mode: true,
+                        no_activate: true,
+                        dark_mode: initial_config.theme != "light",
                         target_x: Some(40.0),
                         target_y: Some(40.0),
                         width: 360.0,
@@ -214,7 +219,12 @@ pub fn run() {
                 );
             }
 
-            // Sync widget windows when configuration changes (e.g. from System Tray toggles)
+            // Sync widget windows on application startup and when configuration changes
+            let initial_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = sync_widget_windows(initial_handle).await;
+            });
+
             let app_handle = app.handle().clone();
             app.listen("config-changed", move |_event| {
                 let handle = app_handle.clone();
@@ -238,11 +248,6 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_skeleton() {
-        assert_eq!(2 + 2, 4);
-    }
 
     #[test]
     fn test_window_setup_options_default() {

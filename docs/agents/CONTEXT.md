@@ -134,6 +134,15 @@ c:\Widgetz\
 - `SpotifyWidget`: Fluent Card featuring album art with fallback, track title, artist, album, live progress, controls, and polished idle state when media is inactive.
 - **Gotchas**: Reading `GetSessions` on WinRT requires the `"Foundation_Collections"` feature on the `windows` crate. Thumbnails are read via `DataReader` and cached in-memory with a 30-entry cap to prevent memory bloat.
 
+## Module: Weather Widget & Geolocation (`src-tauri/src/geo`, `src/widgets/weather`, `src/services/weather`, `src/types/weather.ts`, `src/hooks/useWeather.ts`)
+- `get_windows_location() -> Result<(f64, f64), String>`: Asynchronous query via native WinRT `Windows.Devices.Geolocation::Geolocator`.
+- `fetchWeather(lat, lon, city, country)`: Queries Open-Meteo Forecast API with local `localStorage` caching and offline fallback (`isOffline = true`).
+- `searchCity(query, count)`: Fast, keyless city search and coordinate resolution via Open-Meteo Geocoding API (`geocoding-api.open-meteo.com`).
+- `getWeatherCondition(wmoCode)`: Maps official WMO weather codes (0-99) to human-readable labels and Lucide icon names.
+- `useWeather()`: React hook managing native WinRT/geocoded location resolution, polling interval, offline caching, and manual refresh.
+- `WeatherWidget`: Fluent Acrylic card displaying current temperature, feels-like, WMO weather icon/label, humidity %, wind speed km/h, location name, offline badge, and toggleable Hourly Trend (next 12h) and 5-Day Daily Forecast.
+- **Gotchas**: In `windows` 0.58, `Geocoordinate` retrieves position via `coordinate.Point()?.Position()?` (deprecated direct `Latitude`/`Longitude` properties were removed). If Windows location services are disabled, `useWeather` falls back to manual city geocoding or default coordinates without crashing.
+
 ## Module: Fluent Design Theme, Snapping & Integration (`src/theme`, `src/components/docking`, `src/App.tsx`, `src-tauri/src/lib.rs`)
 - `ThemeProvider`: Context provider auto-detecting Windows 11 light/dark mode via `window.matchMedia` with manual override ("auto" | "light" | "dark") and applying `.theme-light` / `.theme-dark` DOM tokens.
 - `useTheme()`: React hook returning `{ theme, resolvedTheme, setTheme, toggleTheme }`.

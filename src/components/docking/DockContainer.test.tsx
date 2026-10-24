@@ -114,6 +114,32 @@ describe("DockContainer Component", () => {
     expect(screen.getByTestId("dock-item-content-resources")).toBeInTheDocument();
   });
 
+  it("collapses and expands all widgets when toolbar toggle button is clicked", () => {
+    render(
+      <ThemeProvider>
+        <DockContainer />
+      </ThemeProvider>
+    );
+
+    expect(screen.getByTestId("dock-item-content-resources")).toBeInTheDocument();
+    expect(screen.getByTestId("dock-item-content-spotify")).toBeInTheDocument();
+    expect(screen.getByTestId("dock-item-content-weather")).toBeInTheDocument();
+
+    const collapseAllBtn = screen.getByRole("button", { name: /collapse all widgets/i });
+    fireEvent.click(collapseAllBtn);
+
+    expect(screen.queryByTestId("dock-item-content-resources")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("dock-item-content-spotify")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("dock-item-content-weather")).not.toBeInTheDocument();
+
+    const expandAllBtn = screen.getByRole("button", { name: /expand all widgets/i });
+    fireEvent.click(expandAllBtn);
+
+    expect(screen.getByTestId("dock-item-content-resources")).toBeInTheDocument();
+    expect(screen.getByTestId("dock-item-content-spotify")).toBeInTheDocument();
+    expect(screen.getByTestId("dock-item-content-weather")).toBeInTheDocument();
+  });
+
   it("hides widget from dock when hide button is clicked", () => {
     render(
       <ThemeProvider>
