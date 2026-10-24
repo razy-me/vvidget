@@ -405,7 +405,7 @@ pub async fn set_widgets_locked(app: AppHandle, locked: bool) -> Result<(), Stri
   - `npm.cmd run build` and `cargo check` compile cleanly.
   - `docs/agents/CONTEXT.md` populated with stack versions, commands, conventions, module registration patterns, and folder structure.
 
-### WP-01 Desktop Window Engine, Win32 Hooks & Magnetic Snapping  [ ] status: pending
+### WP-01 Desktop Window Engine, Win32 Hooks & Magnetic Snapping  [ ] status: in-progress
 - **Covers**: R1, R6, R7
 - **Owns**: `src-tauri/src/window/**`, `src/components/layout/**`, `src/types/window.ts`
 - **Depends on**: WP-00
@@ -418,7 +418,7 @@ pub async fn set_widgets_locked(app: AppHandle, locked: bool) -> Result<(), Stri
   - Multi-monitor DPI scaling support: converts logical positions to physical coordinates respecting monitor scale factors.
   - Off-screen protection: coordinates validated and clamped against active display bounds queried via `window.available_monitors()`.
 
-### WP-02 Persistent Configuration, System Tray & Settings Lifecycle  [ ] status: pending
+### WP-02 Persistent Configuration, System Tray & Settings Lifecycle  [x] status: ready-for-review
 - **Covers**: R2, R8, R9
 - **Owns**: `src-tauri/src/config/**`, `src-tauri/src/tray/**`, `src/pages/settings/**`, `src/types/config.ts`, `src/hooks/useConfig.ts`
 - **Depends on**: WP-00

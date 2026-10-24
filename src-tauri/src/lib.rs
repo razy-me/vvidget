@@ -1,7 +1,20 @@
+pub mod config;
+pub mod tray;
+pub mod window;
+
+use config::{
+    get_autostart_status, load_config, open_logs_folder, resolve_config_path, save_config,
+    save_config_immediate, set_autostart, set_widgets_locked, ConfigManager,
+};
 use tauri::Manager;
+use tray::{open_settings, setup_tray};
+use window::WindowManager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let config_manager = ConfigManager::new(resolve_config_path());
+    let window_manager = WindowManager::new();
+
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::new().build());
 
@@ -12,7 +25,23 @@ pub fn run() {
     ));
 
     builder
+        .manage(config_manager)
+        .manage(window_manager)
+        .invoke_handler(tauri::generate_handler![
+            load_config,
+            save_config,
+            save_config_immediate,
+            set_widgets_locked,
+            get_autostart_status,
+            set_autostart,
+            open_logs_folder,
+            open_settings,
+        ])
         .setup(|app| {
+            if let Err(e) = setup_tray(app.handle()) {
+                log::error!("Failed to initialize system tray: {}", e);
+            }
+
             #[cfg(debug_assertions)]
             {
                 if let Some(w) = app.get_webview_window("main") {
@@ -27,6 +56,8 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn test_skeleton() {
         assert_eq!(2 + 2, 4);

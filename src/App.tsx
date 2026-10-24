@@ -2,14 +2,22 @@ import { useMemo } from "react";
 import type { FC } from "react";
 import { Card, ProgressBar, Badge } from "@/components/ui";
 import { WIDGET_REGISTRY, getAllWidgetMetadata } from "@/widgets/registry";
+import { SettingsModal } from "@/pages/settings";
 import { Cpu, Music, CloudSun, ShieldCheck } from "lucide-react";
 
 export const App: FC = () => {
-  // Query param allows multi-window view (e.g. /?widget=resources or /?widget=spotify)
-  const widgetId = useMemo(() => {
+  // Query param allows multi-window view (e.g. /?widget=resources or /?view=settings)
+  const { widgetId, isSettingsView } = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("widget");
+    return {
+      widgetId: params.get("widget"),
+      isSettingsView: params.get("view") === "settings" || params.get("widget") === "settings",
+    };
   }, []);
+
+  if (isSettingsView) {
+    return <SettingsModal />;
+  }
 
   const registeredWidgets = getAllWidgetMetadata();
 

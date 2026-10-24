@@ -146,3 +146,17 @@
   1. *Removing protocol-asset*: Breaks binary album art custom protocol streaming required in WP-04.
   2. *Leaving icon.ico missing until packaging*: Causes `tauri-build` to fail immediately on Windows during resource generation.
 - **Reason / trade-offs**: Allows both custom protocol asset serving and Windows PE binary resource compilation to proceed without warnings or build errors.
+
+## D-022 Debounced Configuration Persistence & Self-Healing Corrupt Recovery (WP-02, Coder)
+- **Decision**: Combine frontend optimistic state updates with a dual-stage 500ms debounce (in `useConfig.ts` and in Rust `ConfigManager` via `tokio::select!` channel), coupled with atomic temp file replacement and automatic archiving of corrupt JSON to `.corrupt.<timestamp>` with clean default fallback.
+- **Alternatives considered**:
+  1. *Immediate synchronous file I/O on every coordinate change*: Causes intense disk thrashing during drag operations.
+  2. *Crashing on corrupt config*: Leaves the application unbootable if a power loss or malformed edit occurs.
+- **Reason / trade-offs**: Prevents disk I/O bottlenecks while guaranteeing robust data preservation and fault-tolerant self-healing.
+
+## D-023 Lazy Settings Window Destruction on Close & Standard Activation (WP-02, Coder)
+- **Decision**: Spawn the Settings window on demand from tray click/IPC, hook `CloseRequested` to invoke `window.destroy()`, and explicitly preserve standard Win32 focus activation (omitting `WS_EX_NOACTIVATE`).
+- **Alternatives considered**:
+  1. *Hiding the settings window instead of destroying*: Retains ~40MB RAM resident in WebView2 indefinitely.
+  2. *Applying WS_EX_NOACTIVATE to settings*: Prevents keyboard focus for text inputs such as manual city search.
+- **Reason / trade-offs**: Conforms strictly to memory footprint guidelines while ensuring full keyboard usability.

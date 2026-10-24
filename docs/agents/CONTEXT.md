@@ -82,3 +82,19 @@ c:\Widgetz\
 - `getWidgetMetadata(id: string): WidgetMetadata | undefined`
 - `getAllWidgetMetadata(): WidgetMetadata[]`
 - **Gotchas**: All new widgets must register default width/height and min bounds in `WIDGET_REGISTRY`.
+
+## Module: Persistent Configuration (`src-tauri/src/config`, `src/types/config.ts`, `src/hooks/useConfig.ts`)
+- `load_config() -> Result<AppConfig, String>`
+- `save_config(config: AppConfig) -> Result<(), String>` (debounced by 500ms for movement, emits `"config-changed"`)
+- `save_config_immediate(config: AppConfig) -> Result<(), String>`
+- `set_widgets_locked(locked: bool) -> Result<(), String>`
+- `get_autostart_status() -> Result<bool, String>` & `set_autostart(enabled: bool) -> Result<(), String>`
+- `open_logs_folder() -> Result<(), String>`
+- `useConfig()`: React hook with optimistic updates, 500ms debounce placement sync, and cross-window `"config-changed"` event listener.
+- **Gotchas**: Corrupt config is automatically archived to `%APPDATA%/Widgetz/config.json.corrupt.<timestamp>` and default config restored without panicking.
+
+## Module: System Tray & Settings Lifecycle (`src-tauri/src/tray`, `src/pages/settings`)
+- `setup_tray(app: &AppHandle) -> Result<TrayIcon, Error>`: Native tray icon with context menu (Lock, Widgets toggles, Layout mode, Settings, Logs, Quit).
+- `open_settings_window(app: &AppHandle)`: Lazily creates or focuses settings window. Window is fully destroyed on close (`window.destroy()`) to release WebView2 RAM.
+- `SettingsModal`: Fluent UI modal for system preferences, widget toggles, weather city search, and polling rates.
+- **Gotchas**: Settings window retains standard focus and activation (never `WS_EX_NOACTIVATE`) so text input focus works properly for city search.
