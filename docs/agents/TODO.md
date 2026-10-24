@@ -383,7 +383,7 @@ pub async fn set_widgets_locked(app: AppHandle, locked: bool) -> Result<(), Stri
 
 ## Work Packages
 
-### WP-00 Scaffolding, Complete Dependencies & UI Primitives  [ ] status: in-review
+### WP-00 Scaffolding, Complete Dependencies & UI Primitives  [x] status: approved
 - **Covers**: R6, R7, R8, R9
 - **Owns**:
   - Root config files: `package.json`, `tsconfig.json`, `tsconfig.node.json`, `vite.config.ts`, `.gitignore`, `.env.example`
