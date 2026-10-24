@@ -23,17 +23,6 @@ pub async fn load_config<R: Runtime>(app: AppHandle<R>) -> Result<AppConfig, Str
 #[tauri::command]
 #[specta::specta]
 pub async fn save_config<R: Runtime>(app: AppHandle<R>, config: AppConfig) -> Result<(), String> {
-    // Synchronize Windows autostart state if it differs from system state
-    if let Ok(autostart) = app.autolaunch().is_enabled() {
-        if autostart != config.auto_start {
-            if config.auto_start {
-                let _ = app.autolaunch().enable();
-            } else {
-                let _ = app.autolaunch().disable();
-            }
-        }
-    }
-
     if let Some(manager) = app.try_state::<ConfigManager>() {
         manager.save_debounced(config.clone()).await?;
     } else {
@@ -75,6 +64,10 @@ pub async fn set_widgets_locked<R: Runtime>(
     } else {
         load_or_recover_config(&resolve_config_path()).0
     };
+
+    if let Some(win_mgr) = app.try_state::<crate::window::WindowManager>() {
+        win_mgr.set_locked(locked);
+    }
 
     config.lock_positions = locked;
     save_config_immediate(app, config).await

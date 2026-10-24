@@ -233,4 +233,38 @@ impl WindowManager {
             }
         }
     }
+
+    /// Updates tracked window bounds when programmatic position changes occur.
+    pub fn update_window_position(
+        &self,
+        id: &str,
+        logical_x: f64,
+        logical_y: f64,
+        logical_width: f64,
+        logical_height: f64,
+    ) {
+        if let Ok(mut map) = self.widgets.write() {
+            if let Some(info) = map.get_mut(id) {
+                let physical = logical_to_physical(
+                    LogicalRect {
+                        x: logical_x,
+                        y: logical_y,
+                        width: logical_width,
+                        height: logical_height,
+                    },
+                    info.scale_factor,
+                );
+                info.rect = physical;
+                super::win32::update_tracked_window(
+                    info.hwnd,
+                    Rect::from_pos_size(
+                        physical.x,
+                        physical.y,
+                        physical.width,
+                        physical.height,
+                    ),
+                );
+            }
+        }
+    }
 }

@@ -1,17 +1,7 @@
 import type { ReactNode } from "react";
+import type { LayoutMode, WidgetPlacement } from "./config";
 
-export type LayoutMode = "independent" | "docked";
-
-export interface WidgetPlacement {
-  id: string;
-  visible: boolean;
-  logical_x: number;
-  logical_y: number;
-  logical_width: number;
-  logical_height: number;
-  scale_factor: number;
-  monitor_id?: string | null;
-}
+export type { LayoutMode, WidgetPlacement };
 
 export interface WindowBounds {
   x: number;

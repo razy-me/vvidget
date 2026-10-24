@@ -211,6 +211,7 @@ unsafe extern "system" fn widget_subclass_proc(
             let p_rect = lparam.0 as *mut RECT;
             if !p_rect.is_null() {
                 on_wm_moving(hwnd, &mut *p_rect);
+                return LRESULT(1);
             }
             DefSubclassProc(hwnd, umsg, wparam, lparam)
         }
