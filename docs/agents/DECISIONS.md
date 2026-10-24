@@ -148,18 +148,20 @@
 - **Reason / trade-offs**: Allows both custom protocol asset serving and Windows PE binary resource compilation to proceed without warnings or build errors.
 
 ## D-022 Debounced Configuration Persistence & Self-Healing Corrupt Recovery (WP-02, Coder)
-- **Decision**: Combine frontend optimistic state updates with a dual-stage 500ms debounce (in `useConfig.ts` and in Rust `ConfigManager` via `tokio::select!` channel), coupled with atomic temp file replacement and automatic archiving of corrupt JSON to `.corrupt.<timestamp>` with clean default fallback.
+- **Decision**: Combine frontend optimistic state updates with a synchronized 500ms debounce in `ConfigManager` tracking an atomic `is_dirty` flag and persisting the latest in-memory state on timer pop, superseded immediately by `save_immediate`. Schema robustness is reinforced with `#[serde(default)]` and `Default` implementations across all models, alongside atomic temp file replacement and automatic archiving of corrupt JSON to `.corrupt.<timestamp>` with clean default fallback.
 - **Alternatives considered**:
   1. *Immediate synchronous file I/O on every coordinate change*: Causes intense disk thrashing during drag operations.
-  2. *Crashing on corrupt config*: Leaves the application unbootable if a power loss or malformed edit occurs.
-- **Reason / trade-offs**: Prevents disk I/O bottlenecks while guaranteeing robust data preservation and fault-tolerant self-healing.
+  2. *Uncoordinated pending_save queue*: Risk of stale debounced writes overwriting recent immediate user preference edits.
+  3. *Crashing on corrupt or partial config*: Leaves the application unbootable if a power loss or malformed edit occurs.
+- **Reason / trade-offs**: Prevents disk I/O bottlenecks while guaranteeing robust data preservation, race-free immediate overrides, and fault-tolerant self-healing.
 
 ## D-023 Lazy Settings Window Destruction on Close & Standard Activation (WP-02, Coder)
-- **Decision**: Spawn the Settings window on demand from tray click/IPC, hook `CloseRequested` to invoke `window.destroy()`, and explicitly preserve standard Win32 focus activation (omitting `WS_EX_NOACTIVATE`).
+- **Decision**: Spawn the Settings window on demand from tray click/IPC, unminimize and focus if already open, hook `CloseRequested` to invoke `window.destroy()`, and explicitly preserve standard Win32 focus activation (omitting `WS_EX_NOACTIVATE`).
 - **Alternatives considered**:
   1. *Hiding the settings window instead of destroying*: Retains ~40MB RAM resident in WebView2 indefinitely.
   2. *Applying WS_EX_NOACTIVATE to settings*: Prevents keyboard focus for text inputs such as manual city search.
-- **Reason / trade-offs**: Conforms strictly to memory footprint guidelines while ensuring full keyboard usability.
+  3. *Failing to unminimize before focusing*: Leaves the window minimized in the Windows taskbar on reopen.
+- **Reason / trade-offs**: Conforms strictly to memory footprint guidelines while ensuring full keyboard usability and reliable window restore.
 
 ## D-024 Native MinGW Linker Resource Manifest & Subclassing Snapping (WP-01, Coder)
 - **Decision**: Link the Windows application resource archive `libresource.a` containing the Common Controls v6 manifest via `cargo:rustc-link-arg` in `build.rs` to satisfy `TaskDialogIndirect` symbol requirements across both bin and test executables on `x86_64-pc-windows-gnu`. Implement magnetic edge and inter-widget snapping inside `WM_MOVING` directly in Win32 memory and suppress `SWP_HIDEWINDOW` in `WM_WINDOWPOSCHANGING` for `Win + D` desktop permanence.

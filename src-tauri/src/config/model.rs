@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 /// Placement and dimensions for a single desktop widget.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(default)]
 pub struct WidgetPlacement {
     pub id: String,
     pub visible: bool,
@@ -14,8 +15,24 @@ pub struct WidgetPlacement {
     pub monitor_id: Option<String>,
 }
 
+impl Default for WidgetPlacement {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            visible: true,
+            logical_x: 40.0,
+            logical_y: 40.0,
+            logical_width: 320.0,
+            logical_height: 180.0,
+            scale_factor: 1.0,
+            monitor_id: None,
+        }
+    }
+}
+
 /// Configurable refresh intervals for background collectors.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(default)]
 pub struct PollingRates {
     /// Polling interval for CPU and RAM metrics in milliseconds (default: 1500ms).
     pub resources_cpu_ram_ms: u64,
@@ -37,6 +54,7 @@ impl Default for PollingRates {
 
 /// Weather location preferences.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(default)]
 pub struct WeatherSettings {
     /// Whether to attempt automatic location lookup via Windows Location API.
     pub use_windows_location: bool,
@@ -61,6 +79,7 @@ impl Default for WeatherSettings {
 
 /// Root application configuration persisted in %APPDATA%/Widgetz/config.json.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(default)]
 pub struct AppConfig {
     pub version: u32,
     pub lock_positions: bool,

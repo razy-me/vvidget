@@ -86,6 +86,7 @@ export function useConfig(): UseConfigReturn {
   const updateConfig = useCallback(
     async (updater: (prev: AppConfig) => AppConfig, immediate = false): Promise<void> => {
       const nextConfig = updater(latestConfigRef.current);
+      latestConfigRef.current = nextConfig;
       setConfig(nextConfig);
 
       if (!isTauri()) return;
@@ -129,7 +130,8 @@ export function useConfig(): UseConfigReturn {
         widgets: updatedWidgets,
       };
 
-      // Optimistically update React state immediately
+      // Synchronously update ref and state immediately
+      latestConfigRef.current = nextConfig;
       setConfig(nextConfig);
 
       if (debounceTimerRef.current) {
@@ -147,16 +149,23 @@ export function useConfig(): UseConfigReturn {
 
   const setWidgetsLocked = useCallback(
     async (locked: boolean) => {
-      await updateConfig((prev) => ({ ...prev, lock_positions: locked }), true);
+      const nextConfig: AppConfig = {
+        ...latestConfigRef.current,
+        lock_positions: locked,
+      };
+      latestConfigRef.current = nextConfig;
+      setConfig(nextConfig);
+
       if (isTauri()) {
         try {
           await safeInvoke("set_widgets_locked", { locked });
-        } catch {
-          // Handled via save_config fallback
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          setError(msg);
         }
       }
     },
-    [updateConfig],
+    [],
   );
 
   const setLayoutMode = useCallback(
@@ -175,17 +184,29 @@ export function useConfig(): UseConfigReturn {
 
   const setAutostart = useCallback(
     async (auto_start: boolean) => {
-      await updateConfig((prev) => ({ ...prev, auto_start }), true);
       if (isTauri()) {
         try {
           await safeInvoke("set_autostart", { enabled: auto_start });
+          const nextConfig: AppConfig = {
+            ...latestConfigRef.current,
+            auto_start,
+          };
+          latestConfigRef.current = nextConfig;
+          setConfig(nextConfig);
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           setError(msg);
         }
+      } else {
+        const nextConfig: AppConfig = {
+          ...latestConfigRef.current,
+          auto_start,
+        };
+        latestConfigRef.current = nextConfig;
+        setConfig(nextConfig);
       }
     },
-    [updateConfig],
+    [],
   );
 
   return {

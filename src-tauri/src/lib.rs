@@ -15,8 +15,16 @@ pub fn run() {
     let config_manager = ConfigManager::new(resolve_config_path());
     let window_manager = WindowManager::new();
 
-    let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_log::Builder::new().build());
+    let builder = tauri::Builder::default().plugin(
+        tauri_plugin_log::Builder::new()
+            .target(tauri_plugin_log::Target::new(
+                tauri_plugin_log::TargetKind::Folder {
+                    path: config::resolve_logs_dir(),
+                    file_name: Some("widgetz".to_string()),
+                },
+            ))
+            .build(),
+    );
 
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_autostart::init(

@@ -1,4 +1,4 @@
-import { useState, useCallback, type FC } from "react";
+import { useState, useCallback, useEffect, type FC } from "react";
 import { Badge, Card } from "@/components/ui";
 import { useConfig } from "@/hooks/useConfig";
 import { WidgetToggleList } from "@/pages/settings/WidgetToggleList";
@@ -40,6 +40,35 @@ export const SettingsModal: FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
   const [cityInput, setCityInput] = useState<string>(config.weather_settings.manual_city ?? "");
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
+
+  // Range slider local states to prevent high-frequency unthrottled IPC loops during drag
+  const [localWeatherMinutes, setLocalWeatherMinutes] = useState<number>(
+    config.polling_rates.weather_minutes,
+  );
+  const [localCpuRamMs, setLocalCpuRamMs] = useState<number>(
+    config.polling_rates.resources_cpu_ram_ms,
+  );
+  const [localDiskMs, setLocalDiskMs] = useState<number>(
+    config.polling_rates.resources_disk_ms,
+  );
+
+  // Synchronize cityInput whenever configuration loads or changes
+  useEffect(() => {
+    setCityInput(config.weather_settings.manual_city ?? "");
+  }, [config.weather_settings.manual_city]);
+
+  // Synchronize slider local states with backend configuration
+  useEffect(() => {
+    setLocalWeatherMinutes(config.polling_rates.weather_minutes);
+  }, [config.polling_rates.weather_minutes]);
+
+  useEffect(() => {
+    setLocalCpuRamMs(config.polling_rates.resources_cpu_ram_ms);
+  }, [config.polling_rates.resources_cpu_ram_ms]);
+
+  useEffect(() => {
+    setLocalDiskMs(config.polling_rates.resources_disk_ms);
+  }, [config.polling_rates.resources_disk_ms]);
 
   const handleClose = useCallback(async () => {
     try {
@@ -516,7 +545,7 @@ export const SettingsModal: FC = () => {
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-semibold">Forecast Query Interval</span>
                       <span className="text-[var(--fluent-accent)] font-semibold">
-                        {config.polling_rates.weather_minutes} minutes
+                        {localWeatherMinutes} minutes
                       </span>
                     </div>
                     <input
@@ -524,16 +553,27 @@ export const SettingsModal: FC = () => {
                       min={10}
                       max={120}
                       step={5}
-                      value={config.polling_rates.weather_minutes}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
+                      value={localWeatherMinutes}
+                      onChange={(e) => setLocalWeatherMinutes(Number(e.target.value))}
+                      onPointerUp={() => {
                         void updateConfig((prev) => ({
                           ...prev,
                           polling_rates: {
                             ...prev.polling_rates,
-                            weather_minutes: val,
+                            weather_minutes: localWeatherMinutes,
                           },
                         }));
+                        showFeedback();
+                      }}
+                      onKeyUp={() => {
+                        void updateConfig((prev) => ({
+                          ...prev,
+                          polling_rates: {
+                            ...prev.polling_rates,
+                            weather_minutes: localWeatherMinutes,
+                          },
+                        }));
+                        showFeedback();
                       }}
                       className="w-full accent-[var(--fluent-accent)] cursor-pointer"
                       aria-label="Forecast Query Interval"
@@ -558,7 +598,7 @@ export const SettingsModal: FC = () => {
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-semibold">CPU & RAM Refresh Interval</span>
                       <span className="text-[var(--fluent-accent)] font-semibold">
-                        {(config.polling_rates.resources_cpu_ram_ms / 1000).toFixed(1)}s
+                        {(localCpuRamMs / 1000).toFixed(1)}s
                       </span>
                     </div>
                     <input
@@ -566,16 +606,27 @@ export const SettingsModal: FC = () => {
                       min={500}
                       max={5000}
                       step={250}
-                      value={config.polling_rates.resources_cpu_ram_ms}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
+                      value={localCpuRamMs}
+                      onChange={(e) => setLocalCpuRamMs(Number(e.target.value))}
+                      onPointerUp={() => {
                         void updateConfig((prev) => ({
                           ...prev,
                           polling_rates: {
                             ...prev.polling_rates,
-                            resources_cpu_ram_ms: val,
+                            resources_cpu_ram_ms: localCpuRamMs,
                           },
                         }));
+                        showFeedback();
+                      }}
+                      onKeyUp={() => {
+                        void updateConfig((prev) => ({
+                          ...prev,
+                          polling_rates: {
+                            ...prev.polling_rates,
+                            resources_cpu_ram_ms: localCpuRamMs,
+                          },
+                        }));
+                        showFeedback();
                       }}
                       className="w-full accent-[var(--fluent-accent)] cursor-pointer"
                       aria-label="CPU & RAM Refresh Interval"
@@ -591,7 +642,7 @@ export const SettingsModal: FC = () => {
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-semibold">Storage / Disk Refresh Interval</span>
                       <span className="text-[var(--fluent-accent)] font-semibold">
-                        {(config.polling_rates.resources_disk_ms / 1000).toFixed(0)}s
+                        {(localDiskMs / 1000).toFixed(0)}s
                       </span>
                     </div>
                     <input
@@ -599,16 +650,27 @@ export const SettingsModal: FC = () => {
                       min={5000}
                       max={60000}
                       step={5000}
-                      value={config.polling_rates.resources_disk_ms}
-                      onChange={(e) => {
-                        const val = Number(e.target.value);
+                      value={localDiskMs}
+                      onChange={(e) => setLocalDiskMs(Number(e.target.value))}
+                      onPointerUp={() => {
                         void updateConfig((prev) => ({
                           ...prev,
                           polling_rates: {
                             ...prev.polling_rates,
-                            resources_disk_ms: val,
+                            resources_disk_ms: localDiskMs,
                           },
                         }));
+                        showFeedback();
+                      }}
+                      onKeyUp={() => {
+                        void updateConfig((prev) => ({
+                          ...prev,
+                          polling_rates: {
+                            ...prev.polling_rates,
+                            resources_disk_ms: localDiskMs,
+                          },
+                        }));
+                        showFeedback();
                       }}
                       className="w-full accent-[var(--fluent-accent)] cursor-pointer"
                       aria-label="Disk Refresh Interval"

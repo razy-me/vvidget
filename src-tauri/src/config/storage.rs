@@ -2,6 +2,7 @@ use crate::config::model::AppConfig;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, RwLock};
@@ -145,7 +146,8 @@ fn backup_corrupted_and_reset(target_path: &Path) -> (AppConfig, bool) {
 pub struct ConfigManager {
     config_path: PathBuf,
     current_config: Arc<RwLock<AppConfig>>,
-    debounce_tx: mpsc::Sender<AppConfig>,
+    is_dirty: Arc<AtomicBool>,
+    debounce_tx: mpsc::Sender<()>,
 }
 
 impl ConfigManager {
@@ -154,12 +156,14 @@ impl ConfigManager {
     pub fn new(config_path: PathBuf) -> Self {
         let (initial_config, _recovered) = load_or_recover_config(&config_path);
         let current_config = Arc::new(RwLock::new(initial_config));
+        let is_dirty = Arc::new(AtomicBool::new(false));
 
-        let (debounce_tx, mut debounce_rx) = mpsc::channel::<AppConfig>(64);
+        let (debounce_tx, mut debounce_rx) = mpsc::channel::<()>(64);
         let write_path = config_path.clone();
+        let loop_config = current_config.clone();
+        let loop_dirty = is_dirty.clone();
 
         tokio::spawn(async move {
-            let mut pending_save: Option<AppConfig> = None;
             let sleep_duration = Duration::from_millis(500);
             let sleep = tokio::time::sleep(sleep_duration);
             tokio::pin!(sleep);
@@ -169,8 +173,7 @@ impl ConfigManager {
                 tokio::select! {
                     msg = debounce_rx.recv() => {
                         match msg {
-                            Some(new_config) => {
-                                pending_save = Some(new_config);
+                            Some(()) => {
                                 sleep.as_mut().reset(tokio::time::Instant::now() + sleep_duration);
                                 timer_active = true;
                             }
@@ -179,7 +182,10 @@ impl ConfigManager {
                     }
                     _ = &mut sleep, if timer_active => {
                         timer_active = false;
-                        if let Some(config_to_save) = pending_save.take() {
+                        // Always save the latest in-memory state if marked dirty, preventing
+                        // stale debounced frames from overwriting save_immediate changes.
+                        if loop_dirty.swap(false, Ordering::SeqCst) {
+                            let config_to_save = loop_config.read().await.clone();
                             let path = write_path.clone();
                             let _ = tokio::task::spawn_blocking(move || {
                                 save_config_atomic(&path, &config_to_save)
@@ -193,6 +199,7 @@ impl ConfigManager {
         Self {
             config_path,
             current_config,
+            is_dirty,
             debounce_tx,
         }
     }
@@ -206,20 +213,23 @@ impl ConfigManager {
     pub async fn save_debounced(&self, config: AppConfig) -> Result<(), String> {
         {
             let mut lock = self.current_config.write().await;
-            *lock = config.clone();
+            *lock = config;
         }
+        self.is_dirty.store(true, Ordering::SeqCst);
         self.debounce_tx
-            .send(config)
+            .send(())
             .await
-            .map_err(|e| format!("Failed to dispatch debounced config: {}", e))
+            .map_err(|e| format!("Failed to dispatch debounced config signal: {}", e))
     }
 
-    /// Saves the configuration immediately to disk (bypassing debounce).
+    /// Saves the configuration immediately to disk (bypassing debounce and superseding pending saves).
     pub async fn save_immediate(&self, config: AppConfig) -> Result<(), String> {
         {
             let mut lock = self.current_config.write().await;
             *lock = config.clone();
         }
+        // Clear dirty flag so any subsequent debounce timer pop will not overwrite with stale data
+        self.is_dirty.store(false, Ordering::SeqCst);
         let path = self.config_path.clone();
         tokio::task::spawn_blocking(move || save_config_atomic(&path, &config))
             .await
@@ -231,6 +241,7 @@ impl ConfigManager {
         let (config, recovered) = load_or_recover_config(&self.config_path);
         let mut lock = self.current_config.write().await;
         *lock = config.clone();
+        self.is_dirty.store(false, Ordering::SeqCst);
         (config, recovered)
     }
 
@@ -342,6 +353,59 @@ mod tests {
         // Verify disk has updated value
         let (disk_config, _) = load_or_recover_config(&path);
         assert_eq!(disk_config.snap_to_edges, false);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn test_save_immediate_supersedes_debounced() {
+        let dir = create_test_dir();
+        let path = dir.join("supersede_config.json");
+
+        let manager = ConfigManager::new(path.clone());
+
+        // Queue a debounced update with theme = "light"
+        let mut debounced_config = manager.get_config().await;
+        debounced_config.theme = "light".to_string();
+        manager.save_debounced(debounced_config).await.unwrap();
+
+        // Immediately follow with an immediate update with theme = "dark"
+        let mut immediate_config = manager.get_config().await;
+        immediate_config.theme = "dark".to_string();
+        manager.save_immediate(immediate_config).await.unwrap();
+
+        // Disk should immediately be "dark"
+        let (disk1, _) = load_or_recover_config(&path);
+        assert_eq!(disk1.theme, "dark");
+
+        // Wait past the debounce duration (500ms + buffer)
+        tokio::time::sleep(Duration::from_millis(650)).await;
+
+        // Disk should STILL be "dark", not overwritten by the earlier debounced update
+        let (disk2, _) = load_or_recover_config(&path);
+        assert_eq!(disk2.theme, "dark");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_missing_fields_fallback_cleanly_via_serde_default() {
+        let dir = create_test_dir();
+        let path = dir.join("partial_config.json");
+
+        // Partial JSON missing polling_rates, weather_settings, and some top-level fields
+        let partial_json = r#"{
+            "version": 1,
+            "theme": "dark"
+        }"#;
+        fs::write(&path, partial_json.as_bytes()).unwrap();
+
+        let (loaded, recovered) = load_or_recover_config(&path);
+        assert!(!recovered, "Partial valid JSON should not be marked as corrupted");
+        assert_eq!(loaded.theme, "dark");
+        assert_eq!(loaded.layout_mode, "independent"); // Default applied
+        assert_eq!(loaded.polling_rates.resources_cpu_ram_ms, 1500); // Default applied
+        assert!(loaded.widgets.contains_key("resources")); // Default widgets populated
 
         let _ = fs::remove_dir_all(&dir);
     }

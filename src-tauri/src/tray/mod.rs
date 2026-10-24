@@ -10,6 +10,7 @@ use crate::config::{load_config, open_logs_folder, save_config_immediate};
 /// On close, the window is fully destroyed (window.destroy()) to free WebView2 RAM.
 pub fn open_settings_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     if let Some(existing) = app.get_webview_window("settings") {
+        let _ = existing.unminimize();
         let _ = existing.show();
         let _ = existing.set_focus();
         return Ok(());
@@ -58,12 +59,14 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
 
     let menu = Menu::new(app)?;
 
+    let initial_config = crate::config::load_or_recover_config(&crate::config::resolve_config_path()).0;
+
     let toggle_lock = CheckMenuItem::with_id(
         app,
         "toggle_lock",
         "Lock Positions",
         true,
-        false,
+        initial_config.lock_positions,
         None::<&str>,
     )?;
     menu.append(&toggle_lock)?;
@@ -76,7 +79,11 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
         "toggle_resources",
         "System Resources",
         true,
-        true,
+        initial_config
+            .widgets
+            .get("resources")
+            .map(|w| w.visible)
+            .unwrap_or(true),
         None::<&str>,
     )?;
     let toggle_spotify = CheckMenuItem::with_id(
@@ -84,7 +91,11 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
         "toggle_spotify",
         "Spotify Controls",
         true,
-        true,
+        initial_config
+            .widgets
+            .get("spotify")
+            .map(|w| w.visible)
+            .unwrap_or(true),
         None::<&str>,
     )?;
     let toggle_weather = CheckMenuItem::with_id(
@@ -92,7 +103,11 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
         "toggle_weather",
         "Weather Forecast",
         true,
-        true,
+        initial_config
+            .widgets
+            .get("weather")
+            .map(|w| w.visible)
+            .unwrap_or(true),
         None::<&str>,
     )?;
     widgets_menu.append(&toggle_resources)?;
@@ -100,20 +115,23 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
     widgets_menu.append(&toggle_weather)?;
     menu.append(&widgets_menu)?;
 
-    // Layout mode submenu
+    // Layout mode submenu with CheckMenuItems to reflect active layout
+    let is_docked = initial_config.layout_mode == "docked";
     let layout_menu = Submenu::new(app, "Layout Mode", true)?;
-    let layout_independent = MenuItem::with_id(
+    let layout_independent = CheckMenuItem::with_id(
         app,
         "layout_independent",
         "Independent Windows",
         true,
+        !is_docked,
         None::<&str>,
     )?;
-    let layout_docked = MenuItem::with_id(
+    let layout_docked = CheckMenuItem::with_id(
         app,
         "layout_docked",
         "Docked Stack",
         true,
+        is_docked,
         None::<&str>,
     )?;
     layout_menu.append(&layout_independent)?;
@@ -165,11 +183,10 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
                     });
                 }
                 "layout_independent" | "layout_docked" => {
-                    let mode = if id == "layout_independent" {
-                        "independent"
-                    } else {
-                        "docked"
-                    };
+                    let is_ind = id == "layout_independent";
+                    let mode = if is_ind { "independent" } else { "docked" };
+                    let _ = layout_independent.set_checked(is_ind);
+                    let _ = layout_docked.set_checked(!is_ind);
                     let handle = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
                         if let Ok(mut config) = load_config(handle.clone()).await {

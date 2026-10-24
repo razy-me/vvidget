@@ -125,4 +125,25 @@ describe("SettingsModal component", () => {
       expect(screen.getByText("Munich")).toBeInTheDocument();
     });
   });
+
+  it("updates slider local value and commits on pointer up", async () => {
+    render(<SettingsModal />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Weather")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Weather"));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Forecast Query Interval")).toBeInTheDocument();
+    });
+
+    const slider = screen.getByLabelText("Forecast Query Interval");
+    fireEvent.change(slider, { target: { value: "45" } });
+    expect(screen.getByText("45 minutes")).toBeInTheDocument();
+
+    fireEvent.pointerUp(slider);
+    expect(screen.getByText("45 minutes")).toBeInTheDocument();
+  });
 });
