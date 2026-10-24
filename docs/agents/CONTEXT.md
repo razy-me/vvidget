@@ -113,3 +113,13 @@ c:\Widgetz\
 - `WidgetContainer`: Fluent container wrapping widgets with Acrylic material, HeaderBar, and docked/independent layout styling.
 - **Gotchas**: Common Controls v6 manifest must be linked via `cargo:rustc-link-arg` in `build.rs` to satisfy `TaskDialogIndirect` symbol requirement in MinGW test harness.
 
+## Module: System Resources Monitor (`src-tauri/src/sysinfo`, `src/widgets/resources`, `src/types/resources.ts`, `src/hooks/useSystemMetrics.ts`)
+- `MetricsCollector::new() -> MetricsCollector`: Initializes `System::new_with_specifics` refreshing only CPU and Memory with an initial 200ms sleep to eliminate 0.0% CPU artifacts, and initializes `Disks::new_with_refreshed_list()`.
+- `collect_metrics(refresh_disks: bool) -> SystemMetrics`: Refreshes CPU/RAM on every interval (default 1.5s) and Disks on disk interval (default 15s).
+- `get_system_metrics() -> Result<SystemMetrics, String>`: Tauri IPC command returning cached system resource snapshot.
+- `start_metrics_worker(app, config_manager, shared_metrics)`: Spawns dedicated background worker emitting `metrics-update` events.
+- `useSystemMetrics()`: Hook providing real-time metrics, 20-sample CPU history, and error recovery.
+- `ResourceWidget`: Windows 11 Fluent widget with CPU sparkline trend (`MiniGraph`), memory utilization ring/bar (`MetricBar`), and primary storage drive stats.
+- **Gotchas**: Disks refresh is decoupled from CPU/RAM to maintain <0.2% CPU overhead. Disks in `sysinfo` v0.33 use `disks.refresh(true)` instead of legacy `refresh_list()`.
+
+

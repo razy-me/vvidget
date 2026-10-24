@@ -171,3 +171,12 @@
   3. *Embedding manifest only in release packaging*: Causes `cargo test` to fail at process initialization with `0xc0000139 (STATUS_ENTRYPOINT_NOT_FOUND)` on MinGW toolchains.
 - **Reason / trade-offs**: Delivers 60fps tear-free native drag snapping with zero IPC overhead, protects desktop permanence, and enables automated unit test execution on Windows GNU toolchains.
 
+## D-025 System Resource Metrics Collection & Decoupled Polling (WP-03, Coder)
+- **Decision**: Initialize `System::new_with_specifics` refreshing strictly CPU and RAM, execute an initial 200ms sleep before first CPU sample to eliminate 0.0% artifacts, and decouple Disk polling (15s) from CPU/RAM polling (1.5s). Retain an in-memory `SharedMetricsState` (`Arc<RwLock<SystemMetrics>>`) in Tauri runtime for non-blocking instantaneous `get_system_metrics` responses while emitting `metrics-update` events from the background thread.
+- **Alternatives considered**:
+  1. *Refreshing all system data including full process trees*: Drastically increases CPU usage (>3%) and violates the <0.2% idle CPU requirement.
+  2. *Polling on demand from frontend via IPC `setInterval`*: Causes IPC latency and unnecessary thread wakeups.
+  3. *Sampling CPU without initial 200ms delta*: Produces an initial false 0.0% reading in the UI.
+- **Reason / trade-offs**: Provides instantaneous UI rendering upon widget launch with zero initial 0.0% glitch, sub-0.2% CPU overhead, and adaptive background event streaming.
+
+
