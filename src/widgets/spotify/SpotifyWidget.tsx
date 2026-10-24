@@ -1,0 +1,170 @@
+import { useState } from "react";
+import type { FC } from "react";
+import { Music, Radio, RefreshCw, AlertCircle } from "lucide-react";
+import { Card, Badge } from "@/components/ui";
+import { useMediaPlayback } from "@/hooks/useMediaPlayback";
+import type { MediaSession } from "@/types/media";
+import { MediaControls } from "./MediaControls";
+import { TrackProgress } from "./TrackProgress";
+
+export interface SpotifyWidgetProps {
+  /** Optional custom session override for testing or storyboarding */
+  sessionOverride?: MediaSession;
+  className?: string;
+}
+
+export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
+  sessionOverride,
+  className = "",
+}) => {
+  const hookResult = useMediaPlayback();
+  const session = sessionOverride ?? hookResult.session;
+  const { playPause, nextTrack, previousTrack, refresh, isLoading, error } = hookResult;
+
+  const [imgError, setImgError] = useState(false);
+
+  const isSpotify = session.source_app.toLowerCase().includes("spotify");
+  const hasMetadata = Boolean(session.title || session.artist);
+  const isActive = session.is_active && hasMetadata;
+
+  return (
+    <Card
+      variant="acrylic"
+      className={`w-full max-w-[340px] p-3 text-[var(--fluent-text-primary)] transition-all select-none overflow-hidden ${className}`}
+      data-testid="spotify-widget"
+    >
+      {/* Top Header Row */}
+      <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className="w-5 h-5 rounded-md flex items-center justify-center bg-emerald-500/10 text-emerald-400">
+            {isActive && session.is_playing ? (
+              <Radio className="w-3.5 h-3.5 animate-pulse" />
+            ) : (
+              <Music className="w-3.5 h-3.5" />
+            )}
+          </div>
+          <span className="text-xs font-semibold tracking-wide truncate">
+            {isSpotify ? "Spotify" : session.source_app || "Media"}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          {isActive ? (
+            <Badge
+              size="sm"
+              variant={session.is_playing ? "accent" : "default"}
+              className="text-[10px] uppercase font-semibold"
+            >
+              {session.is_playing ? "Playing" : "Paused"}
+            </Badge>
+          ) : (
+            <Badge size="sm" variant="outline" className="text-[10px]">
+              Idle
+            </Badge>
+          )}
+
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={isLoading}
+            title="Refresh media status"
+            className="p-1 rounded-md text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-bg)] transition-colors active:scale-95 disabled:opacity-50"
+            aria-label="Refresh media status"
+          >
+            <RefreshCw className={`w-3 h-3 ${isLoading ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Error notification if any */}
+      {error && (
+        <div className="mb-2 p-1.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px] flex items-center gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">{error}</span>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      {isActive ? (
+        <div className="flex flex-col gap-2.5">
+          {/* Track Info & Artwork */}
+          <div className="flex items-center gap-3">
+            {/* Album Cover Art */}
+            <div className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] shadow-sm group">
+              {session.album_art_url && !imgError ? (
+                <img
+                  src={session.album_art_url}
+                  alt={`${session.title} cover`}
+                  onError={() => setImgError(true)}
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-emerald-950/40 to-[var(--fluent-card-bg)] text-emerald-400/80">
+                  <Music className="w-6 h-6" />
+                </div>
+              )}
+            </div>
+
+            {/* Track Details */}
+            <div className="min-w-0 flex-1 flex flex-col justify-center">
+              <h2
+                className="text-xs font-semibold text-[var(--fluent-text-primary)] truncate leading-tight"
+                title={session.title}
+              >
+                {session.title || "Unknown Track"}
+              </h2>
+              <p
+                className="text-[11px] text-[var(--fluent-text-secondary)] truncate mt-0.5"
+                title={session.artist}
+              >
+                {session.artist || "Unknown Artist"}
+              </p>
+              {session.album && (
+                <p
+                  className="text-[10px] text-[var(--fluent-text-secondary)]/70 truncate"
+                  title={session.album}
+                >
+                  {session.album}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Interpolated Progress Bar */}
+          <TrackProgress
+            timeline={session.timeline}
+            isPlaying={session.is_playing}
+          />
+
+          {/* Media Playback Controls */}
+          <MediaControls
+            isPlaying={session.is_playing}
+            canPlayPause={session.can_play_pause}
+            canSkipNext={session.can_skip_next}
+            canSkipPrevious={session.can_skip_previous}
+            onPlayPause={() => void playPause()}
+            onNext={() => void nextTrack()}
+            onPrevious={() => void previousTrack()}
+            size="md"
+          />
+        </div>
+      ) : (
+        /* Polished Idle State */
+        <div className="py-4 flex flex-col items-center justify-center text-center">
+          <div className="w-12 h-12 rounded-full bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] flex items-center justify-center text-[var(--fluent-text-secondary)] mb-2.5 shadow-inner">
+            <Music className="w-5 h-5 opacity-60" />
+          </div>
+          <p className="text-xs font-medium text-[var(--fluent-text-primary)]">
+            No Media Playing
+          </p>
+          <p className="text-[11px] text-[var(--fluent-text-secondary)] mt-0.5 max-w-[200px] leading-relaxed">
+            Start playback in Spotify or system media player to see controls
+          </p>
+        </div>
+      )}
+    </Card>
+  );
+};
+
+export default SpotifyWidget;

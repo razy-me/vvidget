@@ -179,4 +179,22 @@
   3. *Sampling CPU without initial 200ms delta*: Produces an initial false 0.0% reading in the UI.
 - **Reason / trade-offs**: Provides instantaneous UI rendering upon widget launch with zero initial 0.0% glitch, sub-0.2% CPU overhead, and adaptive background event streaming.
 
+## D-026 GSMTC Priority Session Arbitration & Binary URI Protocol Streaming (WP-04, Coder)
+- **Decision**: Prioritize Spotify sessions by inspecting `SourceAppUserModelId` with fallback to `GetCurrentSession()` and the first available active playback session. Deliver album art through a custom Tauri URI protocol `widgetz://album-art?t=<trackId>` backed by an in-memory `OnceLock<Mutex<HashMap<String, AlbumArtData>>>` capped at 30 items, and decouple playback timeline updates by locally interpolating `position_ms` at 60fps via `requestAnimationFrame` on the client rather than polling IPC. Add `"Foundation_Collections"` to `windows` crate features in `Cargo.toml` to support `GetSessions()` vector traversal.
+- **Alternatives considered**:
+  1. *Streaming Base64 artwork through JSON IPC*: Emits multi-megabyte strings through IPC on every track change, causing severe serialization overhead and garbage collection pauses.
+  2. *Polling GSMTC playback position every second via IPC*: Constant wakeups and IPC traffic for simple linear time progression.
+  3. *Unbounded album artwork caching*: Memory leak if hundreds of songs are played over days.
+- **Reason / trade-offs**: Zero IPC overhead for smooth 60fps timeline progression, native binary image streaming directly into standard HTML `<img>` elements with browser HTTP cache headers, and priority control of Spotify without requiring OAuth tokens.
+
+## D-027 Open-Meteo & Native Windows Geolocation with Offline Cache Resilience (WP-05, Coder)
+- **Decision**: Use WinRT `Windows.Devices.Geolocation::Geolocator` via `tokio::task::spawn_blocking` extracting coordinates through `coordinate.Point()?.Position()?` with graceful error fallback to Open-Meteo Geocoding API (`searchCity`) or saved coordinates. Cache latest successful weather forecast in `localStorage` under `widgetz_weather_cache` and automatically serve cached forecast with `isOffline = true` and visual warning badge when network or API fails.
+- **Alternatives considered**:
+  1. *Third-party IP geolocation API (ipinfo/ip-api)*: Rate limited, sends device IP to external ad/analytics networks, and inaccurate on VPNs.
+  2. *Failing completely on network outage*: Widget disappears or shows an uninformative crash error.
+  3. *Blocking main UI thread during WinRT Geolocation*: Freezes window frame if Windows Location prompt or permission check waits.
+- **Reason / trade-offs**: Privacy-first zero-key architecture using OS-level geolocation, instant offline resilience showing last known temperatures, and non-blocking asynchronous execution.
+
+
+
 

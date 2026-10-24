@@ -36,6 +36,7 @@ features = [
     "Media_Control",
     "Storage_Streams",
     "Devices_Geolocation",
+    "Foundation_Collections",
 ]
 
 [profile.release]

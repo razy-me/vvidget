@@ -1,0 +1,189 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { formatDuration, TrackProgress } from "@/widgets/spotify/TrackProgress";
+import { MediaControls } from "@/widgets/spotify/MediaControls";
+import { SpotifyWidget } from "@/widgets/spotify/SpotifyWidget";
+import type { MediaSession } from "@/types/media";
+import { DEFAULT_MEDIA_SESSION } from "@/types/media";
+
+describe("formatDuration", () => {
+  it("formats zero and falsy numbers as 0:00", () => {
+    expect(formatDuration(0)).toBe("0:00");
+    expect(formatDuration(-100)).toBe("0:00");
+    expect(formatDuration(NaN)).toBe("0:00");
+  });
+
+  it("formats standard seconds and minutes correctly", () => {
+    expect(formatDuration(5000)).toBe("0:05");
+    expect(formatDuration(65000)).toBe("1:05");
+    expect(formatDuration(215000)).toBe("3:35");
+    expect(formatDuration(3600000)).toBe("60:00");
+  });
+});
+
+describe("TrackProgress Component", () => {
+  it("renders progress and timestamps properly", () => {
+    render(
+      <TrackProgress
+        timeline={{
+          position_ms: 30000,
+          duration_ms: 120000,
+          last_updated_system_time_ms: Date.now(),
+        }}
+        isPlaying={false}
+      />
+    );
+
+    expect(screen.getByText("0:30")).toBeInTheDocument();
+    expect(screen.getByText("2:00")).toBeInTheDocument();
+
+    const progressbar = screen.getByRole("progressbar");
+    expect(progressbar).toBeInTheDocument();
+    expect(progressbar).toHaveAttribute("aria-valuenow", "25");
+  });
+
+  it("handles zero duration gracefully without NaN", () => {
+    render(
+      <TrackProgress
+        timeline={{
+          position_ms: 0,
+          duration_ms: 0,
+          last_updated_system_time_ms: 0,
+        }}
+        isPlaying={false}
+      />
+    );
+
+    const progressbar = screen.getByRole("progressbar");
+    expect(progressbar).toHaveAttribute("aria-valuenow", "0");
+  });
+});
+
+describe("MediaControls Component", () => {
+  const defaultProps = {
+    isPlaying: false,
+    canPlayPause: true,
+    canSkipNext: true,
+    canSkipPrevious: true,
+    onPlayPause: vi.fn(),
+    onNext: vi.fn(),
+    onPrevious: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders all three control buttons and fires callbacks", () => {
+    render(<MediaControls {...defaultProps} />);
+
+    const prevBtn = screen.getByLabelText("Previous track");
+    const playBtn = screen.getByLabelText("Play");
+    const nextBtn = screen.getByLabelText("Next track");
+
+    expect(prevBtn).toBeInTheDocument();
+    expect(playBtn).toBeInTheDocument();
+    expect(nextBtn).toBeInTheDocument();
+
+    fireEvent.click(prevBtn);
+    expect(defaultProps.onPrevious).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(playBtn);
+    expect(defaultProps.onPlayPause).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(nextBtn);
+    expect(defaultProps.onNext).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders Pause label and icon when playing", () => {
+    render(<MediaControls {...defaultProps} isPlaying={true} />);
+    expect(screen.getByLabelText("Pause")).toBeInTheDocument();
+  });
+
+  it("disables buttons when capabilities are false", () => {
+    render(
+      <MediaControls
+        {...defaultProps}
+        canPlayPause={false}
+        canSkipNext={false}
+        canSkipPrevious={false}
+      />
+    );
+
+    expect(screen.getByLabelText("Previous track")).toBeDisabled();
+    expect(screen.getByLabelText("Play")).toBeDisabled();
+    expect(screen.getByLabelText("Next track")).toBeDisabled();
+  });
+});
+
+describe("SpotifyWidget Component", () => {
+  it("renders polished idle state when session is inactive", () => {
+    render(<SpotifyWidget sessionOverride={DEFAULT_MEDIA_SESSION} />);
+
+    expect(screen.getByText("No Media Playing")).toBeInTheDocument();
+    expect(screen.getByText("Idle")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Start playback in Spotify or system media player/)
+    ).toBeInTheDocument();
+  });
+
+  it("renders active track metadata and controls when media is playing", () => {
+    const mockSession: MediaSession = {
+      is_active: true,
+      is_playing: true,
+      title: "Starboy",
+      artist: "The Weeknd, Daft Punk",
+      album: "Starboy",
+      track_id: "starboy-123",
+      timeline: {
+        position_ms: 45000,
+        duration_ms: 230000,
+        last_updated_system_time_ms: Date.now(),
+      },
+      album_art_url: "widgetz://album-art?t=starboy-123",
+      can_play_pause: true,
+      can_skip_next: true,
+      can_skip_previous: true,
+      source_app: "Spotify.exe",
+    };
+
+    render(<SpotifyWidget sessionOverride={mockSession} />);
+
+    expect(screen.getAllByText("Starboy").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("The Weeknd, Daft Punk")).toBeInTheDocument();
+    expect(screen.getByText("Spotify")).toBeInTheDocument();
+    expect(screen.getByText("Playing")).toBeInTheDocument();
+    expect(screen.getByAltText("Starboy cover")).toBeInTheDocument();
+    expect(screen.getByTestId("media-controls")).toBeInTheDocument();
+    expect(screen.getByTestId("track-progress")).toBeInTheDocument();
+  });
+
+  it("falls back to music icon when cover art fails to load", () => {
+    const mockSession: MediaSession = {
+      is_active: true,
+      is_playing: false,
+      title: "Blinding Lights",
+      artist: "The Weeknd",
+      album: "After Hours",
+      track_id: "bl-123",
+      timeline: {
+        position_ms: 10000,
+        duration_ms: 200000,
+        last_updated_system_time_ms: Date.now(),
+      },
+      album_art_url: "invalid-url",
+      can_play_pause: true,
+      can_skip_next: true,
+      can_skip_previous: true,
+      source_app: "Spotify.exe",
+    };
+
+    render(<SpotifyWidget sessionOverride={mockSession} />);
+
+    const img = screen.getByAltText("Blinding Lights cover");
+    fireEvent.error(img);
+
+    // img should be replaced by fallback icon container
+    expect(screen.queryByAltText("Blinding Lights cover")).not.toBeInTheDocument();
+  });
+});

@@ -122,4 +122,27 @@ c:\Widgetz\
 - `ResourceWidget`: Windows 11 Fluent widget with CPU sparkline trend (`MiniGraph`), memory utilization ring/bar (`MetricBar`), and primary storage drive stats.
 - **Gotchas**: Disks refresh is decoupled from CPU/RAM to maintain <0.2% CPU overhead. Disks in `sysinfo` v0.33 use `disks.refresh(true)` instead of legacy `refresh_list()`.
 
+## Module: Spotify Playback Controls (`src-tauri/src/media`, `src/widgets/spotify`, `src/types/media.ts`, `src/hooks/useMediaPlayback.ts`)
+- `get_media_state() -> Result<MediaSession, String>`: Returns current active GSMTC media session with priority filtering for Spotify (`SourceAppUserModelId`).
+- `media_play_pause() -> Result<(), String>`: Asynchronous toggle for playback state via GSMTC `TryTogglePlayPauseAsync`.
+- `media_next_track() -> Result<(), String>` & `media_previous_track() -> Result<(), String>`: Skip controls via GSMTC async APIs.
+- `start_media_monitor(app_handle)`: Background worker monitoring GSMTC session changes and emitting `"media-metadata-update"` events only when metadata/state changes.
+- `handle_album_art_protocol`: Custom URI scheme `widgetz://album-art?t=<track_id>` serving binary album artwork streams from in-memory cache, bypassing Base64 JSON overhead.
+- `useMediaPlayback()`: React hook with optimistic playback state toggling and `"media-metadata-update"` event listener.
+- `TrackProgress`: Decoupled 60fps client-side timeline interpolating current position from `last_updated_system_time_ms` + `position_ms` without IPC spam.
+- `MediaControls`: Fluent interactive previous/play/pause/next control buttons with accessible aria labels and state disabling.
+- `SpotifyWidget`: Fluent Card featuring album art with fallback, track title, artist, album, live progress, controls, and polished idle state when media is inactive.
+- **Gotchas**: Reading `GetSessions` on WinRT requires the `"Foundation_Collections"` feature on the `windows` crate. Thumbnails are read via `DataReader` and cached in-memory with a 30-entry cap to prevent memory bloat.
+
+## Module: Weather Widget & Geolocation (`src-tauri/src/geo`, `src/widgets/weather`, `src/services/weather`, `src/types/weather.ts`, `src/hooks/useWeather.ts`)
+- `get_windows_location() -> Result<(f64, f64), String>`: Asynchronous query via native WinRT `Windows.Devices.Geolocation::Geolocator`.
+- `fetchWeather(lat, lon, city, country)`: Queries Open-Meteo Forecast API with local `localStorage` caching and offline fallback (`isOffline = true`).
+- `searchCity(query, count)`: Fast, keyless city search and coordinate resolution via Open-Meteo Geocoding API (`geocoding-api.open-meteo.com`).
+- `getWeatherCondition(wmoCode)`: Maps official WMO weather codes (0-99) to human-readable labels and Lucide icon names.
+- `useWeather()`: React hook managing native WinRT/geocoded location resolution, polling interval, offline caching, and manual refresh.
+- `WeatherWidget`: Fluent Acrylic card displaying current temperature, feels-like, WMO weather icon/label, humidity %, wind speed km/h, location name, offline badge, and toggleable Hourly Trend (next 12h) and 5-Day Daily Forecast.
+- **Gotchas**: In `windows` 0.58, `Geocoordinate` retrieves position via `coordinate.Point()?.Position()?` (deprecated direct `Latitude`/`Longitude` properties were removed). If Windows location services are disabled, `useWeather` falls back to manual city geocoding or default coordinates without crashing.
+
+
+
 
