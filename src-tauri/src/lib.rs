@@ -211,6 +211,10 @@ pub mod integration {
     ) -> Result<(), String> {
         const SKELETON_LABEL: &str = "widget_skeleton";
         if let Some(window) = app.get_webview_window(SKELETON_LABEL) {
+            #[cfg(windows)]
+            if let Ok(hwnd) = window.hwnd() {
+                crate::window::win32::set_skeleton_hwnd(hwnd.0 as isize);
+            }
             // Use Tauri high-level set_size and set_position so ICoreWebView2Controller::put_Bounds resizes the child viewport
             let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }));
             let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
@@ -376,6 +380,30 @@ pub fn run() {
                     },
                 );
             }
+
+            // Pre-create translucent desktop skeleton window hidden so it is immediately ready for zero-latency drag feedback
+            let _ = tauri::WebviewWindowBuilder::new(
+                app,
+                "widget_skeleton",
+                tauri::WebviewUrl::App("index.html?view=skeleton".into()),
+            )
+            .title("Widgetz Skeleton")
+            .inner_size(360.0, 256.0)
+            .visible(false)
+            .resizable(true)
+            .decorations(false)
+            .transparent(true)
+            .shadow(false)
+            .skip_taskbar(true)
+            .build()
+            .map(|w| {
+                #[cfg(windows)]
+                if let Ok(hwnd) = w.hwnd() {
+                    unsafe {
+                        let _ = crate::window::win32::apply_skeleton_window_styles(hwnd.0 as *mut core::ffi::c_void);
+                    }
+                }
+            });
 
             // Sync widget windows on application startup and when configuration changes
             let initial_handle = app.handle().clone();

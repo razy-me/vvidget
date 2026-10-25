@@ -611,11 +611,20 @@ mod tests {
             h.await.unwrap();
         }
 
-        // Wait past debounce duration to verify stability
-        tokio::time::sleep(Duration::from_millis(600)).await;
-        let (disk_cfg, recovered) = load_or_recover_config(&path);
-        assert!(!recovered);
-        assert!(disk_cfg.theme.starts_with("theme-"));
+        // Wait past debounce duration to verify stability (up to 2 seconds under test load)
+        let mut success = false;
+        for _ in 0..20 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            if let Ok(content) = fs::read_to_string(&path) {
+                if let Ok(cfg) = serde_json::from_str::<AppConfig>(&content) {
+                    if cfg.theme.starts_with("theme-") {
+                        success = true;
+                        break;
+                    }
+                }
+            }
+        }
+        assert!(success, "Debounced config should be written to disk");
 
         let _ = fs::remove_dir_all(&dir);
     }

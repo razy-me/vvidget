@@ -5,6 +5,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE,
     WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE, WS_EX_APPWINDOW, WS_EX_LAYERED,
     SetWindowPos, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_FRAMECHANGED, SWP_HIDEWINDOW, SWP_NOACTIVATE,
+    SWP_SHOWWINDOW, HWND_TOP, ShowWindow,
     WM_WINDOWPOSCHANGING, WM_MOVING, WM_SYSCOMMAND, WM_NCDESTROY, WM_EXITSIZEMOVE, WM_SHOWWINDOW,
     WM_NCHITTEST, HTTRANSPARENT,
     SC_MINIMIZE, WINDOWPOS, GetWindowRect, HWND_BOTTOM,
@@ -19,8 +20,8 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::UI::Shell::{SetWindowSubclass, DefSubclassProc, RemoveWindowSubclass};
 
 use serde::{Deserialize, Serialize};
-use super::snapping::{apply_magnetic_snapping, Rect, SnapConfig};
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use super::snapping::{apply_magnetic_snapping, find_nearest_non_overlapping_slot, Rect, SnapConfig};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicIsize, Ordering};
 use std::sync::RwLock;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
@@ -231,6 +232,16 @@ pub unsafe fn apply_tool_window_styles(raw_hwnd: *mut core::ffi::c_void, no_acti
     Ok(())
 }
 
+static SKELETON_HWND: AtomicIsize = AtomicIsize::new(0);
+
+pub fn set_skeleton_hwnd(hwnd: isize) {
+    SKELETON_HWND.store(hwnd, Ordering::SeqCst);
+}
+
+pub fn get_skeleton_hwnd() -> isize {
+    SKELETON_HWND.load(Ordering::SeqCst)
+}
+
 #[cfg(windows)]
 unsafe extern "system" fn skeleton_subclass_proc(
     hwnd: HWND,
@@ -244,6 +255,7 @@ unsafe extern "system" fn skeleton_subclass_proc(
         WM_NCHITTEST => LRESULT(HTTRANSPARENT as isize),
         WM_NCDESTROY => {
             let _ = RemoveWindowSubclass(hwnd, Some(skeleton_subclass_proc), uidsubclass);
+            set_skeleton_hwnd(0);
             DefSubclassProc(hwnd, umsg, wparam, lparam)
         }
         _ => DefSubclassProc(hwnd, umsg, wparam, lparam),
@@ -253,6 +265,7 @@ unsafe extern "system" fn skeleton_subclass_proc(
 #[cfg(windows)]
 pub unsafe fn apply_skeleton_window_styles(raw_hwnd: *mut core::ffi::c_void) -> Result<(), String> {
     let hwnd = HWND(raw_hwnd);
+    set_skeleton_hwnd(hwnd.0 as isize);
     let current_ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
     // WS_EX_TOOLWINDOW: hide from taskbar / alt-tab
     // WS_EX_NOACTIVATE: prevent stealing focus
@@ -439,6 +452,22 @@ unsafe fn on_wm_moving(hwnd: HWND, rect: &mut RECT) {
     rect.bottom = moving_rect.bottom;
 
     update_tracked_window(current_hwnd_isize, moving_rect);
+
+    // Calculate prospective non-overlapping slot and update skeleton preview in OS space
+    let prospective_slot = find_nearest_non_overlapping_slot(&moving_rect, &other_rects, grid_x, grid_y, &work_area);
+    let skel = get_skeleton_hwnd();
+    if skel != 0 {
+        let skel_hwnd = HWND(skel as *mut core::ffi::c_void);
+        let _ = SetWindowPos(
+            skel_hwnd,
+            HWND_TOP,
+            prospective_slot.left,
+            prospective_slot.top,
+            prospective_slot.width(),
+            prospective_slot.height(),
+            SWP_NOACTIVATE | SWP_SHOWWINDOW,
+        );
+    }
 }
 
 #[cfg(windows)]
@@ -493,23 +522,64 @@ unsafe extern "system" fn widget_subclass_proc(
             }
             DefSubclassProc(hwnd, umsg, wparam, lparam)
         }
-        // Persist final dragged widget position on mouse release with magnetic grid snapping
+        // Persist final dragged widget position on mouse release with guaranteed non-overlapping grid snapping
         WM_EXITSIZEMOVE => {
             let mut rect = RECT::default();
             if GetWindowRect(hwnd, &mut rect).is_ok() {
-                on_wm_moving(hwnd, &mut rect);
+                let metrics = get_desktop_grid_metrics();
+                let (grid_x, grid_y) = (metrics.physical_x.max(1), metrics.physical_y.max(1));
+                let hmon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+                let mut mi = MONITORINFO {
+                    cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+                    ..Default::default()
+                };
+                let work_area = if GetMonitorInfoW(hmon, &mut mi).as_bool() {
+                    Rect::new(mi.rcWork.left, mi.rcWork.top, mi.rcWork.right, mi.rcWork.bottom)
+                } else {
+                    Rect::new(0, 0, 1920, 1080)
+                };
+
+                let current_hwnd_isize = hwnd.0 as isize;
+                let other_rects: Vec<Rect> = {
+                    if let Ok(guard) = TRACKED_WINDOWS.read() {
+                        if let Some(map) = guard.as_ref() {
+                            map.iter()
+                                .filter(|(&h, _)| h != current_hwnd_isize)
+                                .map(|(_, &r)| r)
+                                .collect()
+                        } else {
+                            Vec::new()
+                        }
+                    } else {
+                        Vec::new()
+                    }
+                };
+
+                let moving_rect = Rect::new(rect.left, rect.top, rect.right, rect.bottom);
+                let final_slot = find_nearest_non_overlapping_slot(&moving_rect, &other_rects, grid_x, grid_y, &work_area);
+
+                // Snap the widget window directly to the guaranteed non-overlapping slot
                 let _ = SetWindowPos(
                     hwnd,
                     HWND(core::ptr::null_mut()),
-                    rect.left,
-                    rect.top,
-                    rect.right - rect.left,
-                    rect.bottom - rect.top,
+                    final_slot.left,
+                    final_slot.top,
+                    final_slot.width(),
+                    final_slot.height(),
                     SWP_NOZORDER | SWP_NOACTIVATE,
                 );
-                let r = Rect::new(rect.left, rect.top, rect.right, rect.bottom);
-                update_tracked_window(hwnd.0 as isize, r);
-                dispatch_exit_size_move(hwnd.0 as isize, r);
+
+                // Cleanly hide skeleton preview window
+                let skel = get_skeleton_hwnd();
+                if skel != 0 {
+                    let skel_hwnd = HWND(skel as *mut core::ffi::c_void);
+                    use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
+                    let _ = ShowWindow(skel_hwnd, SW_HIDE);
+                    invalidate_screen_rect(0, 0, 8000, 8000);
+                }
+
+                update_tracked_window(hwnd.0 as isize, final_slot);
+                dispatch_exit_size_move(hwnd.0 as isize, final_slot);
             }
             DefSubclassProc(hwnd, umsg, wparam, lparam)
         }

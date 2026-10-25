@@ -48,6 +48,85 @@ impl Rect {
     }
 }
 
+/// Checks whether two rectangles overlap on the screen.
+/// Margin tolerance allows adjacent edge-to-edge touching without false positives.
+#[inline]
+pub fn rects_overlap(r1: &Rect, r2: &Rect, margin: i32) -> bool {
+    r1.left < r2.right - margin
+        && r1.right > r2.left + margin
+        && r1.top < r2.bottom - margin
+        && r1.bottom > r2.top + margin
+}
+
+/// Finds the nearest non-overlapping slot on the desktop icon grid for a widget rectangle.
+/// If the snapped candidate does not collide with any other widget, snaps directly.
+/// If a collision occurs, searches the entire work area grid and picks the closest free slot.
+pub fn find_nearest_non_overlapping_slot(
+    target: &Rect,
+    other_widgets: &[Rect],
+    grid_x: i32,
+    grid_y: i32,
+    work_area: &Rect,
+) -> Rect {
+    let gx = grid_x.max(1);
+    let gy = grid_y.max(1);
+    let w = target.width();
+    let h = target.height();
+
+    let min_x = work_area.left;
+    let max_x = (work_area.right - w).max(min_x);
+    let min_y = work_area.top;
+    let max_y = (work_area.bottom - h).max(min_y);
+
+    let base_x = min_x + (((target.left - min_x) as f32 / gx as f32).round() as i32) * gx;
+    let base_y = min_y + (((target.top - min_y) as f32 / gy as f32).round() as i32) * gy;
+
+    let candidate = Rect::new(
+        base_x.clamp(min_x, max_x),
+        base_y.clamp(min_y, max_y),
+        base_x.clamp(min_x, max_x) + w,
+        base_y.clamp(min_y, max_y) + h,
+    );
+
+    let has_collision = other_widgets.iter().any(|o| rects_overlap(&candidate, o, 2));
+    if !has_collision {
+        return candidate;
+    }
+
+    let min_col = ((min_x as f32) / (gx as f32)).floor() as i32;
+    let max_col = ((max_x as f32) / (gx as f32)).ceil() as i32;
+    let min_row = ((min_y as f32) / (gy as f32)).floor() as i32;
+    let max_row = ((max_y as f32) / (gy as f32)).ceil() as i32;
+
+    let mut best_rect: Option<(Rect, i64)> = None;
+
+    for c in min_col..=max_col {
+        let cand_x = (c * gx).clamp(min_x, max_x);
+        for r in min_row..=max_row {
+            let cand_y = (r * gy).clamp(min_y, max_y);
+            let test_rect = Rect::new(cand_x, cand_y, cand_x + w, cand_y + h);
+            if !other_widgets.iter().any(|o| rects_overlap(&test_rect, o, 2)) {
+                let dx = (cand_x - target.left) as i64;
+                let dy = (cand_y - target.top) as i64;
+                let dist_sq = dx * dx + dy * dy;
+                match best_rect {
+                    None => best_rect = Some((test_rect, dist_sq)),
+                    Some((_, best_dist)) if dist_sq < best_dist => {
+                        best_rect = Some((test_rect, dist_sq));
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    if let Some((r, _)) = best_rect {
+        return r;
+    }
+
+    candidate
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct SnapResult {
     pub snapped_x: bool,
@@ -556,5 +635,55 @@ mod tests {
         assert!(res.snapped_y, "Should snap vertically to 2 * 128 = 256");
         assert_eq!(moving.left, 240);
         assert_eq!(moving.top, 256);
+    }
+
+    #[test]
+    fn test_rects_overlap_detection() {
+        let r1 = Rect::new(0, 0, 360, 256);
+        let r2 = Rect::new(200, 100, 560, 356); // overlapping
+        let r3 = Rect::new(360, 0, 720, 256); // adjacent touching
+        let r4 = Rect::new(400, 0, 760, 256); // far away
+
+        assert!(rects_overlap(&r1, &r2, 2));
+        assert!(!rects_overlap(&r1, &r3, 2), "Adjacent rects with 2px margin do not overlap");
+        assert!(!rects_overlap(&r1, &r4, 2));
+    }
+
+    #[test]
+    fn test_find_nearest_non_overlapping_slot_unoccupied() {
+        let work_area = Rect::new(0, 0, 1440, 900);
+        let target = Rect::new(20, 20, 380, 276); // w=360, h=256
+        let res = find_nearest_non_overlapping_slot(&target, &[], 120, 128, &work_area);
+        assert_eq!(res.left, 0);
+        assert_eq!(res.top, 0);
+        assert_eq!(res.width(), 360);
+        assert_eq!(res.height(), 256);
+    }
+
+    #[test]
+    fn test_find_nearest_non_overlapping_slot_collision_finds_adjacent_slot() {
+        let work_area = Rect::new(0, 0, 1440, 900);
+        // An existing widget occupies (0, 0, 360, 256)
+        let existing = vec![Rect::new(0, 0, 360, 256)];
+        // Moving widget dragged right onto (0, 0)
+        let target = Rect::new(50, 50, 410, 306); // w=360, h=256
+        let res = find_nearest_non_overlapping_slot(&target, &existing, 120, 128, &work_area);
+        // Must NOT overlap existing
+        assert!(!rects_overlap(&res, &existing[0], 2));
+        // Should find adjacent column or row (e.g. left=360 or top=256)
+        assert!(res.left >= 360 || res.top >= 256);
+    }
+
+    #[test]
+    fn test_find_nearest_non_overlapping_slot_left_third() {
+        let work_area = Rect::new(0, 0, 1440, 900);
+        // Existing widget at x=480, y=0 (middle)
+        let existing = vec![Rect::new(480, 0, 840, 384)];
+        // Target is dragged to left third at x=20, y=100
+        let target = Rect::new(20, 100, 380, 356); // w=360, h=256
+        let res = find_nearest_non_overlapping_slot(&target, &existing, 120, 128, &work_area);
+        assert_eq!(res.left, 0, "Should place at column 0 in the left third");
+        assert_eq!(res.top, 128, "Should snap to row 1 (128)");
+        assert!(!rects_overlap(&res, &existing[0], 2));
     }
 }

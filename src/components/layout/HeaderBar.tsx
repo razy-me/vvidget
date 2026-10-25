@@ -29,8 +29,8 @@ export const HeaderBar: FC<HeaderBarProps> = ({
     onDragStateChange,
   });
 
-  // Native drag fallback for docked multi-widget bar
-  const handleDockMouseDown = (e: React.MouseEvent) => {
+  // Native drag handler: triggers OS-level modal window dragging via Tauri / Win32
+  const handleDragMouseDown = (e: React.MouseEvent) => {
     if (isLocked) return;
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest("button, a, input, select, textarea, [data-no-drag]")) {
@@ -45,8 +45,8 @@ export const HeaderBar: FC<HeaderBarProps> = ({
 
   const dragHandlers = !isLocked
     ? isDocked
-      ? { "data-tauri-drag-region": true, onMouseDown: handleDockMouseDown }
-      : { ...dragProps }
+      ? { "data-tauri-drag-region": true, onMouseDown: handleDragMouseDown }
+      : { ...dragProps, onMouseDown: handleDragMouseDown }
     : {};
 
   return (
