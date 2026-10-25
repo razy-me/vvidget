@@ -103,9 +103,13 @@ pub fn handle_album_art_protocol<R: tauri::Runtime>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_album_art_cache() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         clear_cached_album_art();
         assert!(get_cached_album_art("test-id").is_none());
 
@@ -122,6 +126,7 @@ mod tests {
 
     #[test]
     fn test_album_art_cache_fifo_eviction() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         clear_cached_album_art();
         for i in 0..35 {
             set_cached_album_art(&format!("id-{}", i), vec![i as u8], "image/jpeg".to_string());
@@ -139,6 +144,7 @@ mod tests {
 
     #[test]
     fn test_album_art_cache_overwrite_updates_data_without_duplicating_order() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         clear_cached_album_art();
         set_cached_album_art("unique-id", vec![1, 1], "image/png".to_string());
         set_cached_album_art("unique-id", vec![2, 2, 2], "image/jpeg".to_string());
@@ -161,6 +167,7 @@ mod tests {
 
     #[test]
     fn test_album_art_cache_concurrent_access() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         clear_cached_album_art();
         let mut handles = Vec::new();
 

@@ -88,7 +88,7 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
     if !target_path.exists() {
         let default_config = AppConfig::default();
         if let Err(e) = save_config_atomic(target_path, &default_config) {
-            eprintln!("Warning: could not write default config to {:?}: {}", target_path, e);
+            log::warn!("Could not write default config to {:?}: {}", target_path, e);
         }
         return (default_config, false);
     }
@@ -97,7 +97,7 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
         Ok(content) => match serde_json::from_str::<AppConfig>(&content) {
             Ok(parsed) => (parsed, false),
             Err(parse_err) => {
-                eprintln!(
+                log::error!(
                     "Config file at {:?} is corrupted: {}. Backing up and restoring defaults.",
                     target_path, parse_err
                 );
@@ -105,7 +105,7 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
             }
         },
         Err(read_err) => {
-            eprintln!(
+            log::error!(
                 "Failed to read config file at {:?}: {}. Backing up and restoring defaults.",
                 target_path, read_err
             );
@@ -132,7 +132,7 @@ fn backup_corrupted_and_reset(target_path: &Path) -> (AppConfig, bool) {
     let corrupt_path = parent.join(corrupt_name);
 
     if let Err(e) = fs::rename(target_path, &corrupt_path) {
-        eprintln!(
+        log::error!(
             "Failed to rename corrupted config {:?} to {:?}: {}",
             target_path, corrupt_path, e
         );
@@ -140,7 +140,7 @@ fn backup_corrupted_and_reset(target_path: &Path) -> (AppConfig, bool) {
 
     let default_config = AppConfig::default();
     if let Err(e) = save_config_atomic(target_path, &default_config) {
-        eprintln!(
+        log::error!(
             "Failed to write fresh default config to {:?}: {}",
             target_path, e
         );
@@ -355,12 +355,17 @@ mod tests {
         let in_memory = manager.get_config().await;
         assert_eq!(in_memory.snap_to_edges, false);
 
-        // Wait for debounce period (500ms + buffer)
-        tokio::time::sleep(Duration::from_millis(650)).await;
-
-        // Verify disk has updated value
-        let (disk_config, _) = load_or_recover_config(&path);
-        assert_eq!(disk_config.snap_to_edges, false);
+        // Wait for debounce period (500ms + buffer) with polling
+        let mut disk_updated = false;
+        for _ in 0..30 {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            let (disk_config, _) = load_or_recover_config(&path);
+            if !disk_config.snap_to_edges {
+                disk_updated = true;
+                break;
+            }
+        }
+        assert!(disk_updated, "Disk should have updated value within debounce window");
 
         let _ = fs::remove_dir_all(&dir);
     }

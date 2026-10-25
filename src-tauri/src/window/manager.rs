@@ -7,8 +7,8 @@ use super::monitor::{clamp_to_monitors, logical_to_physical, physical_to_logical
 use super::snapping::{Rect, SnapConfig};
 use super::win32::{
     apply_acrylic_effect, apply_tool_window_styles, install_window_subclass,
-    register_tracked_window, set_snapping_enabled, set_snapping_threshold,
-    unregister_tracked_window, WIDGET_SUBCLASS_ID,
+    register_tracked_window, set_snap_to_edges, set_snap_to_widgets, set_snapping_enabled,
+    set_snapping_threshold, unregister_tracked_window, WIDGET_SUBCLASS_ID,
 };
 
 #[derive(Debug, Clone)]
@@ -51,6 +51,7 @@ pub struct WindowManager {
     widgets: Arc<RwLock<HashMap<String, WidgetWindowInfo>>>,
     locked: Arc<AtomicBool>,
     snap_config: Arc<RwLock<SnapConfig>>,
+    config_manager: Arc<RwLock<Option<crate::config::ConfigManager>>>,
 }
 
 impl Default for WindowManager {
@@ -65,6 +66,7 @@ impl WindowManager {
             widgets: Arc::new(RwLock::new(HashMap::new())),
             locked: Arc::new(AtomicBool::new(false)),
             snap_config: Arc::new(RwLock::new(SnapConfig::default())),
+            config_manager: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -82,6 +84,70 @@ impl WindowManager {
         if let Ok(mut config) = self.snap_config.write() {
             config.enabled = enabled;
             config.threshold = threshold;
+        }
+    }
+
+    pub fn set_snap_to_edges(&self, enabled: bool) {
+        set_snap_to_edges(enabled);
+        if let Ok(mut config) = self.snap_config.write() {
+            config.snap_to_edges = enabled;
+        }
+    }
+
+    pub fn set_snap_to_widgets(&self, enabled: bool) {
+        set_snap_to_widgets(enabled);
+        if let Ok(mut config) = self.snap_config.write() {
+            config.snap_to_widgets = enabled;
+        }
+    }
+
+    pub fn set_config_manager(&self, config_manager: crate::config::ConfigManager) {
+        if let Ok(mut lock) = self.config_manager.write() {
+            *lock = Some(config_manager);
+        }
+    }
+
+    pub fn get_config_manager(&self) -> Option<crate::config::ConfigManager> {
+        self.config_manager.read().ok().and_then(|g| g.clone())
+    }
+
+    pub fn find_widget_by_hwnd(&self, hwnd: isize) -> Option<WidgetWindowInfo> {
+        if let Ok(map) = self.widgets.read() {
+            for info in map.values() {
+                if info.hwnd == hwnd {
+                    return Some(info.clone());
+                }
+            }
+        }
+        None
+    }
+
+    pub fn handle_window_moved(&self, hwnd: isize, rect: Rect) {
+        if let Some(info) = self.find_widget_by_hwnd(hwnd) {
+            let scale = if info.scale_factor > 0.0 { info.scale_factor } else { 1.0 };
+            let logical_x = (rect.left as f64) / scale;
+            let logical_y = (rect.top as f64) / scale;
+            let logical_width = ((rect.right - rect.left) as f64) / scale;
+            let logical_height = ((rect.bottom - rect.top) as f64) / scale;
+
+            self.update_window_position(&info.id, logical_x, logical_y, logical_width, logical_height);
+
+            if let Some(cm) = self.get_config_manager() {
+                let widget_id = info.id.clone();
+                tauri::async_runtime::spawn(async move {
+                    let mut config = cm.get_config().await;
+                    if let Some(placement) = config.widgets.get_mut(&widget_id) {
+                        placement.logical_x = logical_x;
+                        placement.logical_y = logical_y;
+                        placement.logical_width = logical_width;
+                        placement.logical_height = logical_height;
+                        placement.scale_factor = scale;
+                    }
+                    if let Err(e) = cm.save_debounced(config).await {
+                        log::error!("Failed to save debounced widget position: {}", e);
+                    }
+                });
+            }
         }
     }
 
@@ -356,5 +422,56 @@ mod tests {
         for h in handles {
             h.join().unwrap();
         }
+    }
+
+    #[tokio::test]
+    async fn test_window_manager_handle_window_moved_persists_config() {
+        let temp_dir = std::env::temp_dir().join(format!("wm_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let config_path = temp_dir.join("config.json");
+        let cm = crate::config::ConfigManager::new(config_path.clone());
+
+        let wm = WindowManager::new();
+        wm.set_config_manager(cm.clone());
+
+        // Register widget_a
+        {
+            let mut map = wm.widgets.write().unwrap();
+            map.insert(
+                "resources".to_string(),
+                WidgetWindowInfo {
+                    id: "resources".to_string(),
+                    hwnd: 77777,
+                    rect: PhysicalRect { x: 40, y: 40, width: 320, height: 180 },
+                    scale_factor: 1.0,
+                },
+            );
+        }
+
+        // Simulate WM_EXITSIZEMOVE reporting new rect (x=150, y=250, r=470, b=430)
+        wm.handle_window_moved(77777, Rect::new(150, 250, 470, 430));
+
+        // Memory of WindowManager should be updated immediately
+        {
+            let map = wm.widgets.read().unwrap();
+            let info = map.get("resources").unwrap();
+            assert_eq!(info.rect.x, 150);
+            assert_eq!(info.rect.y, 250);
+        }
+
+        // ConfigManager debounced save should update memory
+        let mut updated = false;
+        for _ in 0..20 {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            let cfg = cm.get_config().await;
+            if let Some(p) = cfg.widgets.get("resources") {
+                if (p.logical_x - 150.0).abs() < 1e-3 && (p.logical_y - 250.0).abs() < 1e-3 {
+                    updated = true;
+                    break;
+                }
+            }
+        }
+        assert!(updated, "ConfigManager should have persisted moved widget position");
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

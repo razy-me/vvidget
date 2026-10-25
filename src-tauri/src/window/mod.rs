@@ -10,8 +10,10 @@ pub use monitor::{
 };
 pub use snapping::{apply_magnetic_snapping, Rect, SnapConfig, SnapResult};
 pub use win32::{
-    apply_acrylic_effect, apply_tool_window_styles, install_window_subclass,
-    is_snapping_enabled, register_tracked_window, remove_window_subclass,
-    set_snapping_enabled, set_snapping_threshold, unregister_tracked_window,
+    apply_acrylic_effect, apply_tool_window_styles, dispatch_exit_size_move, hide_window,
+    install_window_subclass, is_allow_hide, is_snap_to_edges, is_snap_to_widgets,
+    is_snapping_enabled, is_window_allow_hide, register_tracked_window, remove_window_subclass,
+    set_allow_hide, set_exit_size_move_callback, set_snap_to_edges, set_snap_to_widgets,
+    set_snapping_enabled, set_snapping_threshold, set_window_allow_hide, unregister_tracked_window,
     WIDGET_SUBCLASS_ID,
 };

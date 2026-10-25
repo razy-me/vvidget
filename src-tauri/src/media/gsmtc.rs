@@ -272,6 +272,7 @@ mod win {
 pub fn get_current_media_session() -> Result<MediaSession, String> {
     #[cfg(windows)]
     {
+        let _com_guard = crate::geo::winrt::ComGuard::new();
         win::get_current_media_session_win()
     }
     #[cfg(not(windows))]
@@ -283,6 +284,7 @@ pub fn get_current_media_session() -> Result<MediaSession, String> {
 pub fn send_play_pause() -> Result<(), String> {
     #[cfg(windows)]
     {
+        let _com_guard = crate::geo::winrt::ComGuard::new();
         win::send_play_pause_win()
     }
     #[cfg(not(windows))]
@@ -294,6 +296,7 @@ pub fn send_play_pause() -> Result<(), String> {
 pub fn send_next_track() -> Result<(), String> {
     #[cfg(windows)]
     {
+        let _com_guard = crate::geo::winrt::ComGuard::new();
         win::send_next_track_win()
     }
     #[cfg(not(windows))]
@@ -305,6 +308,7 @@ pub fn send_next_track() -> Result<(), String> {
 pub fn send_previous_track() -> Result<(), String> {
     #[cfg(windows)]
     {
+        let _com_guard = crate::geo::winrt::ComGuard::new();
         win::send_previous_track_win()
     }
     #[cfg(not(windows))]

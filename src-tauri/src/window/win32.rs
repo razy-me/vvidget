@@ -5,7 +5,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE,
     WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE, WS_EX_APPWINDOW,
     SetWindowPos, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_FRAMECHANGED, SWP_HIDEWINDOW,
-    WM_WINDOWPOSCHANGING, WM_MOVING, WM_SYSCOMMAND, WM_NCDESTROY, SC_MINIMIZE, WINDOWPOS,
+    WM_WINDOWPOSCHANGING, WM_MOVING, WM_SYSCOMMAND, WM_NCDESTROY, WM_EXITSIZEMOVE, WM_SHOWWINDOW,
+    SC_MINIMIZE, WINDOWPOS, GetWindowRect,
 };
 #[cfg(windows)]
 use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
@@ -15,7 +16,7 @@ use windows::Win32::UI::Shell::{SetWindowSubclass, DefSubclassProc, RemoveWindow
 use super::snapping::{apply_magnetic_snapping, Rect, SnapConfig};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::RwLock;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub const WIDGET_SUBCLASS_ID: usize = 0x5749_4447; // 'WIDG'
 
@@ -23,6 +24,89 @@ static SNAP_ENABLED: AtomicBool = AtomicBool::new(true);
 static SNAP_THRESHOLD: AtomicI32 = AtomicI32::new(16);
 static SNAP_TO_EDGES: AtomicBool = AtomicBool::new(true);
 static SNAP_TO_WIDGETS: AtomicBool = AtomicBool::new(true);
+
+static ALLOW_HIDE: AtomicBool = AtomicBool::new(false);
+static ALLOW_HIDE_HWNDS: RwLock<Option<HashSet<isize>>> = RwLock::new(None);
+
+pub type ExitSizeMoveCallback = Box<dyn Fn(isize, Rect) + Send + Sync + 'static>;
+static EXIT_SIZE_MOVE_CALLBACK: RwLock<Option<ExitSizeMoveCallback>> = RwLock::new(None);
+
+pub fn set_exit_size_move_callback<F>(cb: F)
+where
+    F: Fn(isize, Rect) + Send + Sync + 'static,
+{
+    if let Ok(mut lock) = EXIT_SIZE_MOVE_CALLBACK.write() {
+        *lock = Some(Box::new(cb));
+    }
+}
+
+pub fn dispatch_exit_size_move(hwnd: isize, rect: Rect) {
+    if let Ok(guard) = EXIT_SIZE_MOVE_CALLBACK.read() {
+        if let Some(cb) = guard.as_ref() {
+            cb(hwnd, rect);
+        }
+    }
+}
+
+pub fn set_allow_hide(allow: bool) {
+    ALLOW_HIDE.store(allow, Ordering::SeqCst);
+}
+
+pub fn is_allow_hide() -> bool {
+    ALLOW_HIDE.load(Ordering::SeqCst)
+}
+
+pub fn set_window_allow_hide(hwnd: isize, allow: bool) {
+    if let Ok(mut guard) = ALLOW_HIDE_HWNDS.write() {
+        let set = guard.get_or_insert_with(HashSet::new);
+        if allow {
+            set.insert(hwnd);
+        } else {
+            set.remove(&hwnd);
+        }
+    }
+}
+
+pub fn is_window_allow_hide(hwnd: isize) -> bool {
+    if ALLOW_HIDE.load(Ordering::SeqCst) {
+        return true;
+    }
+    if let Ok(guard) = ALLOW_HIDE_HWNDS.read() {
+        if let Some(set) = guard.as_ref() {
+            return set.contains(&hwnd);
+        }
+    }
+    false
+}
+
+pub fn hide_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) -> Result<(), tauri::Error> {
+    #[cfg(windows)]
+    if let Ok(hwnd) = window.hwnd() {
+        set_window_allow_hide(hwnd.0 as isize, true);
+    }
+    let res = window.hide();
+    #[cfg(windows)]
+    if let Ok(hwnd) = window.hwnd() {
+        set_window_allow_hide(hwnd.0 as isize, false);
+    }
+    res
+}
+
+pub fn set_snap_to_edges(enabled: bool) {
+    SNAP_TO_EDGES.store(enabled, Ordering::SeqCst);
+}
+
+pub fn is_snap_to_edges() -> bool {
+    SNAP_TO_EDGES.load(Ordering::SeqCst)
+}
+
+pub fn set_snap_to_widgets(enabled: bool) {
+    SNAP_TO_WIDGETS.store(enabled, Ordering::SeqCst);
+}
+
+pub fn is_snap_to_widgets() -> bool {
+    SNAP_TO_WIDGETS.load(Ordering::SeqCst)
+}
 
 
 static TRACKED_WINDOWS: RwLock<Option<HashMap<isize, Rect>>> = RwLock::new(None);
@@ -187,14 +271,26 @@ unsafe extern "system" fn widget_subclass_proc(
 ) -> LRESULT {
     match umsg {
         // Win + D (Show Desktop) protection:
-        // Intercept SWP_HIDEWINDOW and strip it to keep widget visible on the desktop canvas.
+        // Intercept SWP_HIDEWINDOW and strip it to keep widget visible on the desktop canvas,
+        // unless programmatic hide is explicitly requested.
         WM_WINDOWPOSCHANGING => {
             let p_winpos = lparam.0 as *mut WINDOWPOS;
             if !p_winpos.is_null() {
                 let winpos = &mut *p_winpos;
                 if (winpos.flags & SWP_HIDEWINDOW).0 != 0 {
-                    winpos.flags = winpos.flags & !SWP_HIDEWINDOW;
+                    if !is_window_allow_hide(hwnd.0 as isize) {
+                        winpos.flags = winpos.flags & !SWP_HIDEWINDOW;
+                    }
                 }
+            }
+            DefSubclassProc(hwnd, umsg, wparam, lparam)
+        }
+        // Detect programmatic hide commands (ShowWindow(SW_HIDE))
+        WM_SHOWWINDOW => {
+            if wparam.0 == 0 && lparam.0 == 0 {
+                set_window_allow_hide(hwnd.0 as isize, true);
+            } else if wparam.0 != 0 {
+                set_window_allow_hide(hwnd.0 as isize, false);
             }
             DefSubclassProc(hwnd, umsg, wparam, lparam)
         }
@@ -215,9 +311,20 @@ unsafe extern "system" fn widget_subclass_proc(
             }
             DefSubclassProc(hwnd, umsg, wparam, lparam)
         }
+        // Persist final dragged widget position on mouse release
+        WM_EXITSIZEMOVE => {
+            let mut rect = RECT::default();
+            if GetWindowRect(hwnd, &mut rect).is_ok() {
+                let r = Rect::new(rect.left, rect.top, rect.right, rect.bottom);
+                update_tracked_window(hwnd.0 as isize, r);
+                dispatch_exit_size_move(hwnd.0 as isize, r);
+            }
+            DefSubclassProc(hwnd, umsg, wparam, lparam)
+        }
         // Clean up subclass on window destruction
         WM_NCDESTROY => {
             unregister_tracked_window(hwnd.0 as isize);
+            set_window_allow_hide(hwnd.0 as isize, false);
             let _ = RemoveWindowSubclass(hwnd, Some(widget_subclass_proc), uidsubclass);
             DefSubclassProc(hwnd, umsg, wparam, lparam)
         }
@@ -289,5 +396,50 @@ mod tests {
         unregister_tracked_window(fake_hwnd);
         let tracked_after = get_tracked_windows();
         assert!(!tracked_after.contains(&rect));
+    }
+
+    #[test]
+    fn test_allow_hide_logic() {
+        set_allow_hide(false);
+        assert!(!is_allow_hide());
+        assert!(!is_window_allow_hide(99999));
+
+        set_window_allow_hide(99999, true);
+        assert!(is_window_allow_hide(99999));
+        assert!(!is_window_allow_hide(88888));
+
+        set_window_allow_hide(99999, false);
+        assert!(!is_window_allow_hide(99999));
+
+        set_allow_hide(true);
+        assert!(is_allow_hide());
+        assert!(is_window_allow_hide(99999));
+        set_allow_hide(false);
+    }
+
+    #[test]
+    fn test_snap_flags_sync() {
+        set_snap_to_edges(false);
+        assert!(!is_snap_to_edges());
+        set_snap_to_edges(true);
+        assert!(is_snap_to_edges());
+
+        set_snap_to_widgets(false);
+        assert!(!is_snap_to_widgets());
+        set_snap_to_widgets(true);
+        assert!(is_snap_to_widgets());
+    }
+
+    #[test]
+    fn test_exit_size_move_callback() {
+        use std::sync::atomic::AtomicUsize;
+        static CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+        set_exit_size_move_callback(|_hwnd, _rect| {
+            CALL_COUNT.fetch_add(1, Ordering::SeqCst);
+        });
+
+        dispatch_exit_size_move(1234, Rect::new(10, 20, 110, 120));
+        assert_eq!(CALL_COUNT.load(Ordering::SeqCst), 1);
     }
 }

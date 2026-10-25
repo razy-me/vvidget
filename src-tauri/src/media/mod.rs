@@ -52,6 +52,7 @@ pub fn start_media_monitor(app_handle: tauri::AppHandle) {
     std::thread::Builder::new()
         .name("media-monitor".into())
         .spawn(move || {
+            let _com_guard = crate::geo::winrt::ComGuard::new();
             let mut last_session = MediaSession::default();
             loop {
                 let current = gsmtc::get_current_media_session().unwrap_or_default();

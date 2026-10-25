@@ -70,7 +70,7 @@ pub mod integration {
             let _ = win_mgr.setup_widget_window(
                 &window,
                 WindowSetupOptions {
-                    id: widget_id,
+                    id: widget_id.clone(),
                     is_widget: true,
                     no_activate: true,
                     dark_mode: config.theme != "light",
@@ -80,6 +80,35 @@ pub mod integration {
                     height: placement.logical_height,
                 },
             );
+
+            let wm_event = win_mgr.inner().clone();
+            let widget_id_event = widget_id.clone();
+            let window_clone = window.clone();
+            window.on_window_event(move |event| {
+                if let tauri::WindowEvent::Moved(pos) = event {
+                    let scale = window_clone.scale_factor().unwrap_or(1.0);
+                    let logical_x = (pos.x as f64) / scale;
+                    let logical_y = (pos.y as f64) / scale;
+                    let size = window_clone
+                        .inner_size()
+                        .unwrap_or(tauri::PhysicalSize { width: 340, height: 420 });
+                    let logical_w = (size.width as f64) / scale;
+                    let logical_h = (size.height as f64) / scale;
+                    wm_event.update_window_position(&widget_id_event, logical_x, logical_y, logical_w, logical_h);
+                    if let Some(cm) = wm_event.get_config_manager() {
+                        let wid = widget_id_event.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let mut config = cm.get_config().await;
+                            if let Some(placement) = config.widgets.get_mut(&wid) {
+                                placement.logical_x = logical_x;
+                                placement.logical_y = logical_y;
+                                placement.scale_factor = scale;
+                            }
+                            let _ = cm.save_debounced(config).await;
+                        });
+                    }
+                }
+            });
         }
 
         Ok(())
@@ -110,6 +139,10 @@ pub mod integration {
         if config.layout_mode == "docked" {
             // Docked mode: ensure single unified desktop dock window is visible
             if let Some(main) = app.get_webview_window("main") {
+                #[cfg(windows)]
+                if let Ok(hwnd) = main.hwnd() {
+                    crate::window::win32::set_window_allow_hide(hwnd.0 as isize, false);
+                }
                 let _ = main.show();
             }
             // Destroy independent widget windows to conserve working set RAM (<90 MB budget)
@@ -119,7 +152,7 @@ pub mod integration {
         } else {
             // Independent multi-window mode: hide main window to avoid duplicate rendering and RAM waste
             if let Some(main) = app.get_webview_window("main") {
-                let _ = main.hide();
+                let _ = crate::window::win32::hide_window(&main);
             }
             // Launch separate floating windows for visible widgets
             for (id, placement) in &config.widgets {
@@ -165,6 +198,13 @@ pub fn run() {
     let window_manager_setup = window_manager.clone();
     let config_manager_setup = config_manager.clone();
 
+    // Wire WindowManager with ConfigManager for persisting dragged coordinates (BACKEND-02)
+    window_manager.set_config_manager(config_manager.clone());
+    let wm_move = window_manager.clone();
+    crate::window::win32::set_exit_size_move_callback(move |hwnd, rect| {
+        wm_move.handle_window_moved(hwnd, rect);
+    });
+
     builder
         .manage(config_manager.clone())
         .manage(window_manager)
@@ -203,6 +243,8 @@ pub fn run() {
 
             // Setup main window with DWM Acrylic backdrop, tool window styles, and snapping
             let initial_config = config::load_or_recover_config(&config::resolve_config_path()).0;
+            window_manager_setup.set_snap_to_edges(initial_config.snap_to_edges);
+
             if let Some(main_win) = app.get_webview_window("main") {
                 let _ = window_manager_setup.setup_widget_window(
                     &main_win,
@@ -226,9 +268,14 @@ pub fn run() {
             });
 
             let app_handle = app.handle().clone();
+            let wm_config_sync = window_manager_setup.clone();
             app.listen("config-changed", move |_event| {
                 let handle = app_handle.clone();
+                let wm = wm_config_sync.clone();
                 tauri::async_runtime::spawn(async move {
+                    if let Ok(cfg) = load_config(handle.clone()).await {
+                        wm.set_snap_to_edges(cfg.snap_to_edges);
+                    }
                     let _ = sync_widget_windows(handle).await;
                 });
             });

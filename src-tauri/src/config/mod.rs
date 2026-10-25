@@ -23,6 +23,10 @@ pub async fn load_config<R: Runtime>(app: AppHandle<R>) -> Result<AppConfig, Str
 #[tauri::command]
 #[specta::specta]
 pub async fn save_config<R: Runtime>(app: AppHandle<R>, config: AppConfig) -> Result<(), String> {
+    if let Some(win_mgr) = app.try_state::<crate::window::WindowManager>() {
+        win_mgr.set_snap_to_edges(config.snap_to_edges);
+    }
+
     if let Some(manager) = app.try_state::<ConfigManager>() {
         manager.save_debounced(config.clone()).await?;
     } else {
@@ -42,6 +46,10 @@ pub async fn save_config_immediate<R: Runtime>(
     app: AppHandle<R>,
     config: AppConfig,
 ) -> Result<(), String> {
+    if let Some(win_mgr) = app.try_state::<crate::window::WindowManager>() {
+        win_mgr.set_snap_to_edges(config.snap_to_edges);
+    }
+
     if let Some(manager) = app.try_state::<ConfigManager>() {
         manager.save_immediate(config.clone()).await?;
     } else {
