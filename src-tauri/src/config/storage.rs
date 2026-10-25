@@ -30,7 +30,10 @@ pub fn resolve_logs_dir() -> PathBuf {
 
 /// Saves an `AppConfig` atomically by writing to a temporary sibling file and renaming.
 pub fn save_config_atomic(target_path: &Path, config: &AppConfig) -> Result<(), String> {
-    let parent = target_path.parent().unwrap_or_else(|| Path::new("."));
+    let parent = match target_path.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p,
+        _ => Path::new("."),
+    };
     fs::create_dir_all(parent)
         .map_err(|e| format!("Failed to create config directory {:?}: {}", parent, e))?;
 
@@ -117,11 +120,16 @@ fn backup_corrupted_and_reset(target_path: &Path) -> (AppConfig, bool) {
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    let corrupt_name = format!("config.json.corrupt.{}", timestamp);
-    let corrupt_path = target_path
-        .parent()
-        .unwrap_or_else(|| Path::new("."))
-        .join(corrupt_name);
+    let parent = match target_path.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p,
+        _ => Path::new("."),
+    };
+    let file_stem = target_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("config.json");
+    let corrupt_name = format!("{}.corrupt.{}", file_stem, timestamp);
+    let corrupt_path = parent.join(corrupt_name);
 
     if let Err(e) = fs::rename(target_path, &corrupt_path) {
         eprintln!(
@@ -406,6 +414,135 @@ mod tests {
         assert_eq!(loaded.layout_mode, "independent"); // Default applied
         assert_eq!(loaded.polling_rates.resources_cpu_ram_ms, 1500); // Default applied
         assert!(loaded.widgets.contains_key("resources")); // Default widgets populated
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_save_atomic_bare_filename() {
+        let dir = create_test_dir();
+        let config = AppConfig::default();
+        let bare_path = dir.join("bare_config.json");
+
+        // Save via relative path within test dir
+        let res = save_config_atomic(&bare_path, &config);
+        assert!(res.is_ok(), "Failed to save config with bare/direct path: {:?}", res);
+        assert!(bare_path.exists());
+
+        let (loaded, recovered) = load_or_recover_config(&bare_path);
+        assert!(!recovered);
+        assert_eq!(loaded.version, 1);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_empty_file_corrupt_recovery() {
+        let dir = create_test_dir();
+        let path = dir.join("empty_config.json");
+
+        // Create empty file (0 bytes)
+        fs::write(&path, b"").unwrap();
+        assert_eq!(fs::metadata(&path).unwrap().len(), 0);
+
+        let (loaded, recovered) = load_or_recover_config(&path);
+        assert!(recovered, "Expected 0-byte file to be treated as corrupt and recovered");
+        assert_eq!(loaded.version, 1);
+        assert!(path.exists());
+
+        // Check corrupt backup file was generated
+        let entries: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        assert!(
+            entries.iter().any(|name| name.contains(".corrupt.")),
+            "Corrupt backup file was not created for empty config. Entries: {:?}",
+            entries
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_corrupt_json_type_mismatch_recovery() {
+        let dir = create_test_dir();
+        let path = dir.join("type_mismatch.json");
+
+        // Write JSON with invalid type for integer field
+        fs::write(&path, br#"{"version": "should_be_number", "theme": 123}"#).unwrap();
+
+        let (loaded, recovered) = load_or_recover_config(&path);
+        assert!(recovered, "Expected type mismatch JSON to be recovered");
+        assert_eq!(loaded.version, 1);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_save_config_atomic_deep_directories() {
+        let dir = create_test_dir();
+        let deep_path = dir.join("level1").join("level2").join("level3").join("deep_config.json");
+
+        let config = AppConfig::default();
+        let res = save_config_atomic(&deep_path, &config);
+        assert!(res.is_ok(), "Atomic save failed in deep directory: {:?}", res);
+        assert!(deep_path.exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn test_config_manager_concurrent_access() {
+        let dir = create_test_dir();
+        let path = dir.join("concurrent_config.json");
+
+        let manager = ConfigManager::new(path.clone());
+
+        // Launch multiple concurrent tasks reading and writing
+        let mut handles = Vec::new();
+        for i in 0..10 {
+            let mgr = manager.clone();
+            handles.push(tokio::spawn(async move {
+                let mut cfg = mgr.get_config().await;
+                cfg.theme = format!("theme-{}", i);
+                let _ = mgr.save_debounced(cfg).await;
+                let read_back = mgr.get_config().await;
+                assert!(!read_back.theme.is_empty());
+            }));
+        }
+
+        for h in handles {
+            h.await.unwrap();
+        }
+
+        // Wait past debounce duration to verify stability
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        let (disk_cfg, recovered) = load_or_recover_config(&path);
+        assert!(!recovered);
+        assert!(disk_cfg.theme.starts_with("theme-"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn test_config_manager_reload_from_disk_after_external_change() {
+        let dir = create_test_dir();
+        let path = dir.join("reload_config.json");
+
+        let manager = ConfigManager::new(path.clone());
+        assert_eq!(manager.get_config().await.theme, "auto");
+
+        // Modify file externally on disk
+        let mut external_cfg = AppConfig::default();
+        external_cfg.theme = "custom-external-theme".to_string();
+        save_config_atomic(&path, &external_cfg).unwrap();
+
+        // Reload into manager
+        let (reloaded, recovered) = manager.reload_from_disk().await;
+        assert!(!recovered);
+        assert_eq!(reloaded.theme, "custom-external-theme");
+        assert_eq!(manager.get_config().await.theme, "custom-external-theme");
 
         let _ = fs::remove_dir_all(&dir);
     }

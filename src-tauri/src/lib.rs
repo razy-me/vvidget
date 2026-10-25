@@ -258,4 +258,95 @@ mod tests {
         assert_eq!(options.width, 320.0);
         assert_eq!(options.height, 400.0);
     }
+
+    #[test]
+    fn test_capabilities_acl_strict_security() {
+        // Read capability file from filesystem
+        let cap_path = std::path::Path::new("capabilities/default.json");
+        let content = std::fs::read_to_string(cap_path)
+            .or_else(|_| std::fs::read_to_string("src-tauri/capabilities/default.json"))
+            .expect("capabilities/default.json must exist and be readable");
+
+        let json: serde_json::Value = serde_json::from_str(&content)
+            .expect("capabilities/default.json must be valid JSON");
+
+        let permissions = json["permissions"]
+            .as_array()
+            .expect("permissions array missing in capability ACL");
+
+        // Verify that only safe, local permissions are configured (R8 Security)
+        let allowed_prefixes = [
+            "core:default",
+            "core:window:",
+            "core:event:",
+            "autostart:default",
+        ];
+
+        for perm in permissions {
+            let perm_str = perm.as_str().expect("Permission item must be string");
+            let is_allowed = allowed_prefixes
+                .iter()
+                .any(|prefix| perm_str.starts_with(prefix));
+            assert!(
+                is_allowed,
+                "Disallowed or overly broad permission found in capabilities: {}",
+                perm_str
+            );
+
+            // Explicitly deny dangerous capabilities
+            assert!(!perm_str.contains("shell:execute"), "Shell execution permission is forbidden");
+            assert!(!perm_str.contains("fs:allow-read-all"), "Full filesystem read is forbidden");
+            assert!(!perm_str.contains("http:default"), "Unrestricted HTTP capability is forbidden");
+        }
+    }
+
+    #[test]
+    fn test_default_config_security_no_hardcoded_secrets() {
+        let config = config::AppConfig::default();
+        let json_str = serde_json::to_string(&config).expect("Serialize config");
+
+        // R8: Ensure no secrets, tokens or unauthorized tracking endpoints
+        let suspicious_terms = ["api_key", "secret", "token", "password", "telemetry", "tracking"];
+        let lower = json_str.to_lowercase();
+        for term in suspicious_terms {
+            assert!(
+                !lower.contains(term),
+                "Suspicious credential or tracking term '{}' found in default configuration",
+                term
+            );
+        }
+    }
+
+    #[test]
+    fn test_resolve_paths_security() {
+        let app_dir = config::resolve_app_dir();
+        let config_path = config::resolve_config_path();
+        let logs_dir = config::resolve_logs_dir();
+
+        assert!(config_path.starts_with(&app_dir));
+        assert!(logs_dir.starts_with(&app_dir));
+        assert!(config_path.ends_with("config.json"));
+        assert!(logs_dir.ends_with("logs"));
+    }
+
+    #[test]
+    fn test_all_specta_data_models_deserialization_safety() {
+        // Invalid inputs must fail gracefully without panicking
+        let bad_inputs = [
+            "{",
+            "null",
+            "\"just_a_string\"",
+            "12345",
+            "{\"widgets\": \"invalid_map\"}",
+            "{\"timeline\": [1, 2, 3]}",
+        ];
+
+        for bad in bad_inputs {
+            let _ = serde_json::from_str::<config::AppConfig>(bad);
+            let _ = serde_json::from_str::<media::MediaSession>(bad);
+            let _ = serde_json::from_str::<sysinfo::SystemMetrics>(bad);
+            let _ = serde_json::from_str::<geo::GeoLocation>(bad);
+            let _ = serde_json::from_str::<window::Rect>(bad);
+        }
+    }
 }

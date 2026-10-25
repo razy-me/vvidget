@@ -35,4 +35,22 @@ mod tests {
         assert!((parsed.latitude - 52.520008).abs() < 1e-6);
         assert!((parsed.longitude - 13.404954).abs() < 1e-6);
     }
+
+    #[test]
+    fn test_geo_location_extreme_coordinates() {
+        let north_pole = GeoLocation { latitude: 90.0, longitude: 0.0 };
+        let south_pole = GeoLocation { latitude: -90.0, longitude: 0.0 };
+        let antimeridian = GeoLocation { latitude: 0.0, longitude: 180.0 };
+
+        assert_eq!(north_pole.latitude, 90.0);
+        assert_eq!(south_pole.latitude, -90.0);
+        assert_eq!(antimeridian.longitude, 180.0);
+    }
+
+    #[test]
+    fn test_geo_location_invalid_json() {
+        let invalid = r#"{"latitude": "north", "longitude": 10.0}"#;
+        let res: Result<GeoLocation, _> = serde_json::from_str(invalid);
+        assert!(res.is_err());
+    }
 }

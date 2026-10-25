@@ -331,6 +331,30 @@ mod tests {
     }
 
     #[test]
+    fn test_track_hash_uniqueness_different_tracks() {
+        let hash1 = calculate_hash(&("Song A".to_string(), "Artist".to_string(), "Album".to_string(), "Spotify".to_string()));
+        let hash2 = calculate_hash(&("Song B".to_string(), "Artist".to_string(), "Album".to_string(), "Spotify".to_string()));
+        let hash3 = calculate_hash(&("Song A".to_string(), "Other Artist".to_string(), "Album".to_string(), "Spotify".to_string()));
+
+        assert_ne!(hash1, hash2);
+        assert_ne!(hash1, hash3);
+        assert_ne!(hash2, hash3);
+    }
+
+    #[test]
+    fn test_track_hash_with_unicode_and_emojis() {
+        let title = "🎶 恋人がサンタクロース (Santa Claus is My Lover) 🎅 / Special Mix".to_string();
+        let artist = "松任谷由実 / Yumi Matsutoya".to_string();
+        let album = "SURF & SNOW ❄️".to_string();
+        let app = "Spotify.exe".to_string();
+
+        let hash1 = calculate_hash(&(title.clone(), artist.clone(), album.clone(), app.clone()));
+        let hash2 = calculate_hash(&(title, artist, album, app));
+        assert_eq!(hash1, hash2);
+        assert_ne!(hash1, 0);
+    }
+
+    #[test]
     fn test_current_timestamp_nonzero() {
         let ts = current_timestamp_ms();
         assert!(ts > 1_600_000_000_000);

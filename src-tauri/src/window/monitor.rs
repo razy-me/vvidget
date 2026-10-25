@@ -262,4 +262,137 @@ mod tests {
         let clamped_left = clamp_to_monitors(target_far_left, &monitors);
         assert_eq!(clamped_left.x, -1920);
     }
+
+    #[test]
+    fn test_clamp_target_larger_than_monitor_dimensions() {
+        let monitors = vec![MonitorBounds {
+            id: "primary".to_string(),
+            name: "Display 1".to_string(),
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1080,
+            scale_factor: 1.0,
+            is_primary: true,
+        }];
+
+        let oversized = PhysicalRect {
+            x: 100,
+            y: 100,
+            width: 2500,
+            height: 1400,
+        };
+
+        let clamped = clamp_to_monitors(oversized, &monitors);
+        assert_eq!(clamped.width, 1920);
+        assert_eq!(clamped.height, 1080);
+        assert_eq!(clamped.x, 0);
+        assert_eq!(clamped.y, 0);
+    }
+
+    #[test]
+    fn test_clamp_empty_monitors_list() {
+        let target = PhysicalRect {
+            x: 500,
+            y: 600,
+            width: 300,
+            height: 200,
+        };
+        let clamped = clamp_to_monitors(target, &[]);
+        assert_eq!(clamped, target);
+    }
+
+    #[test]
+    fn test_clamp_furthest_window_selects_closest_monitor() {
+        let monitors = vec![
+            MonitorBounds {
+                id: "mon1".to_string(),
+                name: "Primary".to_string(),
+                x: 0,
+                y: 0,
+                width: 1920,
+                height: 1080,
+                scale_factor: 1.0,
+                is_primary: true,
+            },
+            MonitorBounds {
+                id: "mon2".to_string(),
+                name: "Right".to_string(),
+                x: 1920,
+                y: 0,
+                width: 1920,
+                height: 1080,
+                scale_factor: 1.0,
+                is_primary: false,
+            },
+        ];
+
+        // Far to the right at x=5000 (closer to mon2 than mon1)
+        let target = PhysicalRect {
+            x: 5000,
+            y: 200,
+            width: 300,
+            height: 200,
+        };
+
+        let clamped = clamp_to_monitors(target, &monitors);
+        // Should clamp to mon2 right edge (1920 + 1920 - 300 = 3540)
+        assert_eq!(clamped.x, 3540);
+        assert_eq!(clamped.y, 200);
+    }
+
+    #[test]
+    fn test_invalid_scale_factor_fallback() {
+        let logical = LogicalRect {
+            x: 100.0,
+            y: 200.0,
+            width: 300.0,
+            height: 400.0,
+        };
+
+        let phys_zero = logical_to_physical(logical, 0.0);
+        assert_eq!(phys_zero.x, 100);
+        assert_eq!(phys_zero.width, 300);
+
+        let phys_neg = logical_to_physical(logical, -2.0);
+        assert_eq!(phys_neg.x, 100);
+        assert_eq!(phys_neg.width, 300);
+
+        let log_zero = physical_to_logical(phys_zero, 0.0);
+        assert_eq!(log_zero.x, 100.0);
+    }
+
+    #[test]
+    fn test_clamp_logical_position_roundtrip_all_scales() {
+        let monitors = vec![MonitorBounds {
+            id: "primary".to_string(),
+            name: "Display 1".to_string(),
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1080,
+            scale_factor: 1.5,
+            is_primary: true,
+        }];
+
+        // Inside screen bounds at 150% scaling
+        let (clamped_x, clamped_y) = clamp_logical_position(
+            (100.0, 100.0),
+            (200.0, 150.0),
+            1.5,
+            &monitors,
+        );
+        assert_eq!(clamped_x, 100.0);
+        assert_eq!(clamped_y, 100.0);
+
+        // Outside screen bounds (x = 2000.0 logical)
+        let (clamped_out_x, _) = clamp_logical_position(
+            (2000.0, 100.0),
+            (200.0, 150.0),
+            1.5,
+            &monitors,
+        );
+        // Logical width of 1920 at 1.5 scale is 1280. Max x = 1280 - 200 = 1080.
+        assert_eq!(clamped_out_x, 1080.0);
+    }
 }

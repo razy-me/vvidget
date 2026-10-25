@@ -155,3 +155,85 @@ impl Default for AppConfig {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_app_config_starter_widgets_defaults() {
+        let config = AppConfig::default();
+        assert_eq!(config.version, 1);
+        assert!(!config.lock_positions);
+        assert!(!config.always_on_top);
+        assert!(config.snap_to_edges);
+        assert_eq!(config.layout_mode, "independent");
+        assert_eq!(config.theme, "auto");
+        assert!(!config.auto_start);
+
+        // Three starter widgets must be present: resources, spotify, weather
+        assert!(config.widgets.contains_key("resources"));
+        assert!(config.widgets.contains_key("spotify"));
+        assert!(config.widgets.contains_key("weather"));
+
+        let res = &config.widgets["resources"];
+        assert!(res.visible);
+        assert_eq!(res.logical_width, 320.0);
+        assert_eq!(res.logical_height, 180.0);
+
+        let spotify = &config.widgets["spotify"];
+        assert!(spotify.visible);
+        assert_eq!(spotify.logical_width, 320.0);
+        assert_eq!(spotify.logical_height, 140.0);
+
+        let weather = &config.widgets["weather"];
+        assert!(weather.visible);
+        assert_eq!(weather.logical_width, 320.0);
+        assert_eq!(weather.logical_height, 160.0);
+    }
+
+    #[test]
+    fn test_polling_rates_defaults() {
+        let rates = PollingRates::default();
+        assert_eq!(rates.resources_cpu_ram_ms, 1500);
+        assert_eq!(rates.resources_disk_ms, 15000);
+        assert_eq!(rates.weather_minutes, 30);
+    }
+
+    #[test]
+    fn test_weather_settings_defaults() {
+        let ws = WeatherSettings::default();
+        assert!(ws.use_windows_location);
+        assert!(ws.manual_city.is_none());
+        assert!(ws.latitude.is_none());
+        assert!(ws.longitude.is_none());
+    }
+
+    #[test]
+    fn test_widget_placement_defaults() {
+        let wp = WidgetPlacement::default();
+        assert!(wp.visible);
+        assert_eq!(wp.logical_x, 40.0);
+        assert_eq!(wp.logical_y, 40.0);
+        assert_eq!(wp.logical_width, 320.0);
+        assert_eq!(wp.logical_height, 180.0);
+        assert_eq!(wp.scale_factor, 1.0);
+        assert!(wp.monitor_id.is_none());
+    }
+
+    #[test]
+    fn test_config_serde_roundtrip_complete() {
+        let mut original = AppConfig::default();
+        original.lock_positions = true;
+        original.layout_mode = "docked".to_string();
+        original.theme = "dark".to_string();
+        original.polling_rates.resources_cpu_ram_ms = 2000;
+        original.weather_settings.manual_city = Some("Berlin".to_string());
+        original.weather_settings.latitude = Some(52.52);
+        original.weather_settings.longitude = Some(13.405);
+
+        let json = serde_json::to_string(&original).expect("Serialization failed");
+        let parsed: AppConfig = serde_json::from_str(&json).expect("Deserialization failed");
+        assert_eq!(original, parsed);
+    }
+}

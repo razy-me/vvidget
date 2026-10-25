@@ -48,6 +48,19 @@ pub fn clear_cached_album_art() {
     }
 }
 
+/// Helper extracting track_id from a URI query parameter (?t=<id> or ?id=<id>).
+pub fn extract_track_id_from_query(query: &str) -> Option<&str> {
+    for pair in query.split('&') {
+        let mut parts = pair.splitn(2, '=');
+        if let (Some(k), Some(v)) = (parts.next(), parts.next()) {
+            if (k == "t" || k == "id") && !v.is_empty() {
+                return Some(v);
+            }
+        }
+    }
+    None
+}
+
 /// Handler for the `widgetz` URI protocol: `widgetz://album-art?t=<track_id>`
 pub fn handle_album_art_protocol<R: tauri::Runtime>(
     _ctx: tauri::UriSchemeContext<'_, R>,
@@ -57,18 +70,7 @@ pub fn handle_album_art_protocol<R: tauri::Runtime>(
 
     let uri = request.uri();
     let query = uri.query().unwrap_or_default();
-    
-    // Parse track_id from query (?t=<track_id> or ?id=<track_id>)
-    let mut track_id = None;
-    for pair in query.split('&') {
-        let mut parts = pair.splitn(2, '=');
-        if let (Some(k), Some(v)) = (parts.next(), parts.next()) {
-            if k == "t" || k == "id" {
-                track_id = Some(v);
-                break;
-            }
-        }
-    }
+    let track_id = extract_track_id_from_query(query);
 
     static EMPTY: &[u8] = &[];
 
@@ -133,5 +135,65 @@ mod tests {
         for i in 5..35 {
             assert!(get_cached_album_art(&format!("id-{}", i)).is_some());
         }
+    }
+
+    #[test]
+    fn test_album_art_cache_overwrite_updates_data_without_duplicating_order() {
+        clear_cached_album_art();
+        set_cached_album_art("unique-id", vec![1, 1], "image/png".to_string());
+        set_cached_album_art("unique-id", vec![2, 2, 2], "image/jpeg".to_string());
+
+        let cached = get_cached_album_art("unique-id").expect("Entry should exist");
+        assert_eq!(cached.bytes, vec![2, 2, 2]);
+        assert_eq!(cached.mime_type, "image/jpeg");
+
+        // Verify that 29 more items can be inserted without evicting unique-id
+        for i in 0..29 {
+            set_cached_album_art(&format!("fill-{}", i), vec![i as u8], "image/jpeg".to_string());
+        }
+        assert!(get_cached_album_art("unique-id").is_some());
+
+        // The 31st item should now evict unique-id (as it was the oldest)
+        set_cached_album_art("overflow-item", vec![99], "image/png".to_string());
+        assert!(get_cached_album_art("unique-id").is_none());
+        assert!(get_cached_album_art("overflow-item").is_some());
+    }
+
+    #[test]
+    fn test_album_art_cache_concurrent_access() {
+        clear_cached_album_art();
+        let mut handles = Vec::new();
+
+        for t in 0..8 {
+            handles.push(std::thread::spawn(move || {
+                for i in 0..20 {
+                    let id = format!("thread-{}-id-{}", t, i);
+                    set_cached_album_art(&id, vec![t, i as u8], "image/jpeg".to_string());
+                    let _ = get_cached_album_art(&id);
+                }
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+
+        // Cache must not have panicked or exceeded 30 items
+        if let Ok(cache) = get_cache().lock() {
+            assert!(cache.entries.len() <= 30);
+            assert!(cache.order.len() <= 30);
+        }
+    }
+
+    #[test]
+    fn test_extract_track_id_from_query_variants() {
+        assert_eq!(extract_track_id_from_query("t=track123"), Some("track123"));
+        assert_eq!(extract_track_id_from_query("id=hash456"), Some("hash456"));
+        assert_eq!(extract_track_id_from_query("param=1&t=my_track&foo=bar"), Some("my_track"));
+        assert_eq!(extract_track_id_from_query("param=1&id=my_id&foo=bar"), Some("my_id"));
+        assert_eq!(extract_track_id_from_query("t="), None); // Empty value
+        assert_eq!(extract_track_id_from_query("id="), None);
+        assert_eq!(extract_track_id_from_query(""), None);
+        assert_eq!(extract_track_id_from_query("other=param"), None);
     }
 }

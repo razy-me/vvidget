@@ -287,4 +287,134 @@ mod tests {
         assert_eq!(moving.left, 25);
         assert_eq!(moving.top, 25);
     }
+
+    #[test]
+    fn test_snap_to_widget_all_four_edges_alignment() {
+        let work_area = Rect::new(0, 0, 1920, 1080);
+        let other = Rect::new(200, 200, 500, 500); // 300x300 at (200, 200)
+        let config = SnapConfig::default();
+
+        // 1. Align left-to-left: moving left is at 208 (8px away from other.left=200)
+        let mut moving_left = Rect::new(208, 250, 408, 450);
+        let res_left = apply_magnetic_snapping(&mut moving_left, &work_area, &[other], &config);
+        assert!(res_left.snapped_x);
+        assert_eq!(moving_left.left, 200);
+        assert_eq!(moving_left.right, 400);
+
+        // 2. Align right-to-right: moving right is at 494 (6px away from other.right=500)
+        let mut moving_right = Rect::new(294, 250, 494, 450);
+        let res_right = apply_magnetic_snapping(&mut moving_right, &work_area, &[other], &config);
+        assert!(res_right.snapped_x);
+        assert_eq!(moving_right.right, 500);
+        assert_eq!(moving_right.left, 300);
+
+        // 3. Align top-to-top: moving top is at 206 (6px away from other.top=200)
+        let mut moving_top = Rect::new(250, 206, 450, 406);
+        let res_top = apply_magnetic_snapping(&mut moving_top, &work_area, &[other], &config);
+        assert!(res_top.snapped_y);
+        assert_eq!(moving_top.top, 200);
+        assert_eq!(moving_top.bottom, 400);
+
+        // 4. Align bottom-to-bottom: moving bottom is at 508 (8px away from other.bottom=500)
+        let mut moving_bottom = Rect::new(250, 308, 450, 508);
+        let res_bottom = apply_magnetic_snapping(&mut moving_bottom, &work_area, &[other], &config);
+        assert!(res_bottom.snapped_y);
+        assert_eq!(moving_bottom.bottom, 500);
+        assert_eq!(moving_bottom.top, 300);
+    }
+
+    #[test]
+    fn test_snap_to_widget_adjacent_top_and_bottom() {
+        let work_area = Rect::new(0, 0, 1920, 1080);
+        let other = Rect::new(200, 200, 500, 500); // 300x300
+        let config = SnapConfig::default();
+
+        // Snap moving top to other's bottom (other.bottom=500, moving.top=508)
+        let mut moving_below = Rect::new(220, 508, 420, 708);
+        let res_below = apply_magnetic_snapping(&mut moving_below, &work_area, &[other], &config);
+        assert!(res_below.snapped_y);
+        assert_eq!(moving_below.top, 500);
+        assert_eq!(moving_below.bottom, 700);
+
+        // Snap moving bottom to other's top (other.top=200, moving.bottom=194)
+        let mut moving_above = Rect::new(220, -6, 420, 194);
+        let res_above = apply_magnetic_snapping(&mut moving_above, &work_area, &[other], &config);
+        assert!(res_above.snapped_y);
+        assert_eq!(moving_above.bottom, 200);
+        assert_eq!(moving_above.top, 0);
+    }
+
+    #[test]
+    fn test_snap_closest_candidate_chosen() {
+        let work_area = Rect::new(0, 0, 1920, 1080);
+        // Candidate 1 at 300, Candidate 2 at 320
+        let other1 = Rect::new(100, 100, 300, 300); // right = 300
+        let other2 = Rect::new(320, 100, 500, 300); // left = 320
+
+        // Moving left at 305 (5px from other1 right=300, 15px from other2 left=320)
+        let mut moving = Rect::new(305, 110, 505, 290);
+        let config = SnapConfig::default();
+
+        let res = apply_magnetic_snapping(&mut moving, &work_area, &[other1, other2], &config);
+        assert!(res.snapped_x);
+        assert_eq!(res.dx, -5); // Closer target (other1) was chosen
+        assert_eq!(moving.left, 300);
+    }
+
+    #[test]
+    fn test_snap_flags_selective_edges_and_widgets() {
+        let work_area = Rect::new(0, 0, 1920, 1080);
+        let other = Rect::new(200, 200, 400, 400);
+
+        // 1. snap_to_edges = true, snap_to_widgets = false
+        let mut config_edges = SnapConfig {
+            enabled: true,
+            threshold: 16,
+            snap_to_edges: true,
+            snap_to_widgets: false,
+        };
+        // 8px from other.right (408), 408px from screen edge
+        let mut moving1 = Rect::new(408, 210, 608, 390);
+        let res1 = apply_magnetic_snapping(&mut moving1, &work_area, &[other], &config_edges);
+        assert!(!res1.snapped_x, "Should not snap to widget when snap_to_widgets is false");
+
+        // 2. snap_to_edges = false, snap_to_widgets = true
+        config_edges.snap_to_edges = false;
+        config_edges.snap_to_widgets = true;
+        // 8px from screen left edge (x=8)
+        let mut moving2 = Rect::new(8, 50, 208, 150);
+        let res2 = apply_magnetic_snapping(&mut moving2, &work_area, &[], &config_edges);
+        assert!(!res2.snapped_x, "Should not snap to screen edge when snap_to_edges is false");
+    }
+
+    #[test]
+    fn test_snap_widget_no_vertical_overlap_does_not_snap_horizontally() {
+        let work_area = Rect::new(0, 0, 1920, 1080);
+        // Widget at y: 100..300
+        let other = Rect::new(100, 100, 300, 300);
+        // Moving widget at y: 800..950 (far below, well outside threshold 16)
+        let mut moving = Rect::new(305, 800, 505, 950);
+        let config = SnapConfig::default();
+
+        let res = apply_magnetic_snapping(&mut moving, &work_area, &[other], &config);
+        assert!(!res.snapped_x, "Vertically disjoint widgets must not snap horizontally");
+        assert_eq!(moving.left, 305);
+    }
+
+    #[test]
+    fn test_snap_threshold_zero_or_negative_does_nothing() {
+        let work_area = Rect::new(0, 0, 1920, 1080);
+        let mut moving = Rect::new(5, 5, 300, 300);
+        let mut config = SnapConfig::default();
+        config.threshold = 0;
+
+        let res0 = apply_magnetic_snapping(&mut moving, &work_area, &[], &config);
+        assert!(!res0.snapped_x);
+        assert!(!res0.snapped_y);
+
+        config.threshold = -10;
+        let res_neg = apply_magnetic_snapping(&mut moving, &work_area, &[], &config);
+        assert!(!res_neg.snapped_x);
+        assert!(!res_neg.snapped_y);
+    }
 }

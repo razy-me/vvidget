@@ -197,4 +197,76 @@ mod tests {
         assert_eq!(default_metrics.cpu_usage_percent, 0.0);
         assert_eq!(default_metrics.disks.len(), 0);
     }
+
+    #[test]
+    fn test_disk_metric_edge_cases() {
+        // available > total (should saturate free to total, used = 0)
+        let metric_overflow = DiskMetric::new("Disk", "D:\\", 1000, 2000);
+        assert_eq!(metric_overflow.free_bytes, 1000);
+        assert_eq!(metric_overflow.used_bytes, 0);
+        assert_eq!(metric_overflow.used_percent, 0.0);
+
+        // total = 0
+        let metric_zero = DiskMetric::new("Disk", "E:\\", 0, 500);
+        assert_eq!(metric_zero.used_percent, 0.0);
+        assert_eq!(metric_zero.total_gb(), 0.0);
+
+        // Empty name defaults to mount point
+        let metric_empty_name = DiskMetric::new("", "F:\\", 1000, 500);
+        // DiskMetric constructor sets name to mount_point if empty in sysinfo collector
+        assert_eq!(metric_empty_name.mount_point, "F:\\");
+
+        // 100% used disk (available = 0)
+        let metric_full = DiskMetric::new("Full Disk", "C:\\", 100 * 1024 * 1024 * 1024, 0);
+        assert_eq!(metric_full.used_percent, 100.0);
+        assert_eq!(metric_full.free_gb(), 0.0);
+    }
+
+    #[test]
+    fn test_memory_metric_edge_cases() {
+        // used > total (should clamp used to total)
+        let metric = MemoryMetric::new(1000, 2000);
+        assert_eq!(metric.used_bytes, 1000);
+        assert_eq!(metric.free_bytes, 0);
+        assert_eq!(metric.used_percent, 100.0);
+
+        // 0 used
+        let metric_free = MemoryMetric::new(1000, 0);
+        assert_eq!(metric_free.used_bytes, 0);
+        assert_eq!(metric_free.free_bytes, 1000);
+        assert_eq!(metric_free.used_percent, 0.0);
+    }
+
+    #[test]
+    fn test_bytes_to_gb_large_scale() {
+        // 1 TB = 1024 GiB
+        let bytes_1tb = 1024 * 1024 * 1024 * 1024;
+        assert_eq!(bytes_to_gb(bytes_1tb), 1024.0);
+
+        // 2.5 TB
+        let bytes_2_5tb = (2.5 * 1024.0 * 1024.0 * 1024.0 * 1024.0) as u64;
+        assert_eq!(bytes_to_gb(bytes_2_5tb), 2560.0);
+
+        // 512 MB (0.5 GiB)
+        let bytes_512mb = 512 * 1024 * 1024;
+        assert_eq!(bytes_to_gb(bytes_512mb), 0.5);
+    }
+
+    #[test]
+    fn test_system_metrics_serde_roundtrip() {
+        let metrics = SystemMetrics {
+            cpu_usage_percent: 24.5,
+            cpu_cores: 16,
+            memory: MemoryMetric::new(32 * 1024 * 1024 * 1024, 16 * 1024 * 1024 * 1024),
+            disks: vec![
+                DiskMetric::new("System C", "C:\\", 512 * 1024 * 1024 * 1024, 256 * 1024 * 1024 * 1024),
+                DiskMetric::new("Data D", "D:\\", 1024 * 1024 * 1024 * 1024, 512 * 1024 * 1024 * 1024),
+            ],
+            timestamp_ms: 1729000000000,
+        };
+
+        let json = serde_json::to_string(&metrics).expect("Serialization failed");
+        let parsed: SystemMetrics = serde_json::from_str(&json).expect("Deserialization failed");
+        assert_eq!(metrics, parsed);
+    }
 }

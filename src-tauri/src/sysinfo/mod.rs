@@ -110,4 +110,47 @@ mod tests {
         let cached_ts = handle.read().unwrap().timestamp_ms;
         assert_eq!(cached_ts, updated.timestamp_ms);
     }
+
+    #[test]
+    fn test_disks_are_sorted_alphabetically() {
+        let mut collector = MetricsCollector::new();
+        let metrics = collector.collect_metrics(true);
+
+        if metrics.disks.len() > 1 {
+            for i in 0..(metrics.disks.len() - 1) {
+                assert!(metrics.disks[i].mount_point <= metrics.disks[i + 1].mount_point);
+            }
+        }
+    }
+
+    #[test]
+    fn test_collector_fast_refresh_without_disks() {
+        let mut collector = MetricsCollector::new();
+        let start = std::time::Instant::now();
+        let _ = collector.collect_metrics(false);
+        let elapsed = start.elapsed();
+        // CPU & RAM only refresh should be extremely fast (< 50ms)
+        assert!(elapsed < Duration::from_millis(50), "Metrics refresh too slow: {:?}", elapsed);
+    }
+
+    #[test]
+    fn test_collector_concurrent_cached_reads() {
+        let collector = MetricsCollector::new();
+        let handle = collector.cached_handle();
+
+        let mut threads = Vec::new();
+        for _ in 0..8 {
+            let h = handle.clone();
+            threads.push(std::thread::spawn(move || {
+                for _ in 0..50 {
+                    let m = h.read().unwrap();
+                    assert!(m.timestamp_ms > 0);
+                }
+            }));
+        }
+
+        for t in threads {
+            t.join().unwrap();
+        }
+    }
 }

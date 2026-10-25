@@ -268,3 +268,93 @@ impl WindowManager {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::window::win32;
+
+    #[test]
+    fn test_window_manager_lock_state() {
+        let wm = WindowManager::new();
+        assert!(!wm.is_locked());
+
+        wm.set_locked(true);
+        assert!(wm.is_locked());
+
+        wm.set_locked(false);
+        assert!(!wm.is_locked());
+    }
+
+    #[test]
+    fn test_window_manager_snapping_settings() {
+        let wm = WindowManager::new();
+        wm.set_snapping(false, 32);
+
+        assert!(!win32::is_snapping_enabled());
+        assert_eq!(win32::get_snapping_threshold(), 32);
+
+        // Reset to default
+        wm.set_snapping(true, 16);
+        assert!(win32::is_snapping_enabled());
+        assert_eq!(win32::get_snapping_threshold(), 16);
+    }
+
+    #[test]
+    fn test_window_manager_widget_tracking_lifecycle() {
+        let wm = WindowManager::new();
+
+        // Directly insert info into manager
+        {
+            let mut map = wm.widgets.write().unwrap();
+            map.insert(
+                "widget_a".to_string(),
+                WidgetWindowInfo {
+                    id: "widget_a".to_string(),
+                    hwnd: 55555,
+                    rect: PhysicalRect { x: 10, y: 20, width: 300, height: 200 },
+                    scale_factor: 1.0,
+                },
+            );
+        }
+
+        // Update position
+        wm.update_window_position("widget_a", 50.0, 60.0, 320.0, 220.0);
+        {
+            let map = wm.widgets.read().unwrap();
+            let info = map.get("widget_a").expect("Widget should exist");
+            assert_eq!(info.rect.x, 50);
+            assert_eq!(info.rect.y, 60);
+            assert_eq!(info.rect.width, 320);
+            assert_eq!(info.rect.height, 220);
+        }
+
+        // Unregister
+        wm.unregister_widget("widget_a");
+        {
+            let map = wm.widgets.read().unwrap();
+            assert!(!map.contains_key("widget_a"));
+        }
+    }
+
+    #[test]
+    fn test_window_manager_concurrent_thread_safety() {
+        let wm = WindowManager::new();
+        let mut handles = Vec::new();
+
+        for i in 0..8 {
+            let wm_clone = wm.clone();
+            handles.push(std::thread::spawn(move || {
+                for j in 0..50 {
+                    wm_clone.set_locked(j % 2 == 0);
+                    let _ = wm_clone.is_locked();
+                    wm_clone.set_snapping(j % 2 == 1, 16 + (i as i32));
+                }
+            }));
+        }
+
+        for h in handles {
+            h.join().unwrap();
+        }
+    }
+}
