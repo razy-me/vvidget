@@ -366,14 +366,16 @@ export function useGridDrag({
     [currentGridX, currentGridY, onPositionChange]
   );
 
-  const onPointerUp = useCallback(
-    async (e: React.PointerEvent) => {
+  const endDrag = useCallback(
+    async (pointerTarget?: HTMLElement, pointerId?: number) => {
       dragRef.current.isDown = false;
 
-      try {
-        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch {
-        // Non-Tauri fallback
+      if (pointerTarget && pointerId !== undefined) {
+        try {
+          pointerTarget.releasePointerCapture(pointerId);
+        } catch {
+          // Non-Tauri fallback
+        }
       }
 
       // If drag was not active (e.g. quick click before async init or locked widget), exit immediately
@@ -433,6 +435,88 @@ export function useGridDrag({
     [widgetId, currentGridX, currentGridY, onPositionChange, onDragStateChange]
   );
 
+  const onPointerUp = useCallback(
+    async (e: React.PointerEvent) => {
+      await endDrag(e.currentTarget as HTMLElement, e.pointerId);
+    },
+    [endDrag]
+  );
+
+  // Global window listeners so dragging and releasing never gets lost if pointer leaves the header
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleWindowPointerMove = (e: PointerEvent) => {
+      if (!dragRef.current.active) return;
+
+      const deltaX = e.screenX - dragRef.current.startScreenX;
+      const deltaY = e.screenY - dragRef.current.startScreenY;
+
+      const rawTargetX = dragRef.current.startWindowX + deltaX;
+      const rawTargetY = dragRef.current.startWindowY + deltaY;
+
+      const targetX = Math.max(dragRef.current.minX, Math.min(dragRef.current.maxX, rawTargetX));
+      const targetY = Math.max(dragRef.current.minY, Math.min(dragRef.current.maxY, rawTargetY));
+
+      dragRef.current.lastTargetX = targetX;
+      dragRef.current.lastTargetY = targetY;
+
+      try {
+        const appWindow = getCurrentWindow();
+        void appWindow.setPosition(new LogicalPosition(targetX, targetY));
+        onPositionChange?.(targetX, targetY);
+      } catch {
+        // Non-Tauri fallback
+      }
+
+      const targetSlot = findNearestNonOverlappingSlot(
+        targetX,
+        targetY,
+        dragRef.current.widgetW || 360,
+        dragRef.current.widgetH || 256,
+        dragRef.current.occupiedWidgets,
+        currentGridX,
+        currentGridY,
+        dragRef.current.minX,
+        dragRef.current.maxX,
+        dragRef.current.minY,
+        dragRef.current.maxY
+      );
+
+      if (
+        targetSlot.x !== dragRef.current.lastSkeletonX ||
+        targetSlot.y !== dragRef.current.lastSkeletonY
+      ) {
+        dragRef.current.lastSkeletonX = targetSlot.x;
+        dragRef.current.lastSkeletonY = targetSlot.y;
+        const slot: SkeletonSlot = {
+          x: targetSlot.x,
+          y: targetSlot.y,
+          width: dragRef.current.widgetW || 360,
+          height: dragRef.current.widgetH || 256,
+        };
+        setSkeletonSlot(slot);
+        invoke("update_skeleton_preview", slot).catch(() => {});
+      }
+    };
+
+    const handleWindowPointerUp = () => {
+      void endDrag();
+    };
+
+    window.addEventListener("pointermove", handleWindowPointerMove);
+    window.addEventListener("pointerup", handleWindowPointerUp);
+    window.addEventListener("pointercancel", handleWindowPointerUp);
+    window.addEventListener("mouseup", handleWindowPointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handleWindowPointerMove);
+      window.removeEventListener("pointerup", handleWindowPointerUp);
+      window.removeEventListener("pointercancel", handleWindowPointerUp);
+      window.removeEventListener("mouseup", handleWindowPointerUp);
+    };
+  }, [isDragging, currentGridX, currentGridY, onPositionChange, endDrag]);
+
   return {
     isDragging,
     skeletonSlot,
@@ -443,6 +527,7 @@ export function useGridDrag({
       onPointerMove,
       onPointerUp,
       onPointerCancel: onPointerUp,
+      onLostPointerCapture: onPointerUp,
     },
   };
 }

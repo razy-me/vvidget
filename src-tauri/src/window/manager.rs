@@ -53,6 +53,7 @@ pub struct WidgetWindowInfo {
     pub id: String,
     pub hwnd: isize,
     pub rect: PhysicalRect,
+    pub logical_rect: LogicalRect,
     pub scale_factor: f64,
 }
 
@@ -148,13 +149,12 @@ impl WindowManager {
                         continue;
                     }
                 }
-                let scale = if info.scale_factor > 0.0 { info.scale_factor } else { 1.0 };
                 list.push(ActiveWidgetRect {
                     id: id.clone(),
-                    x: info.rect.x as f64 / scale,
-                    y: info.rect.y as f64 / scale,
-                    width: info.rect.width as f64 / scale,
-                    height: info.rect.height as f64 / scale,
+                    x: info.logical_rect.x,
+                    y: info.logical_rect.y,
+                    width: info.logical_rect.width,
+                    height: info.logical_rect.height,
                 });
             }
         }
@@ -321,6 +321,12 @@ impl WindowManager {
                             id: options.id,
                             hwnd: hwnd_isize,
                             rect: physical_rect,
+                            logical_rect: LogicalRect {
+                                x: clamped_x,
+                                y: clamped_y,
+                                width: logical_w,
+                                height: logical_h,
+                            },
                             scale_factor: scale,
                         },
                     );
@@ -350,13 +356,14 @@ impl WindowManager {
     ) {
         if let Ok(mut map) = self.widgets.write() {
             if let Some(info) = map.get_mut(id) {
+                info.logical_rect = LogicalRect {
+                    x: logical_x,
+                    y: logical_y,
+                    width: logical_width,
+                    height: logical_height,
+                };
                 let physical = logical_to_physical(
-                    LogicalRect {
-                        x: logical_x,
-                        y: logical_y,
-                        width: logical_width,
-                        height: logical_height,
-                    },
+                    info.logical_rect,
                     info.scale_factor,
                 );
                 info.rect = physical;
@@ -418,6 +425,7 @@ mod tests {
                     id: "widget_a".to_string(),
                     hwnd: 55555,
                     rect: PhysicalRect { x: 10, y: 20, width: 300, height: 200 },
+                    logical_rect: LogicalRect { x: 10.0, y: 20.0, width: 300.0, height: 200.0 },
                     scale_factor: 1.0,
                 },
             );
@@ -481,6 +489,7 @@ mod tests {
                     id: "resources".to_string(),
                     hwnd: 77777,
                     rect: PhysicalRect { x: 40, y: 40, width: 320, height: 180 },
+                    logical_rect: LogicalRect { x: 40.0, y: 40.0, width: 320.0, height: 180.0 },
                     scale_factor: 1.0,
                 },
             );

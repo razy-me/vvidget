@@ -113,4 +113,35 @@ describe("gridCollision utilities", () => {
       ).toBe(false);
     }
   });
+
+  it("finds closest slot on the left third of screen above an existing widget", () => {
+    const occupied: GridRect[] = [
+      // Weather sits in column 2 at (240, 384, width 360, height 512)
+      { id: "weather", x: 240, y: 384, width: 360, height: 512 },
+    ];
+
+    // User drags Media Controls (360x256) towards top-left (0, 100)
+    const slot = findNearestNonOverlappingSlot(
+      0,
+      100,
+      360,
+      256,
+      occupied,
+      120,
+      128,
+      0,
+      1440,
+      0,
+      900
+    );
+
+    // Slot must be on the left third (x <= 240) and must not overlap Weather
+    expect(slot.x).toBeLessThanOrEqual(240);
+    expect(
+      rectsOverlap(
+        { x: slot.x, y: slot.y, width: 360, height: 256 },
+        occupied[0]
+      )
+    ).toBe(false);
+  });
 });

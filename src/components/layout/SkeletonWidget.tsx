@@ -31,15 +31,18 @@ export const SkeletonWidget: FC<SkeletonWidgetProps> = ({ className, title }) =>
         </div>
 
         {/* Skeleton Body Cards / Pulse Lines */}
-        <div className="flex-1 flex flex-col gap-3 justify-center">
-          <div className="h-10 w-full rounded-xl bg-[var(--fluent-accent)]/15 border border-[var(--fluent-accent)]/20 animate-pulse flex items-center px-3">
+        <div className="flex-1 flex flex-col gap-3 justify-evenly overflow-hidden py-1">
+          <div className="h-10 min-h-[36px] w-full rounded-xl bg-[var(--fluent-accent)]/15 border border-[var(--fluent-accent)]/20 animate-pulse flex items-center px-3">
             <div className="h-3 w-1/3 rounded-full bg-[var(--fluent-accent)]/30" />
           </div>
-          <div className="h-10 w-full rounded-xl bg-[var(--fluent-accent)]/10 border border-[var(--fluent-accent)]/15 animate-pulse flex items-center px-3">
+          <div className="h-10 min-h-[36px] w-full rounded-xl bg-[var(--fluent-accent)]/10 border border-[var(--fluent-accent)]/15 animate-pulse flex items-center px-3">
             <div className="h-3 w-1/2 rounded-full bg-[var(--fluent-accent)]/25" />
           </div>
-          <div className="h-10 w-full rounded-xl bg-[var(--fluent-accent)]/10 border border-[var(--fluent-accent)]/15 animate-pulse flex items-center px-3">
+          <div className="h-10 min-h-[36px] w-full rounded-xl bg-[var(--fluent-accent)]/10 border border-[var(--fluent-accent)]/15 animate-pulse flex items-center px-3">
             <div className="h-3 w-2/3 rounded-full bg-[var(--fluent-accent)]/25" />
+          </div>
+          <div className="h-10 min-h-[36px] w-full rounded-xl bg-[var(--fluent-accent)]/10 border border-[var(--fluent-accent)]/15 animate-pulse flex items-center px-3">
+            <div className="h-3 w-1/4 rounded-full bg-[var(--fluent-accent)]/20" />
           </div>
         </div>
 

@@ -215,37 +215,10 @@ pub mod integration {
     ) -> Result<(), String> {
         const SKELETON_LABEL: &str = "widget_skeleton";
         if let Some(window) = app.get_webview_window(SKELETON_LABEL) {
-            let scale = window.scale_factor().unwrap_or(1.0);
-            let px = (x * scale).round() as i32;
-            let py = (y * scale).round() as i32;
-            let pw = (width * scale).round() as i32;
-            let ph = (height * scale).round() as i32;
-
-            #[cfg(windows)]
-            {
-                if let Ok(hwnd) = window.hwnd() {
-                    unsafe {
-                        use windows::Win32::UI::WindowsAndMessaging::{
-                            SetWindowPos, SWP_NOACTIVATE, SWP_SHOWWINDOW, SWP_NOZORDER,
-                        };
-                        let _ = SetWindowPos(
-                            windows::Win32::Foundation::HWND(hwnd.0 as *mut core::ffi::c_void),
-                            windows::Win32::Foundation::HWND(core::ptr::null_mut()),
-                            px,
-                            py,
-                            pw,
-                            ph,
-                            SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW,
-                        );
-                    }
-                }
-            }
-            #[cfg(not(windows))]
-            {
-                let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }));
-                let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
-                let _ = window.show();
-            }
+            // Use Tauri high-level set_size and set_position so ICoreWebView2Controller::put_Bounds resizes the child viewport
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }));
+            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
+            let _ = window.show();
             return Ok(());
         }
 
@@ -290,11 +263,23 @@ pub mod integration {
             {
                 if let Ok(hwnd) = window.hwnd() {
                     unsafe {
-                        use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE};
-                        let _ = ShowWindow(
-                            windows::Win32::Foundation::HWND(hwnd.0 as *mut core::ffi::c_void),
-                            SW_HIDE,
+                        use windows::Win32::UI::WindowsAndMessaging::{
+                            ShowWindow, SW_HIDE, SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER, SWP_NOSIZE, SWP_HIDEWINDOW,
+                        };
+                        let raw_h = windows::Win32::Foundation::HWND(hwnd.0 as *mut core::ffi::c_void);
+                        // Move off-screen immediately to eliminate any visible lingering pixels
+                        let _ = SetWindowPos(
+                            raw_h,
+                            windows::Win32::Foundation::HWND(core::ptr::null_mut()),
+                            -10000,
+                            -10000,
+                            0,
+                            0,
+                            SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOSIZE | SWP_HIDEWINDOW,
                         );
+                        let _ = ShowWindow(raw_h, SW_HIDE);
+                        // Force desktop wallpaper redraw over the previous area
+                        crate::window::win32::invalidate_screen_rect(0, 0, 8000, 8000);
                     }
                 }
             }

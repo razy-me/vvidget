@@ -3,9 +3,10 @@ use windows::Win32::Foundation::{HWND, RECT, LRESULT, WPARAM, LPARAM};
 #[cfg(windows)]
 use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE,
-    WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE, WS_EX_APPWINDOW, WS_EX_TRANSPARENT,
+    WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE, WS_EX_APPWINDOW, WS_EX_LAYERED,
     SetWindowPos, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_FRAMECHANGED, SWP_HIDEWINDOW, SWP_NOACTIVATE,
     WM_WINDOWPOSCHANGING, WM_MOVING, WM_SYSCOMMAND, WM_NCDESTROY, WM_EXITSIZEMOVE, WM_SHOWWINDOW,
+    WM_NCHITTEST, HTTRANSPARENT,
     SC_MINIMIZE, WINDOWPOS, GetWindowRect, HWND_BOTTOM,
     FindWindowW, FindWindowExW, SendMessageW,
 };
@@ -13,6 +14,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::Win32::Graphics::Gdi::{
     GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
     GetDC, ReleaseDC, GetDeviceCaps, LOGPIXELSX,
+    RedrawWindow, RDW_INVALIDATE, RDW_ERASE, RDW_ALLCHILDREN, RDW_UPDATENOW,
 };
 #[cfg(windows)]
 use windows::Win32::UI::Shell::{SetWindowSubclass, DefSubclassProc, RemoveWindowSubclass};
@@ -231,10 +233,32 @@ pub unsafe fn apply_tool_window_styles(raw_hwnd: *mut core::ffi::c_void, no_acti
 }
 
 #[cfg(windows)]
+unsafe extern "system" fn skeleton_subclass_proc(
+    hwnd: HWND,
+    umsg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+    uidsubclass: usize,
+    _dwrefdata: usize,
+) -> LRESULT {
+    match umsg {
+        WM_NCHITTEST => LRESULT(HTTRANSPARENT as isize),
+        WM_NCDESTROY => {
+            let _ = RemoveWindowSubclass(hwnd, Some(skeleton_subclass_proc), uidsubclass);
+            DefSubclassProc(hwnd, umsg, wparam, lparam)
+        }
+        _ => DefSubclassProc(hwnd, umsg, wparam, lparam),
+    }
+}
+
+#[cfg(windows)]
 pub unsafe fn apply_skeleton_window_styles(raw_hwnd: *mut core::ffi::c_void) -> Result<(), String> {
     let hwnd = HWND(raw_hwnd);
     let current_ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
-    let new_ex_style = (current_ex_style | WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0 | WS_EX_TRANSPARENT.0)
+    // WS_EX_TOOLWINDOW: hide from taskbar / alt-tab
+    // WS_EX_NOACTIVATE: prevent stealing focus
+    // WS_EX_LAYERED: standard layered composition without WS_EX_TRANSPARENT dirty-region bug
+    let new_ex_style = (current_ex_style | WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0 | WS_EX_LAYERED.0)
         & !WS_EX_APPWINDOW.0;
 
     SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex_style as isize);
@@ -249,8 +273,31 @@ pub unsafe fn apply_skeleton_window_styles(raw_hwnd: *mut core::ffi::c_void) -> 
     )
     .map_err(|e| format!("SetWindowPos failed: {}", e))?;
 
+    // Intercept WM_NCHITTEST with HTTRANSPARENT to achieve 100% click-through without breaking DWM invalidation
+    const SKELETON_SUBCLASS_ID: usize = 0x534B_454C; // 'SKEL'
+    let _ = SetWindowSubclass(hwnd, Some(skeleton_subclass_proc), SKELETON_SUBCLASS_ID, 0);
+
     Ok(())
 }
+
+#[cfg(windows)]
+pub unsafe fn invalidate_screen_rect(x: i32, y: i32, width: i32, height: i32) {
+    let rect = RECT {
+        left: x,
+        top: y,
+        right: x + width,
+        bottom: y + height,
+    };
+    let _ = RedrawWindow(
+        HWND(core::ptr::null_mut()),
+        Some(&rect),
+        None,
+        RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW,
+    );
+}
+
+#[cfg(not(windows))]
+pub unsafe fn invalidate_screen_rect(_x: i32, _y: i32, _width: i32, _height: i32) {}
 
 #[cfg(not(windows))]
 pub unsafe fn apply_skeleton_window_styles(_raw_hwnd: *mut core::ffi::c_void) -> Result<(), String> {

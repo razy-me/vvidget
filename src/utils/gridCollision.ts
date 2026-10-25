@@ -26,8 +26,8 @@ export function rectsOverlap(
 /**
  * Finds the nearest non-overlapping grid slot for a widget.
  * If the target slot is unoccupied, snaps directly to target.
- * If the target slot collides with an existing widget, searches outward in concentric rings
- * for the closest free slot within screen/work-area bounds.
+ * If the target slot collides with an existing widget, searches all valid grid slots
+ * within screen/work-area bounds and selects the one that minimizes Euclidean distance to the cursor.
  */
 export function findNearestNonOverlappingSlot(
   targetX: number,
@@ -58,42 +58,41 @@ export function findNearestNonOverlappingSlot(
     return { x: candidate.x, y: candidate.y };
   }
 
-  // Search expanding grid rings (radius r = 1..15)
+  // Exhaustive search over all valid screen grid positions to guarantee the closest free slot
+  const minCol = Math.floor(minX / gridX);
+  const maxCol = Math.ceil(maxX / gridX);
+  const minRow = Math.floor(minY / gridY);
+  const maxRow = Math.ceil(maxY / gridY);
+
   interface SlotCandidate {
     x: number;
     y: number;
     distSq: number;
   }
   let bestSlot: SlotCandidate | null = null;
-  const maxRadius = 15;
 
-  for (let r = 1; r <= maxRadius; r++) {
-    for (let dx = -r; dx <= r; dx++) {
-      for (let dy = -r; dy <= r; dy++) {
-        // Only evaluate outer perimeter of the current ring
-        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+  for (let c = minCol; c <= maxCol; c++) {
+    const candX = Math.max(minX, Math.min(maxX, c * gridX));
+    for (let r = minRow; r <= maxRow; r++) {
+      const candY = Math.max(minY, Math.min(maxY, r * gridY));
 
-        const candX = Math.max(minX, Math.min(maxX, baseSnappedX + dx * gridX));
-        const candY = Math.max(minY, Math.min(maxY, baseSnappedY + dy * gridY));
+      const testRect = { x: candX, y: candY, width, height };
+      const overlaps = occupied.some((other) => rectsOverlap(testRect, other));
 
-        const testRect = { x: candX, y: candY, width, height };
-        const overlaps = occupied.some((other) => rectsOverlap(testRect, other));
-
-        if (!overlaps) {
-          const distSq = (candX - targetX) ** 2 + (candY - targetY) ** 2;
-          if (bestSlot === null || distSq < bestSlot.distSq) {
-            bestSlot = { x: candX, y: candY, distSq };
-          }
+      if (!overlaps) {
+        const distSq = (candX - targetX) ** 2 + (candY - targetY) ** 2;
+        if (bestSlot === null || distSq < bestSlot.distSq) {
+          bestSlot = { x: candX, y: candY, distSq };
         }
       }
     }
-    // Return the nearest free slot found in the closest concentric ring
-    if (bestSlot !== null) {
-      const found: SlotCandidate = bestSlot;
-      return { x: found.x, y: found.y };
-    }
   }
 
-  // Fallback to initial clamped position if no free slot found
+  if (bestSlot !== null) {
+    const found: SlotCandidate = bestSlot;
+    return { x: found.x, y: found.y };
+  }
+
+  // Fallback to initial clamped position if no free slot found on the entire desktop
   return { x: candidate.x, y: candidate.y };
 }
