@@ -1,0 +1,666 @@
+use std::path::{Path, PathBuf};
+use tauri::Manager;
+use crate::config::LauncherItem;
+
+/// Parses key-value pairs from Valve's KeyValues (VDF) text format.
+pub fn parse_vdf_key_values(content: &str) -> Vec<(String, String)> {
+    let mut pairs = Vec::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("//") || trimmed.is_empty() {
+            continue;
+        }
+
+        let mut tokens = Vec::new();
+        let mut in_quote = false;
+        let mut token = String::new();
+        let mut chars = trimmed.chars().peekable();
+
+        while let Some(c) = chars.next() {
+            if c == '\\' {
+                if let Some(&next) = chars.peek() {
+                    if next == '\\' || next == '"' {
+                        token.push(next);
+                        chars.next();
+                        continue;
+                    }
+                }
+                token.push(c);
+            } else if c == '"' {
+                if in_quote {
+                    tokens.push(token.clone());
+                    token.clear();
+                    in_quote = false;
+                } else {
+                    in_quote = true;
+                }
+            } else if in_quote {
+                token.push(c);
+            }
+        }
+
+        if tokens.len() >= 2 {
+            pairs.push((tokens[0].clone(), tokens[1].clone()));
+        }
+    }
+    pairs
+}
+
+/// Extracts Steam library folder paths from a `libraryfolders.vdf` file content.
+pub fn parse_library_folders_vdf(content: &str) -> Vec<PathBuf> {
+    let pairs = parse_vdf_key_values(content);
+    let mut paths = Vec::new();
+
+    for (k, v) in pairs {
+        let k_lower = k.to_lowercase();
+        if k_lower == "path" {
+            let p = PathBuf::from(&v);
+            if !paths.contains(&p) {
+                paths.push(p);
+            }
+        } else if k.chars().all(|c| c.is_ascii_digit()) {
+            // Older VDF format where key is folder index and value is the path
+            if v.contains(":\\") || v.contains(":/") || v.starts_with('/') {
+                let p = PathBuf::from(&v);
+                if !paths.contains(&p) {
+                    paths.push(p);
+                }
+            }
+        }
+    }
+    paths
+}
+
+/// Parses an `appmanifest_*.acf` file to extract (appid, name, installdir).
+pub fn parse_appmanifest_acf(content: &str) -> Option<(String, String, String)> {
+    let pairs = parse_vdf_key_values(content);
+    let mut appid = None;
+    let mut name = None;
+    let mut installdir = None;
+
+    for (k, v) in pairs {
+        match k.to_lowercase().as_str() {
+            "appid" => {
+                if appid.is_none() && !v.is_empty() {
+                    appid = Some(v);
+                }
+            }
+            "name" => {
+                if name.is_none() && !v.is_empty() {
+                    name = Some(v);
+                }
+            }
+            "installdir" => {
+                if installdir.is_none() && !v.is_empty() {
+                    installdir = Some(v);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    match (appid, name, installdir) {
+        (Some(id), Some(n), Some(dir)) => Some((id, n, dir)),
+        (Some(id), Some(n), None) => Some((id.clone(), n, id)),
+        _ => None,
+    }
+}
+
+/// Parses an Epic Games `*.item` JSON file to construct a `LauncherItem`.
+pub fn parse_epic_manifest_item(content: &str) -> Option<LauncherItem> {
+    let val: serde_json::Value = serde_json::from_str(content).ok()?;
+    let obj = val.as_object()?;
+
+    let app_name = obj.get("AppName")?.as_str()?.trim();
+    if app_name.is_empty() {
+        return None;
+    }
+
+    let display_name = obj
+        .get("DisplayName")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(app_name);
+
+    let uri = format!(
+        "com.epicgames.launcher://apps/{}?action=launch&silent=true",
+        app_name
+    );
+
+    Some(LauncherItem {
+        id: format!("epic_{}", app_name),
+        name: display_name.to_string(),
+        path_or_uri: uri,
+        icon_type: Some("epic".to_string()),
+        source: "epic".to_string(),
+        last_launched: None,
+    })
+}
+
+/// Scans the local filesystem for installed Steam games across all libraries.
+pub fn scan_steam_games() -> Vec<LauncherItem> {
+    let mut items = Vec::new();
+    let mut library_paths = Vec::new();
+
+    // Check candidate Steam installation root directories
+    let mut candidate_roots = Vec::new();
+    if let Ok(prog_x86) = std::env::var("ProgramFiles(x86)") {
+        candidate_roots.push(PathBuf::from(prog_x86).join("Steam"));
+    }
+    if let Ok(prog) = std::env::var("ProgramFiles") {
+        candidate_roots.push(PathBuf::from(prog).join("Steam"));
+    }
+    candidate_roots.push(PathBuf::from("C:\\Program Files (x86)\\Steam"));
+    candidate_roots.push(PathBuf::from("C:\\Program Files\\Steam"));
+    candidate_roots.push(PathBuf::from("C:\\Steam"));
+    candidate_roots.push(PathBuf::from("D:\\Steam"));
+    candidate_roots.push(PathBuf::from("E:\\Steam"));
+
+    for root in candidate_roots {
+        if root.exists() && root.is_dir() {
+            let vdf_file = root.join("steamapps").join("libraryfolders.vdf");
+            if vdf_file.exists() {
+                if let Ok(vdf_content) = std::fs::read_to_string(&vdf_file) {
+                    let parsed = parse_library_folders_vdf(&vdf_content);
+                    for p in parsed {
+                        if !library_paths.contains(&p) {
+                            library_paths.push(p);
+                        }
+                    }
+                }
+            }
+            if !library_paths.contains(&root) {
+                library_paths.push(root);
+            }
+        }
+    }
+
+    // For each library, look in steamapps for appmanifest_*.acf
+    for lib in library_paths {
+        let steamapps_dir = if lib.ends_with("steamapps") {
+            lib.clone()
+        } else {
+            lib.join("steamapps")
+        };
+
+        if !steamapps_dir.exists() || !steamapps_dir.is_dir() {
+            continue;
+        }
+
+        let entries = match std::fs::read_dir(&steamapps_dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let file_name = path
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+
+            if file_name.starts_with("appmanifest_") && file_name.ends_with(".acf") {
+                if let Ok(acf_content) = std::fs::read_to_string(&path) {
+                    if let Some((appid, name, _installdir)) = parse_appmanifest_acf(&acf_content) {
+                        // Filter out empty or redistributable/runtime utilities
+                        if name.trim().is_empty()
+                            || name == "Steamworks Common Redistributables"
+                            || name.starts_with("Proton ")
+                            || appid == "228980"
+                        {
+                            continue;
+                        }
+
+                        let item = LauncherItem {
+                            id: format!("steam_{}", appid),
+                            name,
+                            path_or_uri: format!("steam://rungameid/{}", appid),
+                            icon_type: Some("steam".to_string()),
+                            source: "steam".to_string(),
+                            last_launched: None,
+                        };
+
+                        if !items.iter().any(|existing: &LauncherItem| existing.id == item.id) {
+                            items.push(item);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    items
+}
+
+/// Scans Epic Games manifest directories for installed games.
+pub fn scan_epic_games() -> Vec<LauncherItem> {
+    let mut items = Vec::new();
+    let mut manifests_dirs = Vec::new();
+
+    if let Ok(prog_data) = std::env::var("ProgramData") {
+        manifests_dirs.push(
+            PathBuf::from(prog_data)
+                .join("Epic")
+                .join("EpicGamesLauncher")
+                .join("Data")
+                .join("Manifests"),
+        );
+    }
+    manifests_dirs.push(PathBuf::from(
+        "C:\\ProgramData\\Epic\\EpicGamesLauncher\\Data\\Manifests",
+    ));
+
+    for dir in manifests_dirs {
+        if !dir.exists() || !dir.is_dir() {
+            continue;
+        }
+
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                if ext.eq_ignore_ascii_case("item") {
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        if let Some(item) = parse_epic_manifest_item(&content) {
+                            if !items.iter().any(|existing: &LauncherItem| existing.id == item.id) {
+                                items.push(item);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    items
+}
+
+/// Strictly validates target string against command injection and verifies path existence.
+pub fn validate_launch_target(target: &str) -> Result<(), String> {
+    let trimmed = target.trim();
+    if trimmed.is_empty() {
+        return Err("Launch target cannot be empty".to_string());
+    }
+
+    // Check control characters
+    if trimmed.contains('\0') || trimmed.contains('\n') || trimmed.contains('\r') {
+        return Err("Launch target contains invalid control characters".to_string());
+    }
+
+    // Disallow command-line execution flags or shells
+    let lower = trimmed.to_lowercase();
+    let forbidden_patterns = [
+        "cmd.exe",
+        "powershell",
+        "pwsh",
+        "wscript",
+        "cscript",
+        "mshta",
+        "-enc ",
+        "-encodedcommand",
+        "-command",
+        "/c ",
+        "/k ",
+    ];
+    for pat in forbidden_patterns {
+        if lower.contains(pat) {
+            return Err(format!("Command injection pattern detected: '{}'", pat));
+        }
+    }
+
+    // Allowlisted URI schemes
+    let allowlisted_schemes = [
+        "steam://",
+        "steam:",
+        "com.epicgames.launcher://",
+        "com.epicgames.launcher:",
+        "https://",
+        "http://",
+    ];
+
+    let is_scheme = allowlisted_schemes
+        .iter()
+        .any(|scheme| lower.starts_with(scheme));
+
+    if is_scheme {
+        if trimmed.contains(' ') {
+            return Err("URI scheme target cannot contain spaces".to_string());
+        }
+        // Disallow dangerous shell command separators in URIs
+        let uri_dangerous = ['|', ';', '>', '<', '"', '\'', '`', '$'];
+        for dc in uri_dangerous {
+            if trimmed.contains(dc) {
+                return Err(format!("URI contains forbidden character: '{}'", dc));
+            }
+        }
+        return Ok(());
+    }
+
+    // Disallow shell operators and chaining characters in paths
+    let dangerous_path_chars = ['&', '|', ';', '>', '<', '"', '\'', '`', '$', '%'];
+    for dc in dangerous_path_chars {
+        if trimmed.contains(dc) {
+            return Err(format!(
+                "Launch target contains forbidden shell character: '{}'",
+                dc
+            ));
+        }
+    }
+
+    // If not a scheme, must be an absolute file path that exists on disk
+    let path = Path::new(trimmed);
+    if !path.is_absolute() {
+        return Err("Target must be an allowlisted URI scheme or an absolute file path".to_string());
+    }
+
+    if !path.exists() {
+        return Err(format!("Target file does not exist: {}", trimmed));
+    }
+
+    if !path.is_file() {
+        return Err(format!("Target path is not a file: {}", trimmed));
+    }
+
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let allowed_extensions = ["exe", "lnk", "url"];
+    if !allowed_extensions.contains(&ext.as_str()) {
+        return Err(format!(
+            "File extension '{}' is not an allowed executable or shortcut",
+            ext
+        ));
+    }
+
+    Ok(())
+}
+
+/// Tauri command: scans for installed games from Steam and Epic Games.
+#[tauri::command]
+#[specta::specta]
+pub async fn scan_installed_games() -> Result<Vec<LauncherItem>, String> {
+    let mut games = scan_steam_games();
+    let mut epic_games = scan_epic_games();
+    games.append(&mut epic_games);
+
+    // Sort alphabetically by name
+    games.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(games)
+}
+
+/// Tauri command: launches an allowlisted URI or verified local executable via ShellExecuteW.
+#[tauri::command]
+#[specta::specta]
+pub async fn launch_app_or_uri(target: String) -> Result<(), String> {
+    validate_launch_target(&target)?;
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::core::{w, PCWSTR};
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::Shell::ShellExecuteW;
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        let wide_target: Vec<u16> = std::ffi::OsStr::new(&target)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+
+        unsafe {
+            let res = ShellExecuteW(
+                HWND(core::ptr::null_mut()),
+                w!("open"),
+                PCWSTR(wide_target.as_ptr()),
+                PCWSTR::null(),
+                PCWSTR::null(),
+                SW_SHOWNORMAL,
+            );
+            let code = res.0 as usize;
+            if code <= 32 {
+                return Err(format!("ShellExecuteW failed with error code: {}", code));
+            }
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = target;
+        Ok(())
+    }
+}
+
+/// Tauri command: adds or updates a custom launcher item in persistent AppConfig.
+#[tauri::command]
+#[specta::specta]
+pub async fn add_custom_launcher_item<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    mut item: LauncherItem,
+) -> Result<(), String> {
+    let trimmed_name = item.name.trim().to_string();
+    if trimmed_name.is_empty() {
+        return Err("Item name cannot be empty".to_string());
+    }
+    item.name = trimmed_name;
+
+    let trimmed_target = item.path_or_uri.trim().to_string();
+    if trimmed_target.is_empty() {
+        return Err("Item path or URI cannot be empty".to_string());
+    }
+    validate_launch_target(&trimmed_target)?;
+    item.path_or_uri = trimmed_target;
+
+    if item.id.trim().is_empty() {
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| e.to_string())?
+            .as_millis();
+        item.id = format!("custom_{}", millis);
+    }
+    if item.source.trim().is_empty() {
+        item.source = "custom".to_string();
+    }
+
+    if let Some(cm) = app.try_state::<crate::config::ConfigManager>() {
+        let mut config = cm.get_config().await;
+        if let Some(existing) = config.launcher_items.iter_mut().find(|i| i.id == item.id) {
+            *existing = item;
+        } else {
+            config.launcher_items.push(item);
+        }
+        cm.save_immediate(config.clone())
+            .await
+            .map_err(|e| e.to_string())?;
+        use tauri::Emitter;
+        let _ = app.emit("config-changed", &config);
+        Ok(())
+    } else {
+        Err("ConfigManager not available".to_string())
+    }
+}
+
+/// Tauri command: removes a custom launcher item from persistent AppConfig.
+#[tauri::command]
+#[specta::specta]
+pub async fn remove_launcher_item<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    id: String,
+) -> Result<(), String> {
+    if let Some(cm) = app.try_state::<crate::config::ConfigManager>() {
+        let mut config = cm.get_config().await;
+        let initial_len = config.launcher_items.len();
+        config.launcher_items.retain(|i| i.id != id);
+
+        if config.launcher_items.len() != initial_len {
+            cm.save_immediate(config.clone())
+                .await
+                .map_err(|e| e.to_string())?;
+            use tauri::Emitter;
+            let _ = app.emit("config-changed", &config);
+        }
+        Ok(())
+    } else {
+        Err("ConfigManager not available".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_library_folders_vdf_modern_format() {
+        let vdf = r#"
+"libraryfolders"
+{
+	"0"
+	{
+		"path"		"C:\\Program Files (x86)\\Steam"
+		"label"		""
+		"contentid"		"2119753171675619613"
+		"totalsize"		"0"
+		"apps"
+		{
+			"620"		"125678"
+		}
+	}
+	"1"
+	{
+		"path"		"D:\\Games\\SteamLibrary"
+		"label"		"SSD"
+	}
+}
+"#;
+        let paths = parse_library_folders_vdf(vdf);
+        assert_eq!(paths.len(), 2);
+        assert_eq!(paths[0], PathBuf::from("C:\\Program Files (x86)\\Steam"));
+        assert_eq!(paths[1], PathBuf::from("D:\\Games\\SteamLibrary"));
+    }
+
+    #[test]
+    fn test_parse_library_folders_vdf_legacy_format() {
+        let vdf = r#"
+"LibraryFolders"
+{
+	"TimeNextStatsReport"		"123456789"
+	"ContentStatsID"		"987654321"
+	"1"		"E:\\SteamLibrary"
+	"2"		"F:\\Games\\Steam"
+}
+"#;
+        let paths = parse_library_folders_vdf(vdf);
+        assert_eq!(paths.len(), 2);
+        assert_eq!(paths[0], PathBuf::from("E:\\SteamLibrary"));
+        assert_eq!(paths[1], PathBuf::from("F:\\Games\\Steam"));
+    }
+
+    #[test]
+    fn test_parse_appmanifest_acf() {
+        let acf = r#"
+"AppState"
+{
+	"appid"		"620"
+	"Universe"		"1"
+	"name"		"Portal 2"
+	"StateFlags"		"4"
+	"installdir"		"Portal 2"
+	"LastUpdated"		"1700000000"
+}
+"#;
+        let result = parse_appmanifest_acf(acf);
+        assert!(result.is_some());
+        let (appid, name, installdir) = result.unwrap();
+        assert_eq!(appid, "620");
+        assert_eq!(name, "Portal 2");
+        assert_eq!(installdir, "Portal 2");
+    }
+
+    #[test]
+    fn test_parse_epic_manifest_item() {
+        let json = r#"{
+  "FormatVersion": 0,
+  "AppVersionString": "1.0.0",
+  "AppName": "Fortnite",
+  "DisplayName": "Fortnite Battle Royale",
+  "InstallLocation": "C:\\Program Files\\Epic Games\\Fortnite"
+}"#;
+        let result = parse_epic_manifest_item(json);
+        assert!(result.is_some());
+        let item = result.unwrap();
+        assert_eq!(item.id, "epic_Fortnite");
+        assert_eq!(item.name, "Fortnite Battle Royale");
+        assert_eq!(
+            item.path_or_uri,
+            "com.epicgames.launcher://apps/Fortnite?action=launch&silent=true"
+        );
+        assert_eq!(item.source, "epic");
+        assert_eq!(item.icon_type, Some("epic".to_string()));
+    }
+
+    #[test]
+    fn test_validate_launch_target_allowlisted_uris() {
+        assert!(validate_launch_target("steam://rungameid/620").is_ok());
+        assert!(validate_launch_target("steam:rungameid/1942280").is_ok());
+        assert!(validate_launch_target(
+            "com.epicgames.launcher://apps/Fortnite?action=launch&silent=true"
+        )
+        .is_ok());
+        assert!(validate_launch_target("https://play.geforcenow.com").is_ok());
+        assert!(validate_launch_target("http://localhost:3000").is_ok());
+    }
+
+    #[test]
+    fn test_validate_launch_target_security_injection() {
+        // Empty
+        assert!(validate_launch_target("").is_err());
+        assert!(validate_launch_target("   ").is_err());
+
+        // Dangerous chaining characters
+        assert!(validate_launch_target("steam://rungameid/620 & calc.exe").is_err());
+        assert!(validate_launch_target("steam://rungameid/620; whoami").is_err());
+        assert!(validate_launch_target("steam://rungameid/620 | dir").is_err());
+        assert!(validate_launch_target("steam://rungameid/620 > output.txt").is_err());
+
+        // Shell executions and flags
+        assert!(validate_launch_target("cmd.exe /c calc.exe").is_err());
+        assert!(validate_launch_target("powershell -enc aW52b2tl").is_err());
+        assert!(validate_launch_target("pwsh -command calc").is_err());
+        assert!(validate_launch_target("mshta vbscript:msgbox(1)").is_err());
+
+        // URIs with spaces
+        assert!(validate_launch_target("https://example.com/test with spaces").is_err());
+
+        // Relative path
+        assert!(validate_launch_target("relative/path/game.exe").is_err());
+
+        // Non-existent path
+        assert!(validate_launch_target("C:\\Windows\\NonExistentGame12345.exe").is_err());
+    }
+
+    #[test]
+    fn test_validate_launch_target_existing_executable() {
+        // notepad.exe or calc.exe always exists in System32 on Windows
+        #[cfg(windows)]
+        {
+            let notepad = PathBuf::from("C:\\Windows\\System32\\notepad.exe");
+            if notepad.exists() {
+                assert!(validate_launch_target("C:\\Windows\\System32\\notepad.exe").is_ok());
+            }
+        }
+    }
+}

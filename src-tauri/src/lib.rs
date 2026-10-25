@@ -1,21 +1,29 @@
+pub mod actions;
 pub mod audio;
 pub mod media;
 pub mod config;
 pub mod geo;
+pub mod launcher;
+pub mod speedtest;
 pub mod sysinfo;
 pub mod tray;
 pub mod window;
 
+use actions::{execute_quick_action, update_quick_settings_instance};
 use audio::{get_master_mute, get_master_volume, set_master_volume, toggle_master_mute};
 use config::{
     get_autostart_status, load_config, open_logs_folder, resolve_config_path, save_config,
     save_config_immediate, set_autostart, set_widgets_locked, ConfigManager,
 };
 use geo::get_windows_location;
+use launcher::{
+    add_custom_launcher_item, launch_app_or_uri, remove_launcher_item, scan_installed_games,
+};
 use media::{
     get_media_state, handle_album_art_protocol, media_next_track, media_play_pause,
     media_previous_track, start_media_monitor,
 };
+use speedtest::{get_speedtest_history, run_speedtest, save_speedtest_result};
 use sysinfo::{get_system_metrics, start_metrics_worker, MetricsCollector};
 use tauri::{Listener, Manager, Runtime};
 use tray::{open_settings, setup_tray};
@@ -449,6 +457,15 @@ pub fn run() {
             hide_skeleton_preview,
             duplicate_quick_settings_widget,
             remove_widget_instance,
+            run_speedtest,
+            get_speedtest_history,
+            save_speedtest_result,
+            scan_installed_games,
+            launch_app_or_uri,
+            add_custom_launcher_item,
+            remove_launcher_item,
+            execute_quick_action,
+            update_quick_settings_instance,
         ])
         .setup(move |app| {
             start_metrics_worker(
@@ -643,6 +660,8 @@ mod tests {
             let _ = serde_json::from_str::<media::MediaSession>(bad);
             let _ = serde_json::from_str::<sysinfo::SystemMetrics>(bad);
             let _ = serde_json::from_str::<geo::GeoLocation>(bad);
+            let _ = serde_json::from_str::<speedtest::SpeedtestProgress>(bad);
+            let _ = serde_json::from_str::<config::SpeedtestResult>(bad);
             let _ = serde_json::from_str::<window::Rect>(bad);
             let _ = serde_json::from_str::<window::DesktopGridMetrics>(bad);
         }

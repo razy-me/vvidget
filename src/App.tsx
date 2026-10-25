@@ -7,11 +7,15 @@ import { WidgetContainer } from "@/components/layout/WidgetContainer";
 import { ResourceWidget } from "@/widgets/resources/ResourceWidget";
 import { SpotifyWidget } from "@/widgets/spotify/SpotifyWidget";
 import { WeatherWidget } from "@/widgets/weather/WeatherWidget";
+import { QuickSettingsWidget } from "@/widgets/quick-settings/QuickSettingsWidget";
+import { SpeedtestWidget } from "@/widgets/speedtest/SpeedtestWidget";
 import { SkeletonWidget } from "@/components/layout/SkeletonWidget";
 import {
   Cpu,
   Music,
   CloudSun,
+  Gauge,
+  SlidersHorizontal,
   LayoutGrid,
   Layers,
   Settings,
@@ -117,6 +121,49 @@ export const AppContent: FC = () => {
           className="w-full h-full"
         >
           <WeatherWidget className="border-0 shadow-none bg-transparent p-0 max-w-none" />
+        </WidgetContainer>
+      </div>
+    );
+  }
+
+  if (widgetId === "speedtest") {
+    return (
+      <div className="w-full h-full p-2 flex flex-col bg-transparent overflow-hidden select-none">
+        <WidgetContainer
+          id="speedtest"
+          title="Internet Speedtest"
+          icon={<Gauge className="w-4 h-4 text-sky-400" />}
+          isLocked={config.lock_positions}
+          layoutMode="independent"
+          onToggleLock={handleToggleLock}
+          onOpenSettings={handleOpenSettings}
+          className="w-full h-full"
+        >
+          <SpeedtestWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+        </WidgetContainer>
+      </div>
+    );
+  }
+
+  if (widgetId && widgetId.startsWith("quick_settings")) {
+    const instanceTitle =
+      config.quick_settings_instances?.[widgetId]?.title ?? "Quick Settings";
+    return (
+      <div className="w-full h-full p-2 flex flex-col bg-transparent overflow-hidden select-none">
+        <WidgetContainer
+          id={widgetId}
+          title={instanceTitle}
+          icon={<SlidersHorizontal className="w-4 h-4 text-sky-400" />}
+          isLocked={config.lock_positions}
+          layoutMode="independent"
+          onToggleLock={handleToggleLock}
+          onOpenSettings={handleOpenSettings}
+          className="w-full h-full"
+        >
+          <QuickSettingsWidget
+            instanceId={widgetId}
+            className="border-0 shadow-none bg-transparent p-0 max-w-none"
+          />
         </WidgetContainer>
       </div>
     );
