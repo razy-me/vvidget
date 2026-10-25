@@ -8,6 +8,14 @@ export const DESKTOP_GRID_LOGICAL_Y = 128.0;
 export const DESKTOP_GRID_X = DESKTOP_GRID_LOGICAL_X;
 export const DESKTOP_GRID_Y = DESKTOP_GRID_LOGICAL_Y;
 
+export interface SkeletonSlot {
+  [key: string]: unknown;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface UseGridDragOptions {
   widgetId?: string;
   isLocked?: boolean;
@@ -28,6 +36,7 @@ export function useGridDrag({
   onDragStateChange,
 }: UseGridDragOptions) {
   const [isDragging, setIsDragging] = useState(false);
+  const [skeletonSlot, setSkeletonSlot] = useState<SkeletonSlot | null>(null);
   const [activeGrid, setActiveGrid] = useState<{ x: number; y: number }>({
     x: gridX,
     y: gridY,
@@ -69,6 +78,9 @@ export function useGridDrag({
     startWindowY: number;
     lastTargetX: number;
     lastTargetY: number;
+    lastSkeletonX: number;
+    lastSkeletonY: number;
+    occupiedWidgets: GridRect[];
     widgetW: number;
     widgetH: number;
     minX: number;
@@ -84,6 +96,9 @@ export function useGridDrag({
     startWindowY: 0,
     lastTargetX: 0,
     lastTargetY: 0,
+    lastSkeletonX: -99999,
+    lastSkeletonY: -99999,
+    occupiedWidgets: [],
     widgetW: 360,
     widgetH: 256,
     minX: 0,
@@ -190,78 +205,7 @@ export function useGridDrag({
         // Fallback for non-Tauri / test environments
       }
 
-      // If user released pointer before async initialization finished, abort activation
-      if (!dragRef.current.isDown) {
-        return;
-      }
-
-      dragRef.current.active = true;
-      dragRef.current.startWindowX = currentLogicalX;
-      dragRef.current.startWindowY = currentLogicalY;
-      dragRef.current.lastTargetX = currentLogicalX;
-      dragRef.current.lastTargetY = currentLogicalY;
-      dragRef.current.widgetW = widgetW || 360;
-      dragRef.current.widgetH = widgetH || 256;
-      dragRef.current.minX = boundMinX;
-      dragRef.current.maxX = boundMaxX;
-      dragRef.current.minY = boundMinY;
-      dragRef.current.maxY = boundMaxY;
-
-      setIsDragging(true);
-      onDragStateChange?.(true);
-    },
-    [isLocked, onDragStateChange]
-  );
-
-  const onPointerMove = useCallback(
-    async (e: React.PointerEvent) => {
-      if (!dragRef.current.active) return;
-
-      const deltaX = e.screenX - dragRef.current.startScreenX;
-      const deltaY = e.screenY - dragRef.current.startScreenY;
-
-      const rawTargetX = dragRef.current.startWindowX + deltaX;
-      const rawTargetY = dragRef.current.startWindowY + deltaY;
-
-      // Work-area bounds clamping so widgets cannot be dragged off-screen
-      const targetX = Math.max(dragRef.current.minX, Math.min(dragRef.current.maxX, rawTargetX));
-      const targetY = Math.max(dragRef.current.minY, Math.min(dragRef.current.maxY, rawTargetY));
-
-      dragRef.current.lastTargetX = targetX;
-      dragRef.current.lastTargetY = targetY;
-
-      // Smooth 1:1 real-time drag tracking on pointer move (smoothly following cursor)
-      try {
-        const appWindow = getCurrentWindow();
-        await appWindow.setPosition(new LogicalPosition(targetX, targetY));
-        onPositionChange?.(targetX, targetY);
-      } catch {
-        // Non-Tauri fallback
-      }
-    },
-    [onPositionChange]
-  );
-
-  const onPointerUp = useCallback(
-    async (e: React.PointerEvent) => {
-      dragRef.current.isDown = false;
-
-      try {
-        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch {
-        // Non-Tauri fallback
-      }
-
-      // If drag was not active (e.g. quick click before async init or locked widget), exit immediately
-      if (!dragRef.current.active) {
-        return;
-      }
-
-      dragRef.current.active = false;
-      setIsDragging(false);
-      onDragStateChange?.(false);
-
-      // Retrieve other visible widgets to prevent collisions and overlapping
+      // Retrieve other visible widgets to prevent collisions and overlapping during both preview and drop
       let occupied = otherWidgets || [];
       if (!otherWidgets || otherWidgets.length === 0) {
         try {
@@ -294,13 +238,156 @@ export function useGridDrag({
         }
       }
 
+      // If user released pointer before async initialization finished, abort activation
+      if (!dragRef.current.isDown) {
+        return;
+      }
+
+      dragRef.current.active = true;
+      dragRef.current.occupiedWidgets = occupied;
+      dragRef.current.startWindowX = currentLogicalX;
+      dragRef.current.startWindowY = currentLogicalY;
+      dragRef.current.lastTargetX = currentLogicalX;
+      dragRef.current.lastTargetY = currentLogicalY;
+      dragRef.current.widgetW = widgetW || 360;
+      dragRef.current.widgetH = widgetH || 256;
+      dragRef.current.minX = boundMinX;
+      dragRef.current.maxX = boundMaxX;
+      dragRef.current.minY = boundMinY;
+      dragRef.current.maxY = boundMaxY;
+
+      // Calculate initial prospective snap slot and show skeleton preview immediately
+      const initialSlot = findNearestNonOverlappingSlot(
+        currentLogicalX,
+        currentLogicalY,
+        dragRef.current.widgetW,
+        dragRef.current.widgetH,
+        occupied,
+        currentGridX,
+        currentGridY,
+        boundMinX,
+        boundMaxX,
+        boundMinY,
+        boundMaxY
+      );
+
+      dragRef.current.lastSkeletonX = initialSlot.x;
+      dragRef.current.lastSkeletonY = initialSlot.y;
+      setSkeletonSlot({
+        x: initialSlot.x,
+        y: initialSlot.y,
+        width: dragRef.current.widgetW,
+        height: dragRef.current.widgetH,
+      });
+
+      invoke("update_skeleton_preview", {
+        x: initialSlot.x,
+        y: initialSlot.y,
+        width: dragRef.current.widgetW,
+        height: dragRef.current.widgetH,
+      }).catch(() => {});
+
+      setIsDragging(true);
+      onDragStateChange?.(true);
+    },
+    [widgetId, isLocked, currentGridX, currentGridY, otherWidgets, onDragStateChange]
+  );
+
+  const onPointerMove = useCallback(
+    async (e: React.PointerEvent) => {
+      if (!dragRef.current.active) return;
+
+      const deltaX = e.screenX - dragRef.current.startScreenX;
+      const deltaY = e.screenY - dragRef.current.startScreenY;
+
+      const rawTargetX = dragRef.current.startWindowX + deltaX;
+      const rawTargetY = dragRef.current.startWindowY + deltaY;
+
+      // Work-area bounds clamping so widgets cannot be dragged off-screen
+      const targetX = Math.max(dragRef.current.minX, Math.min(dragRef.current.maxX, rawTargetX));
+      const targetY = Math.max(dragRef.current.minY, Math.min(dragRef.current.maxY, rawTargetY));
+
+      dragRef.current.lastTargetX = targetX;
+      dragRef.current.lastTargetY = targetY;
+
+      // Smooth 1:1 real-time drag tracking on pointer move (smoothly following cursor)
+      try {
+        const appWindow = getCurrentWindow();
+        await appWindow.setPosition(new LogicalPosition(targetX, targetY));
+        onPositionChange?.(targetX, targetY);
+      } catch {
+        // Non-Tauri fallback
+      }
+
+      // Calculate prospective non-overlapping snap target for the skeleton preview
+      const targetSlot = findNearestNonOverlappingSlot(
+        targetX,
+        targetY,
+        dragRef.current.widgetW || 360,
+        dragRef.current.widgetH || 256,
+        dragRef.current.occupiedWidgets,
+        currentGridX,
+        currentGridY,
+        dragRef.current.minX,
+        dragRef.current.maxX,
+        dragRef.current.minY,
+        dragRef.current.maxY
+      );
+
+      if (
+        targetSlot.x !== dragRef.current.lastSkeletonX ||
+        targetSlot.y !== dragRef.current.lastSkeletonY
+      ) {
+        dragRef.current.lastSkeletonX = targetSlot.x;
+        dragRef.current.lastSkeletonY = targetSlot.y;
+        const slot: SkeletonSlot = {
+          x: targetSlot.x,
+          y: targetSlot.y,
+          width: dragRef.current.widgetW || 360,
+          height: dragRef.current.widgetH || 256,
+        };
+        setSkeletonSlot(slot);
+        invoke("update_skeleton_preview", slot).catch(() => {});
+      }
+    },
+    [currentGridX, currentGridY, onPositionChange]
+  );
+
+  const onPointerUp = useCallback(
+    async (e: React.PointerEvent) => {
+      dragRef.current.isDown = false;
+
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        // Non-Tauri fallback
+      }
+
+      // If drag was not active (e.g. quick click before async init or locked widget), exit immediately
+      if (!dragRef.current.active) {
+        setSkeletonSlot(null);
+        dragRef.current.lastSkeletonX = -99999;
+        dragRef.current.lastSkeletonY = -99999;
+        invoke("hide_skeleton_preview").catch(() => {});
+        return;
+      }
+
+      dragRef.current.active = false;
+      setIsDragging(false);
+      onDragStateChange?.(false);
+      setSkeletonSlot(null);
+      dragRef.current.lastSkeletonX = -99999;
+      dragRef.current.lastSkeletonY = -99999;
+
+      invoke("hide_skeleton_preview").catch(() => {});
+
       // Snap-on-release to the nearest free grid slot that does not overlap any other widget
       const { x: finalX, y: finalY } = findNearestNonOverlappingSlot(
         dragRef.current.lastTargetX,
         dragRef.current.lastTargetY,
         dragRef.current.widgetW || 360,
         dragRef.current.widgetH || 256,
-        occupied,
+        dragRef.current.occupiedWidgets,
         currentGridX,
         currentGridY,
         dragRef.current.minX,
@@ -330,11 +417,12 @@ export function useGridDrag({
 
       onPositionChange?.(finalX, finalY);
     },
-    [widgetId, currentGridX, currentGridY, otherWidgets, onPositionChange, onDragStateChange]
+    [widgetId, currentGridX, currentGridY, onPositionChange, onDragStateChange]
   );
 
   return {
     isDragging,
+    skeletonSlot,
     gridX: currentGridX,
     gridY: currentGridY,
     dragProps: {

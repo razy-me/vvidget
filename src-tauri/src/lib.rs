@@ -182,9 +182,93 @@ pub mod integration {
     pub fn get_desktop_grid_metrics() -> Result<window::DesktopGridMetrics, String> {
         Ok(window::get_desktop_grid_metrics())
     }
+
+    /// Shows or updates the position and size of the translucent desktop skeleton preview window during drag.
+    #[tauri::command]
+    #[specta::specta]
+    pub async fn update_skeleton_preview<R: Runtime>(
+        app: tauri::AppHandle<R>,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    ) -> Result<(), String> {
+        const SKELETON_LABEL: &str = "widget_skeleton";
+        if let Some(window) = app.get_webview_window(SKELETON_LABEL) {
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }));
+            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
+            if !window.is_visible().unwrap_or(false) {
+                let _ = window.show();
+            }
+            #[cfg(windows)]
+            {
+                if let Ok(hwnd) = window.hwnd() {
+                    unsafe {
+                        use windows::Win32::UI::WindowsAndMessaging::{
+                            SetWindowPos, HWND_BOTTOM, SWP_NOMOVE, SWP_NOSIZE, SWP_NOACTIVATE,
+                        };
+                        let _ = SetWindowPos(
+                            windows::Win32::Foundation::HWND(hwnd.0 as *mut core::ffi::c_void),
+                            HWND_BOTTOM,
+                            0,
+                            0,
+                            0,
+                            0,
+                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                        );
+                    }
+                }
+            }
+            return Ok(());
+        }
+
+        let window = tauri::WebviewWindowBuilder::new(
+            &app,
+            SKELETON_LABEL,
+            tauri::WebviewUrl::App("index.html?view=skeleton".into()),
+        )
+        .title("Widgetz Skeleton")
+        .inner_size(width, height)
+        .position(x, y)
+        .resizable(false)
+        .decorations(false)
+        .transparent(true)
+        .shadow(false)
+        .skip_taskbar(true)
+        .build()
+        .map_err(|e| format!("Failed to create skeleton window: {}", e))?;
+
+        #[cfg(windows)]
+        {
+            if let Ok(hwnd) = window.hwnd() {
+                unsafe {
+                    let _ = crate::window::win32::apply_skeleton_window_styles(hwnd.0 as *mut core::ffi::c_void);
+                }
+            }
+        }
+
+        let _ = window.show();
+        Ok(())
+    }
+
+    /// Hides the desktop skeleton preview window once the widget drag operation concludes.
+    #[tauri::command]
+    #[specta::specta]
+    pub async fn hide_skeleton_preview<R: Runtime>(
+        app: tauri::AppHandle<R>,
+    ) -> Result<(), String> {
+        const SKELETON_LABEL: &str = "widget_skeleton";
+        if let Some(window) = app.get_webview_window(SKELETON_LABEL) {
+            let _ = window.hide();
+        }
+        Ok(())
+    }
 }
 
-pub use integration::{close_widget_window, open_widget_window, sync_widget_windows, save_widget_position, get_desktop_grid_metrics};
+pub use integration::{
+    close_widget_window, get_desktop_grid_metrics, hide_skeleton_preview, open_widget_window,
+    save_widget_position, sync_widget_windows, update_skeleton_preview,
+};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -246,6 +330,8 @@ pub fn run() {
             sync_widget_windows,
             save_widget_position,
             get_desktop_grid_metrics,
+            update_skeleton_preview,
+            hide_skeleton_preview,
         ])
         .setup(move |app| {
             start_metrics_worker(

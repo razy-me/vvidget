@@ -7,6 +7,7 @@ import { WidgetContainer } from "@/components/layout/WidgetContainer";
 import { ResourceWidget } from "@/widgets/resources/ResourceWidget";
 import { SpotifyWidget } from "@/widgets/spotify/SpotifyWidget";
 import { WeatherWidget } from "@/widgets/weather/WeatherWidget";
+import { SkeletonWidget } from "@/components/layout/SkeletonWidget";
 import {
   Cpu,
   Music,
@@ -24,16 +25,18 @@ export const AppContent: FC = () => {
   const { config, setWidgetsLocked, setLayoutMode } = useConfig();
 
   // Query parameter parsing allows multi-window routing in Tauri:
-  // e.g. /?widget=resources, /?widget=spotify, /?widget=weather, /?view=settings
-  const { widgetId, isSettingsView } = useMemo(() => {
+  // e.g. /?widget=resources, /?widget=spotify, /?widget=weather, /?view=settings, /?view=skeleton
+  const { widgetId, isSettingsView, isSkeletonView } = useMemo(() => {
     if (typeof window === "undefined") {
-      return { widgetId: null, isSettingsView: false };
+      return { widgetId: null, isSettingsView: false, isSkeletonView: false };
     }
     const params = new URLSearchParams(window.location.search);
     return {
       widgetId: params.get("widget"),
       isSettingsView:
         params.get("view") === "settings" || params.get("widget") === "settings",
+      isSkeletonView:
+        params.get("view") === "skeleton" || params.get("widget") === "skeleton",
     };
   }, []);
 
@@ -53,6 +56,11 @@ export const AppContent: FC = () => {
   // 1. Settings Window View
   if (isSettingsView) {
     return <SettingsModal />;
+  }
+
+  // 1b. Translucent Grid Skeleton Preview View (shown while dragging on desktop)
+  if (isSkeletonView) {
+    return <SkeletonWidget />;
   }
 
   // 2. Dedicated Single-Widget Window Views (Independent Multi-Window Mode)

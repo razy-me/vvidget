@@ -503,4 +503,60 @@ describe("useGridDrag Hook", () => {
 
     expect(overlaps).toBe(false);
   });
+
+  it("updates skeleton preview slot during drag and hides skeleton on release", async () => {
+    const { result } = renderHook(() =>
+      useGridDrag({
+        widgetId: "spotify",
+        otherWidgets: [],
+      })
+    );
+
+    expect(result.current.skeletonSlot).toBeNull();
+
+    // Pointer down activates drag and initializes skeletonSlot
+    await act(async () => {
+      await result.current.dragProps.onPointerDown({
+        button: 0,
+        screenX: 100,
+        screenY: 100,
+        pointerId: 1,
+        target: document.createElement("div"),
+        currentTarget: { setPointerCapture: vi.fn() },
+      } as unknown as React.PointerEvent);
+    });
+
+    expect(result.current.skeletonSlot).not.toBeNull();
+    expect(result.current.skeletonSlot?.width).toBe(360);
+    expect(result.current.skeletonSlot?.height).toBe(256);
+    expect(invoke).toHaveBeenCalledWith(
+      "update_skeleton_preview",
+      expect.objectContaining({
+        width: 360,
+        height: 256,
+      })
+    );
+
+    // Pointer move to next grid position updates skeleton preview
+    await act(async () => {
+      await result.current.dragProps.onPointerMove({
+        screenX: 340, // 240px delta
+        screenY: 356, // 256px delta
+      } as unknown as React.PointerEvent);
+    });
+
+    expect(result.current.skeletonSlot?.x).toBe(360);
+    expect(result.current.skeletonSlot?.y).toBe(384);
+
+    // Pointer release clears skeletonSlot and invokes hide_skeleton_preview
+    await act(async () => {
+      await result.current.dragProps.onPointerUp({
+        pointerId: 1,
+        currentTarget: { releasePointerCapture: vi.fn() },
+      } as unknown as React.PointerEvent);
+    });
+
+    expect(result.current.skeletonSlot).toBeNull();
+    expect(invoke).toHaveBeenCalledWith("hide_skeleton_preview");
+  });
 });

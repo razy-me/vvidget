@@ -3,7 +3,7 @@ use windows::Win32::Foundation::{HWND, RECT, LRESULT, WPARAM, LPARAM};
 #[cfg(windows)]
 use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE,
-    WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE, WS_EX_APPWINDOW,
+    WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE, WS_EX_APPWINDOW, WS_EX_TRANSPARENT,
     SetWindowPos, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_FRAMECHANGED, SWP_HIDEWINDOW, SWP_NOACTIVATE,
     WM_WINDOWPOSCHANGING, WM_MOVING, WM_SYSCOMMAND, WM_NCDESTROY, WM_EXITSIZEMOVE, WM_SHOWWINDOW,
     SC_MINIMIZE, WINDOWPOS, GetWindowRect, HWND_BOTTOM,
@@ -227,6 +227,33 @@ pub unsafe fn apply_tool_window_styles(raw_hwnd: *mut core::ffi::c_void, no_acti
     )
     .map_err(|e| format!("SetWindowPos failed: {}", e))?;
 
+    Ok(())
+}
+
+#[cfg(windows)]
+pub unsafe fn apply_skeleton_window_styles(raw_hwnd: *mut core::ffi::c_void) -> Result<(), String> {
+    let hwnd = HWND(raw_hwnd);
+    let current_ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
+    let new_ex_style = (current_ex_style | WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0 | WS_EX_TRANSPARENT.0)
+        & !WS_EX_APPWINDOW.0;
+
+    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex_style as isize);
+    SetWindowPos(
+        hwnd,
+        HWND_BOTTOM,
+        0,
+        0,
+        0,
+        0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+    )
+    .map_err(|e| format!("SetWindowPos failed: {}", e))?;
+
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub unsafe fn apply_skeleton_window_styles(_raw_hwnd: *mut core::ffi::c_void) -> Result<(), String> {
     Ok(())
 }
 
