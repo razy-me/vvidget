@@ -91,7 +91,7 @@ pub mod integration {
                     let logical_y = (pos.y as f64) / scale;
                     let size = window_clone
                         .inner_size()
-                        .unwrap_or(tauri::PhysicalSize { width: 342, height: 300 });
+                        .unwrap_or(tauri::PhysicalSize { width: 311, height: 254 });
                     let logical_w = (size.width as f64) / scale;
                     let logical_h = (size.height as f64) / scale;
                     wm_event.update_window_position(&widget_id_event, logical_x, logical_y, logical_w, logical_h);

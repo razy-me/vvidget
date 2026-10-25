@@ -75,8 +75,8 @@ impl Default for SnapConfig {
             snap_to_edges: true,
             snap_to_widgets: true,
             snap_to_grid: true,
-            grid_size_x: 75,
-            grid_size_y: 75,
+            grid_size_x: 104,
+            grid_size_y: 85,
         }
     }
 }
@@ -498,26 +498,25 @@ mod tests {
 
     #[test]
     fn test_snap_to_desktop_grid_asymmetric_dimensions() {
-        let work_area = Rect::new(0, 0, 1920, 1080);
-        // Real-world Windows 11 150% scaled desktop icon grid: gx = 114, gy = 75
-        // Widget width: 340 (not a multiple of 114, 340 % 114 = 112)
-        // Moving widget left is placed at 240 (close to 2 * 114 = 228, dx = -12)
-        // Moving widget top is placed at 155 (close to 2 * 75 = 150, dy = -5)
-        let mut moving = Rect::new(240, 155, 580, 425);
+        let work_area = Rect::new(0, 0, 2880, 1800);
+        // Real-world Windows 11 desktop icon grid: gx = 207, gy = 169
+        // Moving widget left is placed at 212 (close to 1 * 207 = 207, dx = -5)
+        // Moving widget top is placed at 173 (close to 1 * 169 = 169, dy = -4)
+        let mut moving = Rect::new(212, 173, 833, 511);
         let config = SnapConfig {
             enabled: true,
             threshold: 16,
             snap_to_edges: false,
             snap_to_widgets: false,
             snap_to_grid: true,
-            grid_size_x: 114,
-            grid_size_y: 75,
+            grid_size_x: 207,
+            grid_size_y: 169,
         };
 
         let res = apply_magnetic_snapping(&mut moving, &work_area, &[], &config);
         assert!(res.snapped_x, "Should snap to nearest grid column");
         assert!(res.snapped_y, "Should snap to nearest grid row");
-        assert_eq!(moving.left, 228, "Top-left corner must snap to 2 * 114 = 228 without right-edge interference");
-        assert_eq!(moving.top, 150, "Top-left corner must snap to 2 * 75 = 150");
+        assert_eq!(moving.left, 207, "Top-left corner must snap to 1 * 207 = 207");
+        assert_eq!(moving.top, 169, "Top-left corner must snap to 1 * 169 = 169");
     }
 }

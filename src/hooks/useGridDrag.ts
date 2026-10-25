@@ -2,8 +2,10 @@ import { useRef, useCallback, useState } from "react";
 import { getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 
-export const DESKTOP_GRID_X = 114;
-export const DESKTOP_GRID_Y = 75;
+export const DESKTOP_GRID_LOGICAL_X = 103.5;
+export const DESKTOP_GRID_LOGICAL_Y = 84.5;
+export const DESKTOP_GRID_X = DESKTOP_GRID_LOGICAL_X;
+export const DESKTOP_GRID_Y = DESKTOP_GRID_LOGICAL_Y;
 
 export interface UseGridDragOptions {
   widgetId?: string;

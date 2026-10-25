@@ -56,9 +56,10 @@ export const AppContent: FC = () => {
   }
 
   // 2. Dedicated Single-Widget Window Views (Independent Multi-Window Mode)
+  // Outer p-2 provides an 8px inset gap on all sides, resulting in a clean 16px gap between adjacent snapped widgets
   if (widgetId === "resources") {
     return (
-      <div className="w-full h-full p-0 flex flex-col bg-transparent overflow-hidden select-none">
+      <div className="w-full h-full p-2 flex flex-col bg-transparent overflow-hidden select-none">
         <WidgetContainer
           id="resources"
           title="System Resources"
@@ -69,7 +70,7 @@ export const AppContent: FC = () => {
           onOpenSettings={handleOpenSettings}
           className="w-full h-full"
         >
-          <ResourceWidget className="border-0 shadow-none bg-transparent p-0" />
+          <ResourceWidget className="border-0 shadow-none bg-transparent p-0 max-w-none" />
         </WidgetContainer>
       </div>
     );
@@ -77,7 +78,7 @@ export const AppContent: FC = () => {
 
   if (widgetId === "spotify") {
     return (
-      <div className="w-full h-full p-0 flex flex-col bg-transparent overflow-hidden select-none">
+      <div className="w-full h-full p-2 flex flex-col bg-transparent overflow-hidden select-none">
         <WidgetContainer
           id="spotify"
           title="Media Controls"
@@ -88,7 +89,7 @@ export const AppContent: FC = () => {
           onOpenSettings={handleOpenSettings}
           className="w-full h-full"
         >
-          <SpotifyWidget className="border-0 shadow-none bg-transparent p-0" />
+          <SpotifyWidget className="border-0 shadow-none bg-transparent p-0 max-w-none" />
         </WidgetContainer>
       </div>
     );
@@ -96,7 +97,7 @@ export const AppContent: FC = () => {
 
   if (widgetId === "weather") {
     return (
-      <div className="w-full h-full p-0 flex flex-col bg-transparent overflow-hidden select-none">
+      <div className="w-full h-full p-2 flex flex-col bg-transparent overflow-hidden select-none">
         <WidgetContainer
           id="weather"
           title="Weather Forecast"
@@ -107,7 +108,7 @@ export const AppContent: FC = () => {
           onOpenSettings={handleOpenSettings}
           className="w-full h-full"
         >
-          <WeatherWidget className="border-0 shadow-none bg-transparent p-0" />
+          <WeatherWidget className="border-0 shadow-none bg-transparent p-0 max-w-none" />
         </WidgetContainer>
       </div>
     );

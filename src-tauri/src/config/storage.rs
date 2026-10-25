@@ -96,28 +96,28 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
     match fs::read_to_string(target_path) {
         Ok(content) => match serde_json::from_str::<AppConfig>(&content) {
             Ok(mut parsed) => {
-                // Self-healing migration: upgrade to exact desktop icon grid aspect ratios and dimensions
+                // Self-healing migration: upgrade to exact desktop icon grid aspect ratios and dimensions (103.5x84.5)
                 let mut upgraded = false;
                 for (id, placement) in parsed.widgets.iter_mut() {
-                    if id == "resources" && (placement.logical_height < 300.0 || placement.logical_width != 342.0) {
-                        placement.logical_height = 300.0;
-                        placement.logical_width = 342.0;
+                    if id == "resources" && (placement.logical_height < 250.0 || (placement.logical_width - 310.5).abs() > 1.0) {
+                        placement.logical_height = 253.5;
+                        placement.logical_width = 310.5;
                         upgraded = true;
                     }
-                    if id == "spotify" && (placement.logical_height < 300.0 || placement.logical_width != 342.0) {
-                        placement.logical_height = 300.0;
-                        placement.logical_width = 342.0;
+                    if id == "spotify" && (placement.logical_height < 250.0 || (placement.logical_width - 310.5).abs() > 1.0) {
+                        placement.logical_height = 253.5;
+                        placement.logical_width = 310.5;
                         upgraded = true;
                     }
-                    if id == "weather" && (placement.logical_height < 375.0 || placement.logical_width != 342.0) {
-                        placement.logical_height = 375.0;
-                        placement.logical_width = 342.0;
+                    if id == "weather" && (placement.logical_height < 330.0 || (placement.logical_width - 310.5).abs() > 1.0) {
+                        placement.logical_height = 338.0;
+                        placement.logical_width = 310.5;
                         upgraded = true;
                     }
 
-                    // Quantize any off-grid coordinates to exact multiples of the desktop icon grid (114x75)
-                    let snapped_x = (placement.logical_x / 114.0).round() * 114.0;
-                    let snapped_y = (placement.logical_y / 75.0).round() * 75.0;
+                    // Quantize any off-grid coordinates to exact multiples of the desktop icon grid (103.5x84.5)
+                    let snapped_x = (placement.logical_x / 103.5).round() * 103.5;
+                    let snapped_y = (placement.logical_y / 84.5).round() * 84.5;
                     if (placement.logical_x - snapped_x).abs() > 0.1 || (placement.logical_y - snapped_y).abs() > 0.1 {
                         placement.logical_x = snapped_x;
                         placement.logical_y = snapped_y;

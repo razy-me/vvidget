@@ -21,7 +21,7 @@ export const HeaderBar: FC<HeaderBarProps> = ({
 }) => {
   const isDocked = layoutMode === "docked";
 
-  // Dedicated grid drag hook for independent desktop widgets (strictly snaps to 114x75 desktop icon grid)
+  // Dedicated grid drag hook for independent desktop widgets (strictly snaps to native desktop icon grid)
   const { isDragging: isGridDragging, dragProps } = useGridDrag({
     widgetId,
     isLocked: isLocked || isDocked,

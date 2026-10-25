@@ -77,6 +77,9 @@ impl Default for WeatherSettings {
     }
 }
 
+pub const DESKTOP_GRID_LOGICAL_X: f64 = 103.5;
+pub const DESKTOP_GRID_LOGICAL_Y: f64 = 84.5;
+
 /// Root application configuration persisted in %APPDATA%/Widgetz/config.json.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(default)]
@@ -104,10 +107,10 @@ impl Default for AppConfig {
             WidgetPlacement {
                 id: "resources".to_string(),
                 visible: true,
-                logical_x: 1482.0,
-                logical_y: 75.0,
-                logical_width: 342.0,
-                logical_height: 300.0,
+                logical_x: 828.0,
+                logical_y: 84.5,
+                logical_width: 310.5,
+                logical_height: 253.5,
                 scale_factor: 1.0,
                 monitor_id: None,
             },
@@ -118,10 +121,10 @@ impl Default for AppConfig {
             WidgetPlacement {
                 id: "spotify".to_string(),
                 visible: true,
-                logical_x: 1482.0,
-                logical_y: 450.0,
-                logical_width: 342.0,
-                logical_height: 300.0,
+                logical_x: 828.0,
+                logical_y: 338.0,
+                logical_width: 310.5,
+                logical_height: 253.5,
                 scale_factor: 1.0,
                 monitor_id: None,
             },
@@ -132,10 +135,10 @@ impl Default for AppConfig {
             WidgetPlacement {
                 id: "weather".to_string(),
                 visible: true,
-                logical_x: 1140.0,
-                logical_y: 75.0,
-                logical_width: 342.0,
-                logical_height: 375.0,
+                logical_x: 517.5,
+                logical_y: 84.5,
+                logical_width: 310.5,
+                logical_height: 338.0,
                 scale_factor: 1.0,
                 monitor_id: None,
             },
@@ -178,18 +181,18 @@ mod tests {
 
         let res = &config.widgets["resources"];
         assert!(res.visible);
-        assert_eq!(res.logical_width, 342.0);
-        assert_eq!(res.logical_height, 300.0);
+        assert_eq!(res.logical_width, 310.5);
+        assert_eq!(res.logical_height, 253.5);
 
         let spotify = &config.widgets["spotify"];
         assert!(spotify.visible);
-        assert_eq!(spotify.logical_width, 342.0);
-        assert_eq!(spotify.logical_height, 300.0);
+        assert_eq!(spotify.logical_width, 310.5);
+        assert_eq!(spotify.logical_height, 253.5);
 
         let weather = &config.widgets["weather"];
         assert!(weather.visible);
-        assert_eq!(weather.logical_width, 342.0);
-        assert_eq!(weather.logical_height, 375.0);
+        assert_eq!(weather.logical_width, 310.5);
+        assert_eq!(weather.logical_height, 338.0);
     }
 
     #[test]

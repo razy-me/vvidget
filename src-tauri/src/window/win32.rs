@@ -217,7 +217,10 @@ unsafe fn on_wm_moving(hwnd: HWND, rect: &mut RECT) {
     let (grid_x, grid_y) = {
         let cx = GetSystemMetrics(SM_CXICONSPACING);
         let cy = GetSystemMetrics(SM_CYICONSPACING);
-        (if cx > 0 { cx } else { 75 }, if cy > 0 { cy } else { 75 })
+        // Scale to native Windows 11 Explorer desktop icon grid (103.5 / 114.0 and 84.5 / 75.0)
+        let gx = if cx > 0 { ((cx as f64) * (103.5 / 114.0)).round() as i32 } else { 104 };
+        let gy = if cy > 0 { ((cy as f64) * (84.5 / 75.0)).round() as i32 } else { 85 };
+        (gx.max(1), gy.max(1))
     };
 
     let config = SnapConfig {
