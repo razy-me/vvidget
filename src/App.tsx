@@ -58,7 +58,7 @@ export const AppContent: FC = () => {
   // 2. Dedicated Single-Widget Window Views (Independent Multi-Window Mode)
   if (widgetId === "resources") {
     return (
-      <div className="w-full h-full min-h-screen p-2 flex items-center justify-center bg-transparent">
+      <div className="w-full h-full p-0 flex flex-col bg-transparent overflow-hidden select-none">
         <WidgetContainer
           id="resources"
           title="System Resources"
@@ -67,7 +67,7 @@ export const AppContent: FC = () => {
           layoutMode="independent"
           onToggleLock={handleToggleLock}
           onOpenSettings={handleOpenSettings}
-          className="w-full max-w-[340px]"
+          className="w-full h-full"
         >
           <ResourceWidget className="border-0 shadow-none bg-transparent p-0" />
         </WidgetContainer>
@@ -77,7 +77,7 @@ export const AppContent: FC = () => {
 
   if (widgetId === "spotify") {
     return (
-      <div className="w-full h-full min-h-screen p-2 flex items-center justify-center bg-transparent">
+      <div className="w-full h-full p-0 flex flex-col bg-transparent overflow-hidden select-none">
         <WidgetContainer
           id="spotify"
           title="Spotify Controls"
@@ -86,7 +86,7 @@ export const AppContent: FC = () => {
           layoutMode="independent"
           onToggleLock={handleToggleLock}
           onOpenSettings={handleOpenSettings}
-          className="w-full max-w-[340px]"
+          className="w-full h-full"
         >
           <SpotifyWidget className="border-0 shadow-none bg-transparent p-0" />
         </WidgetContainer>
@@ -96,7 +96,7 @@ export const AppContent: FC = () => {
 
   if (widgetId === "weather") {
     return (
-      <div className="w-full h-full min-h-screen p-2 flex items-center justify-center bg-transparent">
+      <div className="w-full h-full p-0 flex flex-col bg-transparent overflow-hidden select-none">
         <WidgetContainer
           id="weather"
           title="Weather Forecast"
@@ -105,7 +105,7 @@ export const AppContent: FC = () => {
           layoutMode="independent"
           onToggleLock={handleToggleLock}
           onOpenSettings={handleOpenSettings}
-          className="w-full max-w-[340px]"
+          className="w-full h-full"
         >
           <WeatherWidget className="border-0 shadow-none bg-transparent p-0" />
         </WidgetContainer>

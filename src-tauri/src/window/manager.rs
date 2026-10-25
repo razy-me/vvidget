@@ -7,7 +7,7 @@ use super::monitor::{clamp_to_monitors, logical_to_physical, physical_to_logical
 use super::snapping::{Rect, SnapConfig};
 use super::win32::{
     apply_acrylic_effect, apply_tool_window_styles, install_window_subclass,
-    register_tracked_window, set_snap_to_edges, set_snap_to_widgets, set_snapping_enabled,
+    register_tracked_window, set_snap_to_edges, set_snap_to_widgets, set_snap_to_grid, set_snapping_enabled,
     set_snapping_threshold, unregister_tracked_window, WIDGET_SUBCLASS_ID,
 };
 
@@ -98,6 +98,13 @@ impl WindowManager {
         set_snap_to_widgets(enabled);
         if let Ok(mut config) = self.snap_config.write() {
             config.snap_to_widgets = enabled;
+        }
+    }
+
+    pub fn set_snap_to_grid(&self, enabled: bool) {
+        set_snap_to_grid(enabled);
+        if let Ok(mut config) = self.snap_config.write() {
+            config.snap_to_grid = enabled;
         }
     }
 

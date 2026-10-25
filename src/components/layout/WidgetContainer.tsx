@@ -34,7 +34,7 @@ export const WidgetContainer: FC<WidgetContainerProps> = ({
       }}
       className={cn(
         "relative flex flex-col transition-all duration-200 select-none",
-        isDocked ? "w-full rounded-lg" : "w-auto rounded-xl",
+        isDocked ? "w-full rounded-lg" : "w-full h-full rounded-2xl",
         className
       )}
     >
@@ -44,8 +44,8 @@ export const WidgetContainer: FC<WidgetContainerProps> = ({
         className={cn(
           "w-full h-full flex flex-col overflow-hidden",
           "border border-[var(--fluent-stroke)] backdrop-blur-xl",
-          "shadow-lg",
-          isDocked ? "rounded-lg" : "rounded-xl"
+          "shadow-2xl",
+          isDocked ? "rounded-lg" : "rounded-2xl"
         )}
       >
         {showHeader && (

@@ -4,9 +4,10 @@ use windows::Win32::Foundation::{HWND, RECT, LRESULT, WPARAM, LPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE,
     WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE, WS_EX_APPWINDOW,
-    SetWindowPos, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_FRAMECHANGED, SWP_HIDEWINDOW,
+    SetWindowPos, SWP_NOMOVE, SWP_NOSIZE, SWP_FRAMECHANGED, SWP_HIDEWINDOW, SWP_NOACTIVATE,
     WM_WINDOWPOSCHANGING, WM_MOVING, WM_SYSCOMMAND, WM_NCDESTROY, WM_EXITSIZEMOVE, WM_SHOWWINDOW,
     SC_MINIMIZE, WINDOWPOS, GetWindowRect,
+    GetSystemMetrics, SM_CXICONSPACING, SM_CYICONSPACING, HWND_BOTTOM,
 };
 #[cfg(windows)]
 use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
@@ -24,6 +25,7 @@ static SNAP_ENABLED: AtomicBool = AtomicBool::new(true);
 static SNAP_THRESHOLD: AtomicI32 = AtomicI32::new(16);
 static SNAP_TO_EDGES: AtomicBool = AtomicBool::new(true);
 static SNAP_TO_WIDGETS: AtomicBool = AtomicBool::new(true);
+static SNAP_TO_GRID: AtomicBool = AtomicBool::new(true);
 
 static ALLOW_HIDE: AtomicBool = AtomicBool::new(false);
 static ALLOW_HIDE_HWNDS: RwLock<Option<HashSet<isize>>> = RwLock::new(None);
@@ -108,6 +110,14 @@ pub fn is_snap_to_widgets() -> bool {
     SNAP_TO_WIDGETS.load(Ordering::SeqCst)
 }
 
+pub fn set_snap_to_grid(enabled: bool) {
+    SNAP_TO_GRID.store(enabled, Ordering::SeqCst);
+}
+
+pub fn is_snap_to_grid() -> bool {
+    SNAP_TO_GRID.load(Ordering::SeqCst)
+}
+
 
 static TRACKED_WINDOWS: RwLock<Option<HashMap<isize, Rect>>> = RwLock::new(None);
 
@@ -174,12 +184,12 @@ pub unsafe fn apply_tool_window_styles(raw_hwnd: *mut core::ffi::c_void, no_acti
     SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex_style as isize);
     SetWindowPos(
         hwnd,
-        None,
+        HWND_BOTTOM,
         0,
         0,
         0,
         0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED,
     )
     .map_err(|e| format!("SetWindowPos failed: {}", e))?;
 
@@ -191,28 +201,33 @@ pub unsafe fn apply_tool_window_styles(_raw_hwnd: *mut core::ffi::c_void, _no_ac
     Ok(())
 }
 
-/// Applies native DWM Acrylic blur backdrop using window-vibrancy
-pub fn apply_acrylic_effect<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>, dark_mode: bool) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        let tint = if dark_mode {
-            Some((18, 18, 18, 128))
-        } else {
-            Some((245, 245, 245, 128))
-        };
-        window_vibrancy::apply_acrylic(window, tint)
-            .map_err(|e| format!("Failed to apply Acrylic blur: {:?}", e))?;
-    }
+/// Applies native window transparency and composition.
+/// On Windows 11 with transparent: true, WebView2 uses DirectComposition per-pixel alpha transparency.
+/// Calling window_vibrancy::apply_acrylic applies an HWND-level AccentPolicy that fills the ENTIRE
+/// rectangular window with an opaque flat grey tint when inactive (WS_EX_NOACTIVATE), ruining
+/// transparent rounded corners and creating an ugly square border around the widget cards.
+/// By keeping the HWND purely transparent, WebView2 composites the rounded CSS Fluent cards directly onto the desktop
+/// with smooth transparent anti-aliased corners and no rectangular borders!
+pub fn apply_acrylic_effect<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>, _dark_mode: bool) -> Result<(), String> {
     Ok(())
 }
 
 #[cfg(windows)]
 unsafe fn on_wm_moving(hwnd: HWND, rect: &mut RECT) {
+    let (grid_x, grid_y) = {
+        let cx = GetSystemMetrics(SM_CXICONSPACING);
+        let cy = GetSystemMetrics(SM_CYICONSPACING);
+        (if cx > 0 { cx } else { 75 }, if cy > 0 { cy } else { 75 })
+    };
+
     let config = SnapConfig {
         enabled: SNAP_ENABLED.load(Ordering::SeqCst),
         threshold: SNAP_THRESHOLD.load(Ordering::SeqCst),
         snap_to_edges: SNAP_TO_EDGES.load(Ordering::SeqCst),
         snap_to_widgets: SNAP_TO_WIDGETS.load(Ordering::SeqCst),
+        snap_to_grid: SNAP_TO_GRID.load(Ordering::SeqCst),
+        grid_size_x: grid_x,
+        grid_size_y: grid_y,
     };
 
     if !config.enabled {

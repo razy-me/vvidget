@@ -95,7 +95,38 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
 
     match fs::read_to_string(target_path) {
         Ok(content) => match serde_json::from_str::<AppConfig>(&content) {
-            Ok(parsed) => (parsed, false),
+            Ok(mut parsed) => {
+                // Self-healing migration: upgrade legacy cramped heights and move away from default top-left icons
+                let mut upgraded = false;
+                for (id, placement) in parsed.widgets.iter_mut() {
+                    if id == "resources" && placement.logical_height < 250.0 {
+                        placement.logical_height = 260.0;
+                        placement.logical_width = 340.0;
+                        upgraded = true;
+                    }
+                    if id == "spotify" && placement.logical_height < 190.0 {
+                        placement.logical_height = 200.0;
+                        placement.logical_width = 340.0;
+                        upgraded = true;
+                    }
+                    if id == "weather" && placement.logical_height < 230.0 {
+                        placement.logical_height = 250.0;
+                        placement.logical_width = 340.0;
+                        upgraded = true;
+                    }
+                    if placement.logical_x == 40.0 && (placement.logical_y == 40.0 || placement.logical_y == 240.0 || placement.logical_y == 400.0) {
+                        placement.logical_x = 1540.0;
+                        if id == "resources" { placement.logical_y = 40.0; }
+                        else if id == "spotify" { placement.logical_y = 320.0; }
+                        else if id == "weather" { placement.logical_y = 540.0; }
+                        upgraded = true;
+                    }
+                }
+                if upgraded {
+                    let _ = save_config_atomic(target_path, &parsed);
+                }
+                (parsed, false)
+            }
             Err(parse_err) => {
                 log::error!(
                     "Config file at {:?} is corrupted: {}. Backing up and restoring defaults.",

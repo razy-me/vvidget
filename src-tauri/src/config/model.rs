@@ -104,10 +104,10 @@ impl Default for AppConfig {
             WidgetPlacement {
                 id: "resources".to_string(),
                 visible: true,
-                logical_x: 40.0,
+                logical_x: 1540.0,
                 logical_y: 40.0,
-                logical_width: 320.0,
-                logical_height: 180.0,
+                logical_width: 340.0,
+                logical_height: 260.0,
                 scale_factor: 1.0,
                 monitor_id: None,
             },
@@ -118,10 +118,10 @@ impl Default for AppConfig {
             WidgetPlacement {
                 id: "spotify".to_string(),
                 visible: true,
-                logical_x: 40.0,
-                logical_y: 240.0,
-                logical_width: 320.0,
-                logical_height: 140.0,
+                logical_x: 1540.0,
+                logical_y: 320.0,
+                logical_width: 340.0,
+                logical_height: 200.0,
                 scale_factor: 1.0,
                 monitor_id: None,
             },
@@ -132,10 +132,10 @@ impl Default for AppConfig {
             WidgetPlacement {
                 id: "weather".to_string(),
                 visible: true,
-                logical_x: 40.0,
-                logical_y: 400.0,
-                logical_width: 320.0,
-                logical_height: 160.0,
+                logical_x: 1540.0,
+                logical_y: 540.0,
+                logical_width: 340.0,
+                logical_height: 250.0,
                 scale_factor: 1.0,
                 monitor_id: None,
             },
@@ -178,18 +178,18 @@ mod tests {
 
         let res = &config.widgets["resources"];
         assert!(res.visible);
-        assert_eq!(res.logical_width, 320.0);
-        assert_eq!(res.logical_height, 180.0);
+        assert_eq!(res.logical_width, 340.0);
+        assert_eq!(res.logical_height, 260.0);
 
         let spotify = &config.widgets["spotify"];
         assert!(spotify.visible);
-        assert_eq!(spotify.logical_width, 320.0);
-        assert_eq!(spotify.logical_height, 140.0);
+        assert_eq!(spotify.logical_width, 340.0);
+        assert_eq!(spotify.logical_height, 200.0);
 
         let weather = &config.widgets["weather"];
         assert!(weather.visible);
-        assert_eq!(weather.logical_width, 320.0);
-        assert_eq!(weather.logical_height, 160.0);
+        assert_eq!(weather.logical_width, 340.0);
+        assert_eq!(weather.logical_height, 250.0);
     }
 
     #[test]

@@ -62,6 +62,9 @@ pub struct SnapConfig {
     pub threshold: i32,
     pub snap_to_edges: bool,
     pub snap_to_widgets: bool,
+    pub snap_to_grid: bool,
+    pub grid_size_x: i32,
+    pub grid_size_y: i32,
 }
 
 impl Default for SnapConfig {
@@ -71,6 +74,9 @@ impl Default for SnapConfig {
             threshold: 16,
             snap_to_edges: true,
             snap_to_widgets: true,
+            snap_to_grid: true,
+            grid_size_x: 75,
+            grid_size_y: 75,
         }
     }
 }
@@ -162,6 +168,35 @@ pub fn apply_magnetic_snapping(
         }
     }
 
+    // 3. Desktop Grid Snapping
+    if config.snap_to_grid {
+        if config.grid_size_x > 0 {
+            let gx = config.grid_size_x;
+            let rel_x = moving.left - work_area.left;
+            let nearest_col = ((rel_x as f32 / gx as f32).round() as i32) * gx;
+            let target_left = work_area.left + nearest_col;
+            consider_dx(target_left - moving.left, &mut best_dx);
+
+            let rel_right = moving.right - work_area.left;
+            let nearest_col_r = ((rel_right as f32 / gx as f32).round() as i32) * gx;
+            let target_right = work_area.left + nearest_col_r;
+            consider_dx(target_right - moving.right, &mut best_dx);
+        }
+
+        if config.grid_size_y > 0 {
+            let gy = config.grid_size_y;
+            let rel_y = moving.top - work_area.top;
+            let nearest_row = ((rel_y as f32 / gy as f32).round() as i32) * gy;
+            let target_top = work_area.top + nearest_row;
+            consider_dy(target_top - moving.top, &mut best_dy);
+
+            let rel_bottom = moving.bottom - work_area.top;
+            let nearest_row_b = ((rel_bottom as f32 / gy as f32).round() as i32) * gy;
+            let target_bottom = work_area.top + nearest_row_b;
+            consider_dy(target_bottom - moving.bottom, &mut best_dy);
+        }
+    }
+
     let result = SnapResult {
         snapped_x: best_dx.is_some(),
         snapped_y: best_dy.is_some(),
@@ -204,7 +239,8 @@ mod tests {
         let work_area = Rect::new(0, 0, 1920, 1080);
         // Moving window is at x=10 (within default threshold 16)
         let mut moving = Rect::new(10, 100, 310, 400);
-        let config = SnapConfig::default();
+        let mut config = SnapConfig::default();
+        config.snap_to_grid = false;
 
         let result = apply_magnetic_snapping(&mut moving, &work_area, &[], &config);
         assert!(result.snapped_x);
@@ -218,7 +254,8 @@ mod tests {
         let work_area = Rect::new(0, 0, 1920, 1080);
         // Moving window right edge is at 1912 (8px away from 1920)
         let mut moving = Rect::new(1612, 100, 1912, 400);
-        let config = SnapConfig::default();
+        let mut config = SnapConfig::default();
+        config.snap_to_grid = false;
 
         let result = apply_magnetic_snapping(&mut moving, &work_area, &[], &config);
         assert!(result.snapped_x);
@@ -231,7 +268,8 @@ mod tests {
     fn test_snap_to_screen_top_and_bottom_edges() {
         let work_area = Rect::new(0, 0, 1920, 1080);
         let mut moving_top = Rect::new(100, 12, 400, 312);
-        let config = SnapConfig::default();
+        let mut config = SnapConfig::default();
+        config.snap_to_grid = false;
 
         let res_top = apply_magnetic_snapping(&mut moving_top, &work_area, &[], &config);
         assert!(res_top.snapped_y);
@@ -252,7 +290,8 @@ mod tests {
         let other = Rect::new(100, 100, 400, 300);
         // Moving widget left edge is at 408 (8px away from other's right edge 400)
         let mut moving = Rect::new(408, 110, 708, 310);
-        let config = SnapConfig::default();
+        let mut config = SnapConfig::default();
+        config.snap_to_grid = false;
 
         let result = apply_magnetic_snapping(&mut moving, &work_area, &[other], &config);
         assert!(result.snapped_x);
@@ -279,7 +318,8 @@ mod tests {
         let work_area = Rect::new(0, 0, 1920, 1080);
         // 25px away from edge (threshold is 16)
         let mut moving = Rect::new(25, 25, 325, 325);
-        let config = SnapConfig::default();
+        let mut config = SnapConfig::default();
+        config.snap_to_grid = false;
 
         let result = apply_magnetic_snapping(&mut moving, &work_area, &[], &config);
         assert!(!result.snapped_x);
@@ -292,7 +332,8 @@ mod tests {
     fn test_snap_to_widget_all_four_edges_alignment() {
         let work_area = Rect::new(0, 0, 1920, 1080);
         let other = Rect::new(200, 200, 500, 500); // 300x300 at (200, 200)
-        let config = SnapConfig::default();
+        let mut config = SnapConfig::default();
+        config.snap_to_grid = false;
 
         // 1. Align left-to-left: moving left is at 208 (8px away from other.left=200)
         let mut moving_left = Rect::new(208, 250, 408, 450);
@@ -327,7 +368,8 @@ mod tests {
     fn test_snap_to_widget_adjacent_top_and_bottom() {
         let work_area = Rect::new(0, 0, 1920, 1080);
         let other = Rect::new(200, 200, 500, 500); // 300x300
-        let config = SnapConfig::default();
+        let mut config = SnapConfig::default();
+        config.snap_to_grid = false;
 
         // Snap moving top to other's bottom (other.bottom=500, moving.top=508)
         let mut moving_below = Rect::new(220, 508, 420, 708);
@@ -353,7 +395,8 @@ mod tests {
 
         // Moving left at 305 (5px from other1 right=300, 15px from other2 left=320)
         let mut moving = Rect::new(305, 110, 505, 290);
-        let config = SnapConfig::default();
+        let mut config = SnapConfig::default();
+        config.snap_to_grid = false;
 
         let res = apply_magnetic_snapping(&mut moving, &work_area, &[other1, other2], &config);
         assert!(res.snapped_x);
@@ -372,6 +415,9 @@ mod tests {
             threshold: 16,
             snap_to_edges: true,
             snap_to_widgets: false,
+            snap_to_grid: false,
+            grid_size_x: 75,
+            grid_size_y: 75,
         };
         // 8px from other.right (408), 408px from screen edge
         let mut moving1 = Rect::new(408, 210, 608, 390);
@@ -394,7 +440,8 @@ mod tests {
         let other = Rect::new(100, 100, 300, 300);
         // Moving widget at y: 800..950 (far below, well outside threshold 16)
         let mut moving = Rect::new(305, 800, 505, 950);
-        let config = SnapConfig::default();
+        let mut config = SnapConfig::default();
+        config.snap_to_grid = false;
 
         let res = apply_magnetic_snapping(&mut moving, &work_area, &[other], &config);
         assert!(!res.snapped_x, "Vertically disjoint widgets must not snap horizontally");
@@ -416,5 +463,28 @@ mod tests {
         let res_neg = apply_magnetic_snapping(&mut moving, &work_area, &[], &config);
         assert!(!res_neg.snapped_x);
         assert!(!res_neg.snapped_y);
+    }
+
+    #[test]
+    fn test_snap_to_desktop_grid() {
+        let work_area = Rect::new(0, 0, 1920, 1080);
+        // Grid is 75px. Multiples: 75, 150, 225, 300, 375...
+        // Window is moved to x: 230, y: 380 (5px away from grid cell (225, 375))
+        let mut moving = Rect::new(230, 380, 550, 640);
+        let config = SnapConfig {
+            enabled: true,
+            threshold: 16,
+            snap_to_edges: false,
+            snap_to_widgets: false,
+            snap_to_grid: true,
+            grid_size_x: 75,
+            grid_size_y: 75,
+        };
+
+        let res = apply_magnetic_snapping(&mut moving, &work_area, &[], &config);
+        assert!(res.snapped_x, "Should snap horizontally to nearest grid line");
+        assert!(res.snapped_y, "Should snap vertically to nearest grid line");
+        assert_eq!(moving.left, 225, "Left should snap to multiple of 75 (225)");
+        assert_eq!(moving.top, 375, "Top should snap to multiple of 75 (375)");
     }
 }
