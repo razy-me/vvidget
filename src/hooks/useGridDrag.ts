@@ -328,7 +328,7 @@ export function useGridDrag({
       // Smooth 1:1 real-time drag tracking on pointer move (smoothly following cursor)
       try {
         const appWindow = getCurrentWindow();
-        await appWindow.setPosition(new LogicalPosition(targetX, targetY));
+        void appWindow.setPosition(new LogicalPosition(targetX, targetY));
         onPositionChange?.(targetX, targetY);
       } catch {
         // Non-Tauri fallback

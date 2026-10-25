@@ -43,14 +43,10 @@ export const HeaderBar: FC<HeaderBarProps> = ({
     }
   };
 
-  const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-
   const dragHandlers = !isLocked
     ? isDocked
       ? { "data-tauri-drag-region": true, onMouseDown: handleDragMouseDown }
-      : isTauri
-        ? { onMouseDown: handleDragMouseDown }
-        : { ...dragProps }
+      : { ...dragProps }
     : {};
 
   return (
