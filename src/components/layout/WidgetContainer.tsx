@@ -56,6 +56,8 @@ export const WidgetContainer: FC<WidgetContainerProps> = ({
             onToggleLock={onToggleLock}
             onClose={onClose}
             onOpenSettings={onOpenSettings}
+            widgetId={id}
+            layoutMode={layoutMode}
           />
         )}
 

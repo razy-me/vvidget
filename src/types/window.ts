@@ -38,6 +38,8 @@ export interface HeaderBarProps {
   className?: string;
   showControls?: boolean;
   actions?: ReactNode;
+  widgetId?: string;
+  layoutMode?: LayoutMode;
 }
 
 export interface WidgetContainerProps {

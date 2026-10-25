@@ -114,11 +114,13 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
                         placement.logical_width = 342.0;
                         upgraded = true;
                     }
-                    if placement.logical_x == 40.0 || placement.logical_x == 1540.0 {
-                        placement.logical_x = 1482.0;
-                        if id == "resources" { placement.logical_y = 75.0; }
-                        else if id == "spotify" { placement.logical_y = 450.0; }
-                        else if id == "weather" { placement.logical_x = 1140.0; placement.logical_y = 75.0; }
+
+                    // Quantize any off-grid coordinates to exact multiples of the desktop icon grid (114x75)
+                    let snapped_x = (placement.logical_x / 114.0).round() * 114.0;
+                    let snapped_y = (placement.logical_y / 75.0).round() * 75.0;
+                    if (placement.logical_x - snapped_x).abs() > 0.1 || (placement.logical_y - snapped_y).abs() > 0.1 {
+                        placement.logical_x = snapped_x;
+                        placement.logical_y = snapped_y;
                         upgraded = true;
                     }
                 }

@@ -412,6 +412,14 @@ mod tests {
 
     #[test]
     fn test_tracked_windows_registry() {
+        #[cfg(windows)]
+        unsafe {
+            println!(
+                "DEBUG_METRICS: SM_CXICONSPACING={}, SM_CYICONSPACING={}",
+                GetSystemMetrics(SM_CXICONSPACING),
+                GetSystemMetrics(SM_CYICONSPACING)
+            );
+        }
         let fake_hwnd: isize = 12345;
         let rect = Rect::new(50, 50, 350, 350);
         register_tracked_window(fake_hwnd, rect);

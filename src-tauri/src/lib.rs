@@ -102,6 +102,26 @@ pub mod integration {
         Ok(())
     }
 
+    /// Saves the exact snapped grid coordinates of a widget to persistent config immediately.
+    #[tauri::command]
+    #[specta::specta]
+    pub async fn save_widget_position<R: Runtime>(
+        app: tauri::AppHandle<R>,
+        widget_id: String,
+        logical_x: f64,
+        logical_y: f64,
+    ) -> Result<(), String> {
+        if let Some(cm) = app.try_state::<ConfigManager>() {
+            let mut config = cm.get_config().await;
+            if let Some(placement) = config.widgets.get_mut(&widget_id) {
+                placement.logical_x = logical_x;
+                placement.logical_y = logical_y;
+            }
+            cm.save_immediate(config).await.map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
     /// Closes an independent widget window and releases associated tracking.
     #[tauri::command]
     #[specta::specta]
@@ -155,7 +175,7 @@ pub mod integration {
     }
 }
 
-pub use integration::{close_widget_window, open_widget_window, sync_widget_windows};
+pub use integration::{close_widget_window, open_widget_window, sync_widget_windows, save_widget_position};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -215,6 +235,7 @@ pub fn run() {
             open_widget_window,
             close_widget_window,
             sync_widget_windows,
+            save_widget_position,
         ])
         .setup(move |app| {
             start_metrics_worker(

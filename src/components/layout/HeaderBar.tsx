@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { cn } from "@/utils/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { HeaderBarProps } from "@/types/window";
+import { useGridDrag } from "@/hooks/useGridDrag";
 
 export const HeaderBar: FC<HeaderBarProps> = ({
   title,
@@ -15,8 +16,19 @@ export const HeaderBar: FC<HeaderBarProps> = ({
   className,
   showControls = true,
   actions,
+  widgetId,
+  layoutMode = "independent",
 }) => {
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const isDocked = layoutMode === "docked";
+
+  // Dedicated grid drag hook for independent desktop widgets (strictly snaps to 114x75 desktop icon grid)
+  const { isDragging: isGridDragging, dragProps } = useGridDrag({
+    widgetId,
+    isLocked: isLocked || isDocked,
+  });
+
+  // Native drag fallback for docked multi-widget bar
+  const handleDockMouseDown = (e: React.MouseEvent) => {
     if (isLocked) return;
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest("button, a, input, select, textarea, [data-no-drag]")) {
@@ -29,26 +41,35 @@ export const HeaderBar: FC<HeaderBarProps> = ({
     }
   };
 
+  const dragHandlers = !isLocked
+    ? isDocked
+      ? { "data-tauri-drag-region": true, onMouseDown: handleDockMouseDown }
+      : { ...dragProps }
+    : {};
+
   return (
     <header
-      {...(!isLocked ? { "data-tauri-drag-region": true } : {})}
-      onMouseDown={handleMouseDown}
+      {...dragHandlers}
       className={cn(
         "flex items-center justify-between px-3 py-2 select-none border-b border-[var(--fluent-stroke)]",
-        "transition-colors duration-150",
-        !isLocked ? "cursor-grab active:cursor-grabbing" : "cursor-default",
+        "transition-colors duration-150 touch-none",
+        !isLocked
+          ? isGridDragging
+            ? "cursor-grabbing"
+            : "cursor-grab active:cursor-grabbing"
+          : "cursor-default",
         className
       )}
       aria-label={`${title} widget header`}
     >
       {/* Title & Icon Area */}
-      <div className="flex items-center gap-2 min-w-0" {...(!isLocked ? { "data-tauri-drag-region": true } : {})}>
+      <div className="flex items-center gap-2 min-w-0" {...(isDocked && !isLocked ? { "data-tauri-drag-region": true } : {})}>
         {!isLocked && (
           <Tooltip content="Drag to move widget" position="bottom" delay={300}>
             <span
               className="text-[var(--fluent-text-tertiary)] hover:text-[var(--fluent-text-secondary)] transition-colors pointer-events-none"
               aria-hidden="true"
-              data-tauri-drag-region={!isLocked ? true : undefined}
+              data-tauri-drag-region={isDocked && !isLocked ? true : undefined}
             >
               <GripHorizontal className="w-3.5 h-3.5 pointer-events-none" />
             </span>
@@ -58,14 +79,14 @@ export const HeaderBar: FC<HeaderBarProps> = ({
           <span
             className="flex-shrink-0 text-[var(--fluent-accent)] flex items-center justify-center pointer-events-none"
             aria-hidden="true"
-            data-tauri-drag-region={!isLocked ? true : undefined}
+            data-tauri-drag-region={isDocked && !isLocked ? true : undefined}
           >
             {icon}
           </span>
         )}
         <h2
           className="text-xs font-semibold text-[var(--fluent-text-primary)] truncate tracking-wide pointer-events-none"
-          data-tauri-drag-region={!isLocked ? true : undefined}
+          data-tauri-drag-region={isDocked && !isLocked ? true : undefined}
         >
           {title}
         </h2>

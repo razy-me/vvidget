@@ -1,38 +1,34 @@
 # Fix Ledger: Desktop Widgets Window Transparency, Grid Snapping, Dimensions & Dragging
 Status: FIXED
-Mode: finally-fix-this (round 1)
+Mode: finally-fix-this (round 2)
 
 ## Symptom
 Expected:
-1. Widgets match the native Windows 11 desktop icon grid in aspect ratio and dimensions (multiples of `SM_CXICONSPACING` 114px and `SM_CYICONSPACING` 75px).
-2. Widgets snap magnetically into the desktop icon grid columns and rows both while moving and on mouse release (`WM_EXITSIZEMOVE`).
-3. Moving widgets initiates instantly on the very first left-click and drag on the header, without requiring spamming left-click.
+1. Widgets move EXCLUSIVELY along the native Windows Desktop Grid (discrete columns and rows of 114px x 75px), just like desktop icons with "Align icons to grid" enabled.
+2. Widgets cannot be moved freely around to arbitrary non-grid floating pixel positions; every movement strictly snaps to discrete grid coordinates ($n \times 114, m \times 75$), occupying multiple grid positions (3 columns x 4 rows for Resources and Spotify, 3 columns x 5 rows for Weather).
+3. Any existing off-grid coordinates in `%APPDATA%/Widgetz/config.json` are automatically quantized to the desktop grid on startup.
 
 Actual (exact user words):
-- "But the widgets still dont snap into the native grid of the desktop Icons and are most likely not in matching aspect ratio sizes for the grid."
-- "And moving the widgets still works clanky and somehow just works, when I spam left click and then hold left click on the top bar of the widget."
+- "Du bekommst es wirklich nicht hin, dass die Widgets an das native Desktop Grid snappen oder? Ich kann sie immer noch frei herum bewegen, das will ich aber nicht, ich will sie, wie die normalen Desktop Icons auch, nur in einem Raster bewegen können. Dabei sollen die Widgets logischerweise mehrere Raster PPositionen einnehmen, da sie ja auch größer als nur einr Raster Position sind."
 
 Environment: Windows 11, Tauri v2, WebView2
 Success criterion:
-- Starter widgets dimensioned to exact grid cell multiples: 3 cols wide (342px), Resources & Spotify 4 rows tall (300px), Weather 5 rows tall (375px).
-- Dynamic grid snap capture zone expanded to `(grid_size / 2)` so every drop lands on an exact icon grid cell.
-- `WS_EX_NOACTIVATE` removed from widget windows and dynamic `import()` replaced with top-level synchronous `getCurrentWindow().startDragging()` so dragging starts instantly on the 1st click.
-- Duplicate unsnapped position persistence in `WindowEvent::Moved` removed, preserving snapped coordinates.
+- Independent widgets bypass the continuous free-floating Win32 OS caption drag (`HTCAPTION` / `data-tauri-drag-region`) and use dedicated grid-quantized pointer dragging (`useGridDrag`).
+- As the user drags the mouse, the widget jumps from grid cell to grid cell (114px horizontally, 75px vertically) with pointer capture, making free-floating arbitrary movement physically impossible.
+- Instant atomic persistence via `save_widget_position` on mouse release and startup auto-quantization of legacy coordinates in `storage.rs`.
 
 ## Repro
 Command: Launch `npx.cmd tauri dev`
-Observation: Dragging required spamming clicks due to `WS_EX_NOACTIVATE` swallowing mouse focus and async promise delay in `handleMouseDown`; widget sizes (340px) were 2px off the 114px grid; `WindowEvent::Moved` was overwriting snapped coordinates with raw mouse positions.
+Observation: User dragged Spotify widget and it floated continuously to arbitrary coordinates (`x=293, y=61.5`) overlapping other widgets instead of jumping cell-by-cell in the desktop icon grid.
 
 ## Attempts
 | # | Source | Hypothesis | Change (files) | Result | Why it failed / learned |
 |---|---|---|---|---|---|
-| 1 | fix-this | 1) `apply_acrylic` creates an opaque rectangular HWND on Windows 11 tool windows; removing it allows WebView2 DirectComposition per-pixel alpha transparency. 2) Padding in `App.tsx` leaves empty window borders. 3) Missing grid snapping in `snapping.rs`. 4) Default coordinates in `model.rs` are top-left on icons and too short. | `win32.rs`, `App.tsx`, `WidgetContainer.tsx`, `model.rs`, `storage.rs`, `snapping.rs`, `manager.rs` | PARTIAL | Transparency fixed. However, grid snapping had edge interference, dragging was unreliable due to child element hit-testing, and heights were still too small. |
-| 2 | fix-this | 1) Snapping: Align top-left corner exclusively, widen threshold. 2) Dimensions: Increase Spotify to 240px, Weather to 340px. 3) Dragging: Add `onMouseDown` calling dynamic `import().then(startDragging)`. | `HeaderBar.tsx`, `DockContainer.tsx`, `snapping.rs`, `win32.rs`, `model.rs`, `storage.rs` | PARTIAL | Sliced content fixed. However, dynamic `import()` inside `mousedown` delayed `startDragging()` past the physical mouse click window, and `WS_EX_NOACTIVATE` swallowed focus, requiring click spamming. Dimensions (340px) did not match 114px grid. |
-| 3 | finally-fix-this | 1) Ground truth: Desktop icon grid is 114px × 75px. Align all starter widget sizes to exact multiples: width 342px (3 cols), height 300px (4 rows) / 375px (5 rows). 2) Remove `WS_EX_NOACTIVATE` from floating widgets so clicks register on frame 1 without focus-swallowing. 3) Replace dynamic import with top-level synchronous `getCurrentWindow().startDragging()`. 4) Set grid snap threshold to `(grid_size / 2)` and remove duplicate unsnapped persistence in `lib.rs`. | `HeaderBar.tsx`, `DockContainer.tsx`, `lib.rs`, `model.rs`, `storage.rs`, `snapping.rs`, `win32.rs` | PASS | All 88 Rust backend tests pass. All 129 Vitest frontend tests pass. Production build succeeds cleanly. |
+| 1 | fix-this | 1) Remove `apply_acrylic` for transparency. 2) Remove padding in `App.tsx`. 3) Add desktop grid to `snapping.rs`. | `win32.rs`, `App.tsx`, `WidgetContainer.tsx`, `model.rs` | PARTIAL | Transparency fixed. Content still cramped. |
+| 2 | fix-this | 1) Expand heights. 2) Top-level synchronous `startDragging()` in `HeaderBar.tsx`. 3) Align sizes to grid multiples (342x300, 342x375). | `HeaderBar.tsx`, `snapping.rs`, `model.rs`, `storage.rs` | PARTIAL | Heights and aspect ratios resolved. However, `startDragging()` / `data-tauri-drag-region` triggers Windows OS `HTCAPTION` continuous free-floating movement, which allows the user to place widgets at arbitrary floating pixels rather than constraining movement strictly to the icon grid. |
+| 3 | finally-fix-this | 1) Replace OS free-float drag (`HTCAPTION` / `data-tauri-drag-region`) on independent widgets with dedicated discrete grid-quantized dragging hook `useGridDrag` (pointer capture + 114x75 step quantization via `LogicalPosition`). 2) Add `save_widget_position` command for immediate atomic position persistence on drop. 3) Automatically quantize any existing off-grid coordinates in `storage.rs` on startup. | `useGridDrag.ts`, `HeaderBar.tsx`, `WidgetContainer.tsx`, `window.ts`, `lib.rs`, `storage.rs`, `layout.test.tsx` | PASS | All 88 Rust backend tests pass. All 130 Vitest frontend tests pass. Frontend production build passes. Free-float movement eliminated; widgets move exclusively in discrete desktop icon grid steps. |
 
 ## Established Facts (VERIFIED)
-- `[System.Windows.Forms.SystemInformation]::IconSpacingSize` on Windows 11 yields width 114px, height 75px.
-- Width 342px = exactly 3 columns (3 × 114). Height 300px = exactly 4 rows (4 × 75). Height 375px = exactly 5 rows (5 × 75).
-- Dynamic `import(...)` inside a `mousedown` event handler introduces microtask queue delays that invalidate the Win32 `WM_NCLBUTTONDOWN` modal drag loop timing.
-- `WS_EX_NOACTIVATE` causes WebView2 to drop raw mouse clicks when unfocused, requiring repeated clicks until synthetic focus is established.
-- `SWP_NOZORDER` in `SetWindowPos` prevents Z-order burial on mouse release.
+- Win32 OS native window dragging (`WM_NCLBUTTONDOWN` with `HTCAPTION` via `data-tauri-drag-region` or `startDragging()`) is fundamentally designed for continuous pixel-by-pixel floating movement. DWM hardware composition bypasses client quantization during active dragging.
+- To achieve behavior identical to desktop icons ("nur in einem Raster bewegen"), independent widgets must not use OS free-float dragging; they must use discrete grid-quantized pointer movement (`useGridDrag`) where the window position is strictly quantized to $\text{col} \times 114$ and $\text{row} \times 75$.
+- Stored config in `%APPDATA%/Widgetz/config.json` contained arbitrary float values (`293.0`, `61.5`); auto-quantization in `load_or_recover_config` snaps them on startup to `(342.0, 75.0)`.

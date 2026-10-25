@@ -8,16 +8,23 @@ describe("HeaderBar Component", () => {
     expect(screen.getByText("Weather")).toBeInTheDocument();
   });
 
-  it("sets data-tauri-drag-region when not locked", () => {
-    const { container } = render(<HeaderBar title="Spotify" isLocked={false} />);
+  it("sets data-tauri-drag-region when not locked in docked mode", () => {
+    const { container } = render(<HeaderBar title="Spotify" isLocked={false} layoutMode="docked" />);
     const header = container.querySelector("header");
     expect(header).toHaveAttribute("data-tauri-drag-region", "true");
   });
 
   it("removes data-tauri-drag-region when locked", () => {
-    const { container } = render(<HeaderBar title="Spotify" isLocked={true} />);
+    const { container } = render(<HeaderBar title="Spotify" isLocked={true} layoutMode="docked" />);
     const header = container.querySelector("header");
     expect(header).not.toHaveAttribute("data-tauri-drag-region");
+  });
+
+  it("uses grid-based pointer dragging in independent mode without native free-float drag region", () => {
+    const { container } = render(<HeaderBar title="Spotify" isLocked={false} layoutMode="independent" widgetId="spotify" />);
+    const header = container.querySelector("header");
+    expect(header).not.toHaveAttribute("data-tauri-drag-region");
+    expect(header).toHaveClass("cursor-grab");
   });
 
   it("fires onToggleLock when lock button is clicked", () => {
