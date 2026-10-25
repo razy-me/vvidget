@@ -169,18 +169,24 @@ pub fn apply_magnetic_snapping(
     }
 
     // 3. Desktop Grid Snapping
+    // Align widget's top-left corner with the desktop icon grid columns and rows.
     if config.snap_to_grid {
+        let grid_threshold_x = (config.grid_size_x / 3).max(threshold);
+        let grid_threshold_y = (config.grid_size_y / 3).max(threshold);
+
         if config.grid_size_x > 0 {
             let gx = config.grid_size_x;
             let rel_x = moving.left - work_area.left;
             let nearest_col = ((rel_x as f32 / gx as f32).round() as i32) * gx;
             let target_left = work_area.left + nearest_col;
-            consider_dx(target_left - moving.left, &mut best_dx);
-
-            let rel_right = moving.right - work_area.left;
-            let nearest_col_r = ((rel_right as f32 / gx as f32).round() as i32) * gx;
-            let target_right = work_area.left + nearest_col_r;
-            consider_dx(target_right - moving.right, &mut best_dx);
+            let dx = target_left - moving.left;
+            if dx.abs() <= grid_threshold_x {
+                match best_dx {
+                    None => best_dx = Some(dx),
+                    Some(best) if dx.abs() < best.abs() => best_dx = Some(dx),
+                    _ => {}
+                }
+            }
         }
 
         if config.grid_size_y > 0 {
@@ -188,12 +194,14 @@ pub fn apply_magnetic_snapping(
             let rel_y = moving.top - work_area.top;
             let nearest_row = ((rel_y as f32 / gy as f32).round() as i32) * gy;
             let target_top = work_area.top + nearest_row;
-            consider_dy(target_top - moving.top, &mut best_dy);
-
-            let rel_bottom = moving.bottom - work_area.top;
-            let nearest_row_b = ((rel_bottom as f32 / gy as f32).round() as i32) * gy;
-            let target_bottom = work_area.top + nearest_row_b;
-            consider_dy(target_bottom - moving.bottom, &mut best_dy);
+            let dy = target_top - moving.top;
+            if dy.abs() <= grid_threshold_y {
+                match best_dy {
+                    None => best_dy = Some(dy),
+                    Some(best) if dy.abs() < best.abs() => best_dy = Some(dy),
+                    _ => {}
+                }
+            }
         }
     }
 
@@ -486,5 +494,30 @@ mod tests {
         assert!(res.snapped_y, "Should snap vertically to nearest grid line");
         assert_eq!(moving.left, 225, "Left should snap to multiple of 75 (225)");
         assert_eq!(moving.top, 375, "Top should snap to multiple of 75 (375)");
+    }
+
+    #[test]
+    fn test_snap_to_desktop_grid_asymmetric_dimensions() {
+        let work_area = Rect::new(0, 0, 1920, 1080);
+        // Real-world Windows 11 150% scaled desktop icon grid: gx = 114, gy = 75
+        // Widget width: 340 (not a multiple of 114, 340 % 114 = 112)
+        // Moving widget left is placed at 240 (close to 2 * 114 = 228, dx = -12)
+        // Moving widget top is placed at 155 (close to 2 * 75 = 150, dy = -5)
+        let mut moving = Rect::new(240, 155, 580, 425);
+        let config = SnapConfig {
+            enabled: true,
+            threshold: 16,
+            snap_to_edges: false,
+            snap_to_widgets: false,
+            snap_to_grid: true,
+            grid_size_x: 114,
+            grid_size_y: 75,
+        };
+
+        let res = apply_magnetic_snapping(&mut moving, &work_area, &[], &config);
+        assert!(res.snapped_x, "Should snap to nearest grid column");
+        assert!(res.snapped_y, "Should snap to nearest grid row");
+        assert_eq!(moving.left, 228, "Top-left corner must snap to 2 * 114 = 228 without right-edge interference");
+        assert_eq!(moving.top, 150, "Top-left corner must snap to 2 * 75 = 150");
     }
 }

@@ -322,14 +322,25 @@ unsafe extern "system" fn widget_subclass_proc(
             let p_rect = lparam.0 as *mut RECT;
             if !p_rect.is_null() {
                 on_wm_moving(hwnd, &mut *p_rect);
+                DefSubclassProc(hwnd, umsg, wparam, lparam);
                 return LRESULT(1);
             }
             DefSubclassProc(hwnd, umsg, wparam, lparam)
         }
-        // Persist final dragged widget position on mouse release
+        // Persist final dragged widget position on mouse release with magnetic grid snapping
         WM_EXITSIZEMOVE => {
             let mut rect = RECT::default();
             if GetWindowRect(hwnd, &mut rect).is_ok() {
+                on_wm_moving(hwnd, &mut rect);
+                let _ = SetWindowPos(
+                    hwnd,
+                    HWND_BOTTOM,
+                    rect.left,
+                    rect.top,
+                    rect.right - rect.left,
+                    rect.bottom - rect.top,
+                    SWP_NOACTIVATE,
+                );
                 let r = Rect::new(rect.left, rect.top, rect.right, rect.bottom);
                 update_tracked_window(hwnd.0 as isize, r);
                 dispatch_exit_size_move(hwnd.0 as isize, r);

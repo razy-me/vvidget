@@ -106,6 +106,19 @@ export const DockContainer: FC<DockContainerProps> = ({
     [updateWidgetPlacement]
   );
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (isLocked) return;
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest("button, a, input, select, textarea, [data-no-drag]")) {
+      return;
+    }
+    import("@tauri-apps/api/window")
+      .then(({ getCurrentWindow }) => {
+        void getCurrentWindow().startDragging();
+      })
+      .catch(() => {});
+  };
+
   return (
     <div
       id="widgetz-dock"
@@ -128,6 +141,7 @@ export const DockContainer: FC<DockContainerProps> = ({
         {/* Dock Header */}
         <header
           {...(!isLocked ? { "data-tauri-drag-region": true } : {})}
+          onMouseDown={handleMouseDown}
           className={cn(
             "flex items-center justify-between px-3.5 py-2.5 border-b border-[var(--fluent-stroke)]",
             "bg-[var(--fluent-card-bg)] select-none",
@@ -142,18 +156,24 @@ export const DockContainer: FC<DockContainerProps> = ({
           >
             {!isLocked && (
               <span
-                className="text-[var(--fluent-text-tertiary)] hover:text-[var(--fluent-text-secondary)] transition-colors"
+                className="text-[var(--fluent-text-tertiary)] hover:text-[var(--fluent-text-secondary)] transition-colors pointer-events-none"
                 aria-hidden="true"
+                data-tauri-drag-region={!isLocked ? true : undefined}
               >
-                <GripHorizontal className="w-4 h-4" />
+                <GripHorizontal className="w-4 h-4 pointer-events-none" />
               </span>
             )}
-            <h1 className="text-xs font-bold tracking-wide text-[var(--fluent-text-primary)]">
+            <h1
+              className="text-xs font-bold tracking-wide text-[var(--fluent-text-primary)] pointer-events-none"
+              data-tauri-drag-region={!isLocked ? true : undefined}
+            >
               Widgetz Dock
             </h1>
-            <Badge size="sm" variant="accent">
-              {visibleWidgets.length} Active
-            </Badge>
+            <span className="pointer-events-none" data-tauri-drag-region={!isLocked ? true : undefined}>
+              <Badge size="sm" variant="accent">
+                {visibleWidgets.length} Active
+              </Badge>
+            </span>
           </div>
 
           {/* Action Toolbar */}

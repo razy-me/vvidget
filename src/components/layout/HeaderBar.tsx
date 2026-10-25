@@ -15,9 +15,23 @@ export const HeaderBar: FC<HeaderBarProps> = ({
   showControls = true,
   actions,
 }) => {
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (isLocked) return;
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest("button, a, input, select, textarea, [data-no-drag]")) {
+      return;
+    }
+    import("@tauri-apps/api/window")
+      .then(({ getCurrentWindow }) => {
+        void getCurrentWindow().startDragging();
+      })
+      .catch(() => {});
+  };
+
   return (
     <header
       {...(!isLocked ? { "data-tauri-drag-region": true } : {})}
+      onMouseDown={handleMouseDown}
       className={cn(
         "flex items-center justify-between px-3 py-2 select-none border-b border-[var(--fluent-stroke)]",
         "transition-colors duration-150",
@@ -31,22 +45,27 @@ export const HeaderBar: FC<HeaderBarProps> = ({
         {!isLocked && (
           <Tooltip content="Drag to move widget" position="bottom" delay={300}>
             <span
-              className="text-[var(--fluent-text-tertiary)] hover:text-[var(--fluent-text-secondary)] transition-colors"
+              className="text-[var(--fluent-text-tertiary)] hover:text-[var(--fluent-text-secondary)] transition-colors pointer-events-none"
               aria-hidden="true"
+              data-tauri-drag-region={!isLocked ? true : undefined}
             >
-              <GripHorizontal className="w-3.5 h-3.5" />
+              <GripHorizontal className="w-3.5 h-3.5 pointer-events-none" />
             </span>
           </Tooltip>
         )}
         {icon && (
           <span
-            className="flex-shrink-0 text-[var(--fluent-accent)] flex items-center justify-center"
+            className="flex-shrink-0 text-[var(--fluent-accent)] flex items-center justify-center pointer-events-none"
             aria-hidden="true"
+            data-tauri-drag-region={!isLocked ? true : undefined}
           >
             {icon}
           </span>
         )}
-        <h2 className="text-xs font-semibold text-[var(--fluent-text-primary)] truncate tracking-wide">
+        <h2
+          className="text-xs font-semibold text-[var(--fluent-text-primary)] truncate tracking-wide pointer-events-none"
+          data-tauri-drag-region={!isLocked ? true : undefined}
+        >
           {title}
         </h2>
       </div>

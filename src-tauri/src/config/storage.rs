@@ -99,26 +99,26 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
                 // Self-healing migration: upgrade legacy cramped heights and move away from default top-left icons
                 let mut upgraded = false;
                 for (id, placement) in parsed.widgets.iter_mut() {
-                    if id == "resources" && placement.logical_height < 250.0 {
-                        placement.logical_height = 260.0;
+                    if id == "resources" && placement.logical_height < 270.0 {
+                        placement.logical_height = 270.0;
                         placement.logical_width = 340.0;
                         upgraded = true;
                     }
-                    if id == "spotify" && placement.logical_height < 190.0 {
-                        placement.logical_height = 200.0;
+                    if id == "spotify" && placement.logical_height < 240.0 {
+                        placement.logical_height = 240.0;
                         placement.logical_width = 340.0;
                         upgraded = true;
                     }
-                    if id == "weather" && placement.logical_height < 230.0 {
-                        placement.logical_height = 250.0;
+                    if id == "weather" && placement.logical_height < 340.0 {
+                        placement.logical_height = 340.0;
                         placement.logical_width = 340.0;
                         upgraded = true;
                     }
-                    if placement.logical_x == 40.0 && (placement.logical_y == 40.0 || placement.logical_y == 240.0 || placement.logical_y == 400.0) {
+                    if placement.logical_x == 40.0 && (placement.logical_y == 40.0 || placement.logical_y == 240.0 || placement.logical_y == 320.0 || placement.logical_y == 400.0 || placement.logical_y == 540.0) {
                         placement.logical_x = 1540.0;
                         if id == "resources" { placement.logical_y = 40.0; }
-                        else if id == "spotify" { placement.logical_y = 320.0; }
-                        else if id == "weather" { placement.logical_y = 540.0; }
+                        else if id == "spotify" { placement.logical_y = 330.0; }
+                        else if id == "weather" { placement.logical_y = 590.0; }
                         upgraded = true;
                     }
                 }
