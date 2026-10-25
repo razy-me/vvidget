@@ -4,7 +4,7 @@ use windows::Win32::Foundation::{HWND, RECT, LRESULT, WPARAM, LPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE,
     WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE, WS_EX_APPWINDOW,
-    SetWindowPos, SWP_NOMOVE, SWP_NOSIZE, SWP_FRAMECHANGED, SWP_HIDEWINDOW, SWP_NOACTIVATE,
+    SetWindowPos, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_FRAMECHANGED, SWP_HIDEWINDOW, SWP_NOACTIVATE,
     WM_WINDOWPOSCHANGING, WM_MOVING, WM_SYSCOMMAND, WM_NCDESTROY, WM_EXITSIZEMOVE, WM_SHOWWINDOW,
     SC_MINIMIZE, WINDOWPOS, GetWindowRect,
     GetSystemMetrics, SM_CXICONSPACING, SM_CYICONSPACING, HWND_BOTTOM,
@@ -334,12 +334,12 @@ unsafe extern "system" fn widget_subclass_proc(
                 on_wm_moving(hwnd, &mut rect);
                 let _ = SetWindowPos(
                     hwnd,
-                    HWND_BOTTOM,
+                    HWND(core::ptr::null_mut()),
                     rect.left,
                     rect.top,
                     rect.right - rect.left,
                     rect.bottom - rect.top,
-                    SWP_NOACTIVATE,
+                    SWP_NOZORDER | SWP_NOACTIVATE,
                 );
                 let r = Rect::new(rect.left, rect.top, rect.right, rect.bottom);
                 update_tracked_window(hwnd.0 as isize, r);

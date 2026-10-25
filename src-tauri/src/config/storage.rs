@@ -96,29 +96,29 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
     match fs::read_to_string(target_path) {
         Ok(content) => match serde_json::from_str::<AppConfig>(&content) {
             Ok(mut parsed) => {
-                // Self-healing migration: upgrade legacy cramped heights and move away from default top-left icons
+                // Self-healing migration: upgrade to exact desktop icon grid aspect ratios and dimensions
                 let mut upgraded = false;
                 for (id, placement) in parsed.widgets.iter_mut() {
-                    if id == "resources" && placement.logical_height < 270.0 {
-                        placement.logical_height = 270.0;
-                        placement.logical_width = 340.0;
+                    if id == "resources" && (placement.logical_height < 300.0 || placement.logical_width != 342.0) {
+                        placement.logical_height = 300.0;
+                        placement.logical_width = 342.0;
                         upgraded = true;
                     }
-                    if id == "spotify" && placement.logical_height < 240.0 {
-                        placement.logical_height = 240.0;
-                        placement.logical_width = 340.0;
+                    if id == "spotify" && (placement.logical_height < 300.0 || placement.logical_width != 342.0) {
+                        placement.logical_height = 300.0;
+                        placement.logical_width = 342.0;
                         upgraded = true;
                     }
-                    if id == "weather" && placement.logical_height < 340.0 {
-                        placement.logical_height = 340.0;
-                        placement.logical_width = 340.0;
+                    if id == "weather" && (placement.logical_height < 375.0 || placement.logical_width != 342.0) {
+                        placement.logical_height = 375.0;
+                        placement.logical_width = 342.0;
                         upgraded = true;
                     }
-                    if placement.logical_x == 40.0 && (placement.logical_y == 40.0 || placement.logical_y == 240.0 || placement.logical_y == 320.0 || placement.logical_y == 400.0 || placement.logical_y == 540.0) {
-                        placement.logical_x = 1540.0;
-                        if id == "resources" { placement.logical_y = 40.0; }
-                        else if id == "spotify" { placement.logical_y = 330.0; }
-                        else if id == "weather" { placement.logical_y = 590.0; }
+                    if placement.logical_x == 40.0 || placement.logical_x == 1540.0 {
+                        placement.logical_x = 1482.0;
+                        if id == "resources" { placement.logical_y = 75.0; }
+                        else if id == "spotify" { placement.logical_y = 450.0; }
+                        else if id == "weather" { placement.logical_x = 1140.0; placement.logical_y = 75.0; }
                         upgraded = true;
                     }
                 }

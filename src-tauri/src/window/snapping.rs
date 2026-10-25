@@ -171,8 +171,8 @@ pub fn apply_magnetic_snapping(
     // 3. Desktop Grid Snapping
     // Align widget's top-left corner with the desktop icon grid columns and rows.
     if config.snap_to_grid {
-        let grid_threshold_x = (config.grid_size_x / 3).max(threshold);
-        let grid_threshold_y = (config.grid_size_y / 3).max(threshold);
+        let grid_threshold_x = (config.grid_size_x / 2).max(threshold);
+        let grid_threshold_y = (config.grid_size_y / 2).max(threshold);
 
         if config.grid_size_x > 0 {
             let gx = config.grid_size_x;

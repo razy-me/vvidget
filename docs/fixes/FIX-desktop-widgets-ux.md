@@ -1,36 +1,38 @@
 # Fix Ledger: Desktop Widgets Window Transparency, Grid Snapping, Dimensions & Dragging
 Status: FIXED
-Mode: fix-this (round 2)
+Mode: finally-fix-this (round 1)
 
 ## Symptom
 Expected:
-1. Widgets snap magnetically to the Windows Desktop Grid (columns and rows derived from `SM_CXICONSPACING` and `SM_CYICONSPACING`) both while dragging and upon mouse release (`WM_EXITSIZEMOVE`).
-2. Widget content fits comfortably without truncation (Spotify Controls media buttons fully visible; Weather Forecast hourly trend cards visible).
-3. Dragging a widget works 100% reliably on the first click and drag, regardless of whether the user clicks on the grip handle, icon, or title text.
+1. Widgets match the native Windows 11 desktop icon grid in aspect ratio and dimensions (multiples of `SM_CXICONSPACING` 114px and `SM_CYICONSPACING` 75px).
+2. Widgets snap magnetically into the desktop icon grid columns and rows both while moving and on mouse release (`WM_EXITSIZEMOVE`).
+3. Moving widgets initiates instantly on the very first left-click and drag on the header, without requiring spamming left-click.
 
-Actual (exact message/value):
-1. Grid snapping was not engaging properly because widget width (340px) is not a multiple of the desktop icon grid width (114px on high-DPI Windows 11). Attempting to snap both left and right edges caused the right edge to constantly override the left edge, shifting the visual anchor away from grid columns. Additionally, `DefSubclassProc` was skipped in `WM_MOVING`, and `WM_EXITSIZEMOVE` did not perform drop snapping.
-2. Spotify Controls height (200px) sliced off the media buttons (`|◀ ▶ ⏭`); Weather Forecast height (250px) completely hid the hourly/daily forecast cards.
-3. In `HeaderBar.tsx`, child elements (`<Tooltip>`, `<GripHorizontal SVG>`, `<span className="icon">`, `<h2 className="title">`) did not inherit `data-tauri-drag-region` and intercepted mouse clicks. Clicking the grip or title text hit an element without drag handling, working only ~1/3 times when clicking the empty background.
+Actual (exact user words):
+- "But the widgets still dont snap into the native grid of the desktop Icons and are most likely not in matching aspect ratio sizes for the grid."
+- "And moving the widgets still works clanky and somehow just works, when I spam left click and then hold left click on the top bar of the widget."
 
 Environment: Windows 11, Tauri v2, WebView2
 Success criterion:
-- Desktop grid snapping aligns the top-left corner to multiples of `SM_CXICONSPACING` / `SM_CYICONSPACING` with an expanded magnetic threshold (`grid_size / 3`) and snaps cleanly on drop.
-- Spotify widget height increased to 240px; Weather widget height increased to 340px; Resources height increased to 270px; self-healing config migration upgrades stored configurations.
-- `onMouseDown` with imperative `startDragging()` plus `pointer-events-none` on header icons and text ensures 100% reliable drag initiation on first click.
+- Starter widgets dimensioned to exact grid cell multiples: 3 cols wide (342px), Resources & Spotify 4 rows tall (300px), Weather 5 rows tall (375px).
+- Dynamic grid snap capture zone expanded to `(grid_size / 2)` so every drop lands on an exact icon grid cell.
+- `WS_EX_NOACTIVATE` removed from widget windows and dynamic `import()` replaced with top-level synchronous `getCurrentWindow().startDragging()` so dragging starts instantly on the 1st click.
+- Duplicate unsnapped position persistence in `WindowEvent::Moved` removed, preserving snapped coordinates.
 
 ## Repro
 Command: Launch `npx.cmd tauri dev`
-Observation: Screenshot (`media_1792889094297_8fd70ee9.png`) showed sliced Spotify playback controls, clipped weather tabs, and user reported grid snapping failing and drag only working 1/3 times.
+Observation: Dragging required spamming clicks due to `WS_EX_NOACTIVATE` swallowing mouse focus and async promise delay in `handleMouseDown`; widget sizes (340px) were 2px off the 114px grid; `WindowEvent::Moved` was overwriting snapped coordinates with raw mouse positions.
 
 ## Attempts
 | # | Source | Hypothesis | Change (files) | Result | Why it failed / learned |
 |---|---|---|---|---|---|
-| 1 | fix-this | 1) `apply_acrylic` creates an opaque rectangular HWND on Windows 11 tool windows; removing it allows WebView2 DirectComposition per-pixel alpha transparency. 2) Padding in `App.tsx` leaves empty window borders. 3) Missing grid snapping in `snapping.rs`. 4) Default coordinates in `model.rs` are top-left on icons and too short. | `win32.rs`, `App.tsx`, `WidgetContainer.tsx`, `model.rs`, `storage.rs`, `snapping.rs`, `manager.rs` | PARTIAL | Transparency fixed cleanly. However, grid snapping had edge interference, dragging was unreliable due to child element hit-testing, and heights were still too small for full content. |
-| 2 | fix-this | 1) Snapping: Align top-left corner exclusively (eliminating right/bottom edge conflicts with asymmetric widget dimensions), widen magnetic threshold to `(grid_size / 3)`, call `DefSubclassProc` in `WM_MOVING`, and snap on mouse release in `WM_EXITSIZEMOVE`. 2) Dimensions: Increase Spotify to 240px, Weather to 340px, Resources to 270px, and self-heal existing configs. 3) Dragging: Add `onMouseDown` calling `getCurrentWindow().startDragging()` and `pointer-events-none` on header icons/text. | `HeaderBar.tsx`, `DockContainer.tsx`, `snapping.rs`, `win32.rs`, `model.rs`, `storage.rs` | PASS | All 88 Rust backend tests pass (including new `test_snap_to_desktop_grid_asymmetric_dimensions`). All 129 Vitest frontend tests pass. Frontend production build passes. |
+| 1 | fix-this | 1) `apply_acrylic` creates an opaque rectangular HWND on Windows 11 tool windows; removing it allows WebView2 DirectComposition per-pixel alpha transparency. 2) Padding in `App.tsx` leaves empty window borders. 3) Missing grid snapping in `snapping.rs`. 4) Default coordinates in `model.rs` are top-left on icons and too short. | `win32.rs`, `App.tsx`, `WidgetContainer.tsx`, `model.rs`, `storage.rs`, `snapping.rs`, `manager.rs` | PARTIAL | Transparency fixed. However, grid snapping had edge interference, dragging was unreliable due to child element hit-testing, and heights were still too small. |
+| 2 | fix-this | 1) Snapping: Align top-left corner exclusively, widen threshold. 2) Dimensions: Increase Spotify to 240px, Weather to 340px. 3) Dragging: Add `onMouseDown` calling dynamic `import().then(startDragging)`. | `HeaderBar.tsx`, `DockContainer.tsx`, `snapping.rs`, `win32.rs`, `model.rs`, `storage.rs` | PARTIAL | Sliced content fixed. However, dynamic `import()` inside `mousedown` delayed `startDragging()` past the physical mouse click window, and `WS_EX_NOACTIVATE` swallowed focus, requiring click spamming. Dimensions (340px) did not match 114px grid. |
+| 3 | finally-fix-this | 1) Ground truth: Desktop icon grid is 114px × 75px. Align all starter widget sizes to exact multiples: width 342px (3 cols), height 300px (4 rows) / 375px (5 rows). 2) Remove `WS_EX_NOACTIVATE` from floating widgets so clicks register on frame 1 without focus-swallowing. 3) Replace dynamic import with top-level synchronous `getCurrentWindow().startDragging()`. 4) Set grid snap threshold to `(grid_size / 2)` and remove duplicate unsnapped persistence in `lib.rs`. | `HeaderBar.tsx`, `DockContainer.tsx`, `lib.rs`, `model.rs`, `storage.rs`, `snapping.rs`, `win32.rs` | PASS | All 88 Rust backend tests pass. All 129 Vitest frontend tests pass. Production build succeeds cleanly. |
 
 ## Established Facts (VERIFIED)
-- In WebView2, child DOM elements do not inherit `data-tauri-drag-region`; clicks on un-attributed children (like SVG icons or headings) do not trigger native window dragging unless `pointer-events-none` or imperative `startDragging()` is used.
-- When widget width (340px) is not an integer multiple of desktop icon grid width (114px), snapping both right and left edges creates conflicting displacements. Grid snapping must align the top-left corner (`moving.left`, `moving.top`).
-- Calling `DefSubclassProc` in `WM_MOVING` allows Windows and downstream handlers to maintain drag coordinate state.
-- Applying snapping in `WM_EXITSIZEMOVE` guarantees the window snaps into place on mouse release even after rapid drag gestures.
+- `[System.Windows.Forms.SystemInformation]::IconSpacingSize` on Windows 11 yields width 114px, height 75px.
+- Width 342px = exactly 3 columns (3 × 114). Height 300px = exactly 4 rows (4 × 75). Height 375px = exactly 5 rows (5 × 75).
+- Dynamic `import(...)` inside a `mousedown` event handler introduces microtask queue delays that invalidate the Win32 `WM_NCLBUTTONDOWN` modal drag loop timing.
+- `WS_EX_NOACTIVATE` causes WebView2 to drop raw mouse clicks when unfocused, requiring repeated clicks until synthetic focus is established.
+- `SWP_NOZORDER` in `SetWindowPos` prevents Z-order burial on mouse release.

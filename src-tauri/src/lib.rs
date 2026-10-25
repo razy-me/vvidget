@@ -72,7 +72,7 @@ pub mod integration {
                 WindowSetupOptions {
                     id: widget_id.clone(),
                     is_widget: true,
-                    no_activate: true,
+                    no_activate: false,
                     dark_mode: config.theme != "light",
                     target_x: Some(placement.logical_x),
                     target_y: Some(placement.logical_y),
@@ -91,22 +91,10 @@ pub mod integration {
                     let logical_y = (pos.y as f64) / scale;
                     let size = window_clone
                         .inner_size()
-                        .unwrap_or(tauri::PhysicalSize { width: 340, height: 420 });
+                        .unwrap_or(tauri::PhysicalSize { width: 342, height: 300 });
                     let logical_w = (size.width as f64) / scale;
                     let logical_h = (size.height as f64) / scale;
                     wm_event.update_window_position(&widget_id_event, logical_x, logical_y, logical_w, logical_h);
-                    if let Some(cm) = wm_event.get_config_manager() {
-                        let wid = widget_id_event.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let mut config = cm.get_config().await;
-                            if let Some(placement) = config.widgets.get_mut(&wid) {
-                                placement.logical_x = logical_x;
-                                placement.logical_y = logical_y;
-                                placement.scale_factor = scale;
-                            }
-                            let _ = cm.save_debounced(config).await;
-                        });
-                    }
                 }
             });
         }

@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, type FC, type ReactNode } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   GripHorizontal,
   Lock,
@@ -112,11 +113,11 @@ export const DockContainer: FC<DockContainerProps> = ({
     if ((e.target as HTMLElement).closest("button, a, input, select, textarea, [data-no-drag]")) {
       return;
     }
-    import("@tauri-apps/api/window")
-      .then(({ getCurrentWindow }) => {
-        void getCurrentWindow().startDragging();
-      })
-      .catch(() => {});
+    try {
+      void getCurrentWindow().startDragging();
+    } catch {
+      // Graceful fallback in non-Tauri browser test environments
+    }
   };
 
   return (

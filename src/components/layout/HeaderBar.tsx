@@ -1,5 +1,6 @@
 import type { FC } from "react";
 import { GripHorizontal, Lock, Unlock, Settings, X } from "lucide-react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { cn } from "@/utils/cn";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { HeaderBarProps } from "@/types/window";
@@ -21,11 +22,11 @@ export const HeaderBar: FC<HeaderBarProps> = ({
     if ((e.target as HTMLElement).closest("button, a, input, select, textarea, [data-no-drag]")) {
       return;
     }
-    import("@tauri-apps/api/window")
-      .then(({ getCurrentWindow }) => {
-        void getCurrentWindow().startDragging();
-      })
-      .catch(() => {});
+    try {
+      void getCurrentWindow().startDragging();
+    } catch {
+      // Graceful fallback in non-Tauri browser test environments
+    }
   };
 
   return (
