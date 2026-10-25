@@ -171,7 +171,7 @@ impl ConfigManager {
         let loop_config = current_config.clone();
         let loop_dirty = is_dirty.clone();
 
-        tokio::spawn(async move {
+        tauri::async_runtime::spawn(async move {
             let sleep_duration = Duration::from_millis(500);
             let sleep = tokio::time::sleep(sleep_duration);
             tokio::pin!(sleep);
