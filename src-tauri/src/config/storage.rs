@@ -96,28 +96,28 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
     match fs::read_to_string(target_path) {
         Ok(content) => match serde_json::from_str::<AppConfig>(&content) {
             Ok(mut parsed) => {
-                // Self-healing migration: upgrade to exact desktop icon grid aspect ratios and dimensions (103.5x84.5)
+                // Self-healing migration: upgrade to exact desktop icon grid aspect ratios and dimensions (120x98)
                 let mut upgraded = false;
                 for (id, placement) in parsed.widgets.iter_mut() {
-                    if id == "resources" && (placement.logical_height < 330.0 || (placement.logical_width - 310.5).abs() > 1.0) {
-                        placement.logical_height = 338.0;
-                        placement.logical_width = 310.5;
+                    if id == "resources" && ((placement.logical_width - 360.0).abs() > 0.1 || (placement.logical_height - 392.0).abs() > 0.1) {
+                        placement.logical_width = 360.0;
+                        placement.logical_height = 392.0;
                         upgraded = true;
                     }
-                    if id == "spotify" && (placement.logical_height < 250.0 || (placement.logical_width - 310.5).abs() > 1.0) {
-                        placement.logical_height = 253.5;
-                        placement.logical_width = 310.5;
+                    if id == "spotify" && ((placement.logical_width - 360.0).abs() > 0.1 || (placement.logical_height - 294.0).abs() > 0.1) {
+                        placement.logical_width = 360.0;
+                        placement.logical_height = 294.0;
                         upgraded = true;
                     }
-                    if id == "weather" && (placement.logical_height < 415.0 || (placement.logical_width - 310.5).abs() > 1.0) {
-                        placement.logical_height = 422.5;
-                        placement.logical_width = 310.5;
+                    if id == "weather" && ((placement.logical_width - 360.0).abs() > 0.1 || (placement.logical_height - 490.0).abs() > 0.1) {
+                        placement.logical_width = 360.0;
+                        placement.logical_height = 490.0;
                         upgraded = true;
                     }
 
-                    // Quantize any off-grid coordinates to exact multiples of the desktop icon grid (103.5x84.5)
-                    let snapped_x = (placement.logical_x / 103.5).round() * 103.5;
-                    let snapped_y = (placement.logical_y / 84.5).round() * 84.5;
+                    // Quantize any off-grid coordinates to exact multiples of the desktop icon grid (120x98)
+                    let snapped_x = (placement.logical_x / 120.0).round() * 120.0;
+                    let snapped_y = (placement.logical_y / 98.0).round() * 98.0;
                     if (placement.logical_x - snapped_x).abs() > 0.1 || (placement.logical_y - snapped_y).abs() > 0.1 {
                         placement.logical_x = snapped_x;
                         placement.logical_y = snapped_y;
@@ -581,6 +581,67 @@ mod tests {
         assert!(!recovered);
         assert_eq!(reloaded.theme, "custom-external-theme");
         assert_eq!(manager.get_config().await.theme, "custom-external-theme");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_self_healing_migration_to_120_98_grid() {
+        let dir = create_test_dir();
+        let path = dir.join("legacy_grid_config.json");
+
+        // Write legacy config with older dimensions (310.5x338) and off-grid positions
+        let legacy_json = r#"{
+            "version": 1,
+            "theme": "dark",
+            "widgets": {
+                "resources": {
+                    "id": "resources",
+                    "visible": true,
+                    "logical_x": 828.0,
+                    "logical_y": 84.5,
+                    "logical_width": 310.5,
+                    "logical_height": 338.0,
+                    "scale_factor": 1.0
+                },
+                "spotify": {
+                    "id": "spotify",
+                    "visible": true,
+                    "logical_x": 828.0,
+                    "logical_y": 422.5,
+                    "logical_width": 310.5,
+                    "logical_height": 253.5,
+                    "scale_factor": 1.0
+                },
+                "weather": {
+                    "id": "weather",
+                    "visible": true,
+                    "logical_x": 517.5,
+                    "logical_y": 84.5,
+                    "logical_width": 310.5,
+                    "logical_height": 422.5,
+                    "scale_factor": 1.0
+                }
+            }
+        }"#;
+        fs::write(&path, legacy_json.as_bytes()).unwrap();
+
+        let (loaded, recovered) = load_or_recover_config(&path);
+        assert!(!recovered);
+
+        let res = &loaded.widgets["resources"];
+        assert_eq!(res.logical_width, 360.0);
+        assert_eq!(res.logical_height, 392.0);
+        assert_eq!(res.logical_x, 840.0); // 828.0 / 120.0 = 6.9 -> round to 7 * 120.0 = 840.0
+        assert_eq!(res.logical_y, 98.0);  // 84.5 / 98.0 = 0.86 -> round to 1 * 98.0 = 98.0
+
+        let spotify = &loaded.widgets["spotify"];
+        assert_eq!(spotify.logical_width, 360.0);
+        assert_eq!(spotify.logical_height, 294.0);
+
+        let weather = &loaded.widgets["weather"];
+        assert_eq!(weather.logical_width, 360.0);
+        assert_eq!(weather.logical_height, 490.0);
 
         let _ = fs::remove_dir_all(&dir);
     }

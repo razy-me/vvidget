@@ -71,6 +71,16 @@ Bisher kannst du schonmal folgende Widgets als "Starter Widgets" einplanen: Wett
   - Unit tests for system metrics collector, config serialization, corrupt config recovery, and weather parser.
   - Zero linter or type-checker warnings.
 
+- **R10: Native Desktop Grid Alignment & Smooth Drag-and-Drop Interaction** [functional]
+  - Real Windows 11 desktop icon grid metrics: 120 × 98 logical pixels (240 × 196 physical pixels at 200% DPI), with dynamic runtime Win32 `LVM_GETITEMSPACING` query from `Progman`/`WorkerW` -> `SHELLDLL_DefView` -> `SysListView32`.
+  - Standardized widget dimensions matching exact integer grid spans:
+    - Media Controls: 3 × 3 cells (360 × 294 logical px)
+    - System Resources: 3 × 4 cells (360 × 392 logical px)
+    - Weather Forecast: 3 × 5 cells (360 × 490 logical px)
+  - Smooth 1:1 real-time drag tracking during pointer move (`useGridDrag.ts`), with snap-on-release to the nearest desktop grid cell.
+  - Visual elevation feedback while dragging (active shadow / border accent).
+  - Screen / work area bounds clamping preventing dragging offscreen or under the taskbar.
+
 ## Assumptions
 - **A1: Stack Selection** — Tauri v2 (Rust backend + Vite/React 19/Tailwind v4 frontend) leveraging Windows 11's built-in Evergreen WebView2 runtime.
 - **A2: Spotify Media Source** — Utilizing Windows 10/11 GSMTC (`Windows.Media.Control`) is superior to Spotify Web API because it requires zero user login, no Spotify Developer API credentials, works completely offline/locally, and has instantaneous response time.

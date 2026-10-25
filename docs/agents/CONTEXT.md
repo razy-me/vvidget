@@ -153,6 +153,18 @@ c:\Widgetz\
 - `sync_widget_windows(app)`: Coordinates active windows between Docked mode (single window) and Independent mode (multi-window), keeping working set RAM strictly within budget (<90 MB docked, <180 MB independent).
 - **Gotchas**: To avoid macro export collisions in `lib.rs`, IPC commands are contained within `pub mod integration` and re-exported. All display windows apply transparent background to allow OS DWM Acrylic blur backdrop through.
 
+## Module: Native Desktop Grid Alignment & Fluid Drag-and-Drop (`src-tauri/src/window/win32.rs`, `src-tauri/src/window/snapping.rs`, `src/hooks/useGridDrag.ts`)
+- `get_desktop_grid_metrics() -> DesktopGridMetrics`: Dynamic live Win32 query via `SendMessageW(hwnd, LVM_GETITEMSPACING, 0, 0)` on `Progman`/`WorkerW` -> `SHELLDLL_DefView` -> `SysListView32` with fallback to 120 × 98 logical px (240 × 196 physical px @ 200% DPI).
+- `SnapConfig::default()`: Configured to 120 × 98 with `SnapConfig::with_dpi(scale)` for multi-monitor scaling.
+- Standardized grid widget sizes:
+  - Spotify: 3 × 3 cells (360.0 × 294.0 logical px)
+  - Resources: 3 × 4 cells (360.0 × 392.0 logical px)
+  - Weather: 3 × 5 cells (360.0 × 490.0 logical px)
+- Self-healing config migration in `storage.rs`: Migrates legacy/off-grid dimensions and positions to 120.0 and 98.0 multiples.
+- `useGridDrag({ widgetId, isLocked, onPositionChange, onDragStateChange })`: Smooth 1:1 real-time drag tracking on pointer move via `setPosition(new LogicalPosition(targetX, targetY))`, work-area bounds clamping preventing offscreen dragging, and snap-on-release on pointer up to nearest grid cell `Math.round(targetX / gridX) * gridX`.
+- `HeaderBar` & `WidgetContainer`: Visual elevation and focus styling (`border-[var(--fluent-accent)]`, elevated shadow, `cursor-grabbing`, `data-dragging="true"`).
+- **Gotchas**: Desktop listview handle can reside in `WorkerW` when wallpaper slideshows are active, requiring iteration across top-level WorkerW windows if `Progman` does not directly host `SHELLDLL_DefView`.
+
 
 
 

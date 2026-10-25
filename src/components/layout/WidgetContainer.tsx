@@ -1,4 +1,4 @@
-import type { FC } from "react";
+import { useState, type FC } from "react";
 import { Card } from "@/components/ui/Card";
 import { HeaderBar } from "./HeaderBar";
 import { cn } from "@/utils/cn";
@@ -21,6 +21,7 @@ export const WidgetContainer: FC<WidgetContainerProps> = ({
   minHeight,
 }) => {
   const isDocked = layoutMode === "docked";
+  const [isDragging, setIsDragging] = useState(false);
 
   return (
     <div
@@ -28,6 +29,7 @@ export const WidgetContainer: FC<WidgetContainerProps> = ({
       data-widget-id={id}
       data-layout-mode={layoutMode}
       data-locked={isLocked}
+      data-dragging={isDragging}
       style={{
         minWidth: minWidth ? `${minWidth}px` : undefined,
         minHeight: minHeight ? `${minHeight}px` : undefined,
@@ -35,6 +37,7 @@ export const WidgetContainer: FC<WidgetContainerProps> = ({
       className={cn(
         "relative flex flex-col transition-all duration-200 select-none",
         isDocked ? "w-full rounded-lg" : "w-full h-full rounded-2xl",
+        isDragging && "scale-[1.01]",
         className
       )}
     >
@@ -42,9 +45,11 @@ export const WidgetContainer: FC<WidgetContainerProps> = ({
         variant="acrylic"
         padded={false}
         className={cn(
-          "w-full h-full flex flex-col overflow-hidden",
-          "border border-[var(--fluent-stroke)] backdrop-blur-xl",
-          "shadow-2xl",
+          "w-full h-full flex flex-col overflow-hidden transition-all duration-150",
+          isDragging
+            ? "border-[var(--fluent-accent)]/60 shadow-[0_20px_40px_rgba(0,0,0,0.5)] ring-1 ring-[var(--fluent-accent)]/40"
+            : "border border-[var(--fluent-stroke)] shadow-2xl",
+          "backdrop-blur-xl",
           isDocked ? "rounded-lg" : "rounded-2xl"
         )}
       >
@@ -58,6 +63,7 @@ export const WidgetContainer: FC<WidgetContainerProps> = ({
             onOpenSettings={onOpenSettings}
             widgetId={id}
             layoutMode={layoutMode}
+            onDragStateChange={setIsDragging}
           />
         )}
 

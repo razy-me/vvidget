@@ -1,9 +1,9 @@
-import { useRef, useCallback, useState } from "react";
-import { getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window";
+import { useRef, useCallback, useState, useEffect } from "react";
+import { getCurrentWindow, currentMonitor, LogicalPosition } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 
-export const DESKTOP_GRID_LOGICAL_X = 103.5;
-export const DESKTOP_GRID_LOGICAL_Y = 84.5;
+export const DESKTOP_GRID_LOGICAL_X = 120.0;
+export const DESKTOP_GRID_LOGICAL_Y = 98.0;
 export const DESKTOP_GRID_X = DESKTOP_GRID_LOGICAL_X;
 export const DESKTOP_GRID_Y = DESKTOP_GRID_LOGICAL_Y;
 
@@ -13,6 +13,7 @@ export interface UseGridDragOptions {
   gridX?: number;
   gridY?: number;
   onPositionChange?: (logicalX: number, logicalY: number) => void;
+  onDragStateChange?: (isDragging: boolean) => void;
 }
 
 export function useGridDrag({
@@ -21,8 +22,40 @@ export function useGridDrag({
   gridX = DESKTOP_GRID_X,
   gridY = DESKTOP_GRID_Y,
   onPositionChange,
+  onDragStateChange,
 }: UseGridDragOptions) {
   const [isDragging, setIsDragging] = useState(false);
+  const [activeGrid, setActiveGrid] = useState<{ x: number; y: number }>({
+    x: gridX,
+    y: gridY,
+  });
+
+  // Query live desktop icon grid metrics from Windows Explorer SysListView32 if available
+  useEffect(() => {
+    let cancelled = false;
+    invoke<{ logical_x?: number; cell_width?: number; logical_y?: number; cell_height?: number }>(
+      "get_desktop_grid_metrics"
+    )
+      .then((metrics) => {
+        if (!cancelled && metrics) {
+          const gx = metrics.logical_x || metrics.cell_width || DESKTOP_GRID_X;
+          const gy = metrics.logical_y || metrics.cell_height || DESKTOP_GRID_Y;
+          if (gx > 0 && gy > 0) {
+            setActiveGrid({ x: gx, y: gy });
+          }
+        }
+      })
+      .catch(() => {
+        // Fallback to calibrated 120.0 x 98.0
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const currentGridX = gridX !== DESKTOP_GRID_X ? gridX : activeGrid.x;
+  const currentGridY = gridY !== DESKTOP_GRID_Y ? gridY : activeGrid.y;
 
   const dragRef = useRef<{
     active: boolean;
@@ -30,21 +63,29 @@ export function useGridDrag({
     startScreenY: number;
     startWindowX: number;
     startWindowY: number;
-    currentCol: number;
-    currentRow: number;
+    lastTargetX: number;
+    lastTargetY: number;
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
   }>({
     active: false,
     startScreenX: 0,
     startScreenY: 0,
     startWindowX: 0,
     startWindowY: 0,
-    currentCol: 0,
-    currentRow: 0,
+    lastTargetX: 0,
+    lastTargetY: 0,
+    minX: 0,
+    maxX: 1920,
+    minY: 0,
+    maxY: 1080,
   });
 
   const onPointerDown = useCallback(
     async (e: React.PointerEvent) => {
-      if (isLocked || e.button !== 0) return;
+      if (isLocked || (e.button !== undefined && e.button !== 0)) return;
       if (
         (e.target as HTMLElement).closest(
           "button, a, input, select, textarea, [data-no-drag]"
@@ -59,52 +100,63 @@ export function useGridDrag({
         // Ignored in test environment
       }
 
-      let currentLogicalX = 0;
-      let currentLogicalY = 0;
+      dragRef.current.active = true;
+      dragRef.current.startScreenX = e.screenX;
+      dragRef.current.startScreenY = e.screenY;
+      setIsDragging(true);
+      onDragStateChange?.(true);
+
+      let currentLogicalX = dragRef.current.lastTargetX || 0;
+      let currentLogicalY = dragRef.current.lastTargetY || 0;
+      let boundMinX = 0;
+      let boundMaxX = Math.max(0, (typeof window !== "undefined" && window.screen?.availWidth ? window.screen.availWidth : 1920) - 360);
+      let boundMinY = 0;
+      let boundMaxY = Math.max(0, (typeof window !== "undefined" && window.screen?.availHeight ? window.screen.availHeight : 1080) - 294);
 
       try {
         const appWindow = getCurrentWindow();
         const scale = await appWindow.scaleFactor().catch(() => 1.0);
         const outer = await appWindow.outerPosition().catch(() => ({ x: 0, y: 0 }));
-        currentLogicalX = outer.x / (scale > 0 ? scale : 1.0);
-        currentLogicalY = outer.y / (scale > 0 ? scale : 1.0);
+        const inner = await appWindow.innerSize().catch(() => ({ width: 360 * scale, height: 294 * scale }));
+        const s = scale > 0 ? scale : 1.0;
+        currentLogicalX = outer.x / s;
+        currentLogicalY = outer.y / s;
+        const widgetW = inner.width / s;
+        const widgetH = inner.height / s;
+
+        const monitor = await currentMonitor().catch(() => null);
+        if (monitor) {
+          const mScale = monitor.scaleFactor || s;
+          const workPos = monitor.workArea?.position || monitor.position;
+          const workSize = monitor.workArea?.size || monitor.size;
+          const monLeft = workPos.x / mScale;
+          const monTop = workPos.y / mScale;
+          const monW = workSize.width / mScale;
+          const monH = workSize.height / mScale;
+          boundMinX = monLeft;
+          boundMaxX = Math.max(monLeft, monLeft + monW - widgetW);
+          boundMinY = monTop;
+          boundMaxY = Math.max(monTop, monTop + monH - widgetH);
+        } else if (typeof window !== "undefined" && window.screen) {
+          boundMinX = 0;
+          boundMaxX = Math.max(0, window.screen.availWidth - widgetW);
+          boundMinY = 0;
+          boundMaxY = Math.max(0, window.screen.availHeight - widgetH);
+        }
       } catch {
         // Fallback for non-Tauri / test environments
       }
 
-      // Calculate the nearest desktop icon grid cell
-      const initialCol = Math.max(0, Math.round(currentLogicalX / gridX));
-      const initialRow = Math.max(0, Math.round(currentLogicalY / gridY));
-      const snappedX = initialCol * gridX;
-      const snappedY = initialRow * gridY;
-
-      dragRef.current = {
-        active: true,
-        startScreenX: e.screenX,
-        startScreenY: e.screenY,
-        startWindowX: snappedX,
-        startWindowY: snappedY,
-        currentCol: initialCol,
-        currentRow: initialRow,
-      };
-
-      setIsDragging(true);
-
-      // Instantly snap to the desktop icon grid on mouse down if currently off-grid
-      if (
-        Math.abs(currentLogicalX - snappedX) > 1 ||
-        Math.abs(currentLogicalY - snappedY) > 1
-      ) {
-        try {
-          const appWindow = getCurrentWindow();
-          await appWindow.setPosition(new LogicalPosition(snappedX, snappedY));
-          onPositionChange?.(snappedX, snappedY);
-        } catch {
-          // Non-Tauri fallback
-        }
-      }
+      dragRef.current.startWindowX = currentLogicalX;
+      dragRef.current.startWindowY = currentLogicalY;
+      dragRef.current.lastTargetX = currentLogicalX;
+      dragRef.current.lastTargetY = currentLogicalY;
+      dragRef.current.minX = boundMinX;
+      dragRef.current.maxX = boundMaxX;
+      dragRef.current.minY = boundMinY;
+      dragRef.current.maxY = boundMaxY;
     },
-    [isLocked, gridX, gridY, onPositionChange]
+    [isLocked, onDragStateChange]
   );
 
   const onPointerMove = useCallback(
@@ -114,33 +166,26 @@ export function useGridDrag({
       const deltaX = e.screenX - dragRef.current.startScreenX;
       const deltaY = e.screenY - dragRef.current.startScreenY;
 
-      const targetX = dragRef.current.startWindowX + deltaX;
-      const targetY = dragRef.current.startWindowY + deltaY;
+      const rawTargetX = dragRef.current.startWindowX + deltaX;
+      const rawTargetY = dragRef.current.startWindowY + deltaY;
 
-      // Quantize to discrete desktop grid cell indices
-      const newCol = Math.max(0, Math.round(targetX / gridX));
-      const newRow = Math.max(0, Math.round(targetY / gridY));
+      // Work-area bounds clamping so widgets cannot be dragged off-screen
+      const targetX = Math.max(dragRef.current.minX, Math.min(dragRef.current.maxX, rawTargetX));
+      const targetY = Math.max(dragRef.current.minY, Math.min(dragRef.current.maxY, rawTargetY));
 
-      if (
-        newCol !== dragRef.current.currentCol ||
-        newRow !== dragRef.current.currentRow
-      ) {
-        dragRef.current.currentCol = newCol;
-        dragRef.current.currentRow = newRow;
+      dragRef.current.lastTargetX = targetX;
+      dragRef.current.lastTargetY = targetY;
 
-        const snappedX = newCol * gridX;
-        const snappedY = newRow * gridY;
-
-        try {
-          const appWindow = getCurrentWindow();
-          await appWindow.setPosition(new LogicalPosition(snappedX, snappedY));
-          onPositionChange?.(snappedX, snappedY);
-        } catch {
-          // Non-Tauri fallback
-        }
+      // Smooth 1:1 real-time drag tracking on pointer move (smoothly following cursor)
+      try {
+        const appWindow = getCurrentWindow();
+        await appWindow.setPosition(new LogicalPosition(targetX, targetY));
+        onPositionChange?.(targetX, targetY);
+      } catch {
+        // Non-Tauri fallback
       }
     },
-    [gridX, gridY, onPositionChange]
+    [onPositionChange]
   );
 
   const onPointerUp = useCallback(
@@ -148,6 +193,7 @@ export function useGridDrag({
       if (!dragRef.current.active) return;
       dragRef.current.active = false;
       setIsDragging(false);
+      onDragStateChange?.(false);
 
       try {
         (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
@@ -155,8 +201,20 @@ export function useGridDrag({
         // Non-Tauri fallback
       }
 
-      const finalX = dragRef.current.currentCol * gridX;
-      const finalY = dragRef.current.currentRow * gridY;
+      // Snap-on-release on pointerup to the nearest grid cell Math.round(targetX / gridX) * gridX
+      const rawSnappedX = Math.round(dragRef.current.lastTargetX / currentGridX) * currentGridX;
+      const rawSnappedY = Math.round(dragRef.current.lastTargetY / currentGridY) * currentGridY;
+
+      // Clamped to work-area bounds
+      const finalX = Math.max(dragRef.current.minX, Math.min(dragRef.current.maxX, rawSnappedX));
+      const finalY = Math.max(dragRef.current.minY, Math.min(dragRef.current.maxY, rawSnappedY));
+
+      try {
+        const appWindow = getCurrentWindow();
+        await appWindow.setPosition(new LogicalPosition(finalX, finalY));
+      } catch {
+        // Non-Tauri fallback
+      }
 
       if (widgetId) {
         try {
@@ -166,17 +224,19 @@ export function useGridDrag({
             logicalY: finalY,
           });
         } catch {
-          // If command not registered yet, safe fallback
+          // Non-Tauri fallback
         }
       }
 
       onPositionChange?.(finalX, finalY);
     },
-    [widgetId, gridX, gridY, onPositionChange]
+    [widgetId, currentGridX, currentGridY, onPositionChange, onDragStateChange]
   );
 
   return {
     isDragging,
+    gridX: currentGridX,
+    gridY: currentGridY,
     dragProps: {
       onPointerDown,
       onPointerMove,

@@ -75,8 +75,20 @@ impl Default for SnapConfig {
             snap_to_edges: true,
             snap_to_widgets: true,
             snap_to_grid: true,
-            grid_size_x: 104,
-            grid_size_y: 85,
+            grid_size_x: 120,
+            grid_size_y: 98,
+        }
+    }
+}
+
+impl SnapConfig {
+    /// Creates a SnapConfig scaled by monitor DPI factor.
+    pub fn with_dpi(scale: f64) -> Self {
+        let s = if scale > 0.0 { scale } else { 1.0 };
+        Self {
+            grid_size_x: (120.0 * s).round() as i32,
+            grid_size_y: (98.0 * s).round() as i32,
+            ..Default::default()
         }
     }
 }
@@ -518,5 +530,31 @@ mod tests {
         assert!(res.snapped_y, "Should snap to nearest grid row");
         assert_eq!(moving.left, 207, "Top-left corner must snap to 1 * 207 = 207");
         assert_eq!(moving.top, 169, "Top-left corner must snap to 1 * 169 = 169");
+    }
+
+    #[test]
+    fn test_snap_config_default_and_dpi_scaling() {
+        let default_config = SnapConfig::default();
+        assert_eq!(default_config.grid_size_x, 120);
+        assert_eq!(default_config.grid_size_y, 98);
+
+        // At 200% DPI, grid should scale to 240 x 196
+        let dpi_200 = SnapConfig::with_dpi(2.0);
+        assert_eq!(dpi_200.grid_size_x, 240);
+        assert_eq!(dpi_200.grid_size_y, 196);
+    }
+
+    #[test]
+    fn test_snap_to_desktop_grid_120_98() {
+        let work_area = Rect::new(0, 0, 1920, 1080);
+        // Window is moved to (235, 192) - within 16px of (240, 196), which is 2*120, 2*98
+        let mut moving = Rect::new(235, 192, 595, 486);
+        let config = SnapConfig::default();
+
+        let res = apply_magnetic_snapping(&mut moving, &work_area, &[], &config);
+        assert!(res.snapped_x, "Should snap horizontally to 2 * 120 = 240");
+        assert!(res.snapped_y, "Should snap vertically to 2 * 98 = 196");
+        assert_eq!(moving.left, 240);
+        assert_eq!(moving.top, 196);
     }
 }

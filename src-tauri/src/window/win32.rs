@@ -6,20 +6,50 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE, WS_EX_APPWINDOW,
     SetWindowPos, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_FRAMECHANGED, SWP_HIDEWINDOW, SWP_NOACTIVATE,
     WM_WINDOWPOSCHANGING, WM_MOVING, WM_SYSCOMMAND, WM_NCDESTROY, WM_EXITSIZEMOVE, WM_SHOWWINDOW,
-    SC_MINIMIZE, WINDOWPOS, GetWindowRect,
-    GetSystemMetrics, SM_CXICONSPACING, SM_CYICONSPACING, HWND_BOTTOM,
+    SC_MINIMIZE, WINDOWPOS, GetWindowRect, HWND_BOTTOM,
+    FindWindowW, FindWindowExW, SendMessageW,
 };
 #[cfg(windows)]
-use windows::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
+use windows::Win32::Graphics::Gdi::{
+    GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
+    GetDC, ReleaseDC, GetDeviceCaps, LOGPIXELSX,
+};
 #[cfg(windows)]
 use windows::Win32::UI::Shell::{SetWindowSubclass, DefSubclassProc, RemoveWindowSubclass};
 
+use serde::{Deserialize, Serialize};
 use super::snapping::{apply_magnetic_snapping, Rect, SnapConfig};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::RwLock;
 use std::collections::{HashMap, HashSet};
 
 pub const WIDGET_SUBCLASS_ID: usize = 0x5749_4447; // 'WIDG'
+
+/// Desktop icon grid spacing metrics (logical and physical pixels with scale factor).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, specta::Type)]
+pub struct DesktopGridMetrics {
+    pub cell_width: f64,
+    pub cell_height: f64,
+    pub logical_x: f64,
+    pub logical_y: f64,
+    pub physical_x: i32,
+    pub physical_y: i32,
+    pub scale_factor: f64,
+}
+
+impl Default for DesktopGridMetrics {
+    fn default() -> Self {
+        Self {
+            cell_width: 120.0,
+            cell_height: 98.0,
+            logical_x: 120.0,
+            logical_y: 98.0,
+            physical_x: 120,
+            physical_y: 98,
+            scale_factor: 1.0,
+        }
+    }
+}
 
 static SNAP_ENABLED: AtomicBool = AtomicBool::new(true);
 static SNAP_THRESHOLD: AtomicI32 = AtomicI32::new(16);
@@ -212,16 +242,105 @@ pub fn apply_acrylic_effect<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>
     Ok(())
 }
 
+/// Attempts to find the desktop's SysListView32 window under Progman or WorkerW.
+#[cfg(windows)]
+unsafe fn find_desktop_listview() -> Option<HWND> {
+    use windows::core::w;
+
+    // 1. Check Progman -> SHELLDLL_DefView -> SysListView32
+    if let Ok(progman) = FindWindowW(w!("Progman"), None) {
+        if progman.0 != core::ptr::null_mut() {
+            if let Ok(def_view) = FindWindowExW(progman, HWND(core::ptr::null_mut()), w!("SHELLDLL_DefView"), None) {
+                if def_view.0 != core::ptr::null_mut() {
+                    if let Ok(listview) = FindWindowExW(def_view, HWND(core::ptr::null_mut()), w!("SysListView32"), None) {
+                        if listview.0 != core::ptr::null_mut() {
+                            return Some(listview);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. WorkerW check (when active wallpaper / desktop slides run in Explorer)
+    let mut worker: HWND = HWND(core::ptr::null_mut());
+    while let Ok(next_worker) = FindWindowExW(HWND(core::ptr::null_mut()), worker, w!("WorkerW"), None) {
+        if next_worker.0 == core::ptr::null_mut() {
+            break;
+        }
+        if let Ok(def_view) = FindWindowExW(next_worker, HWND(core::ptr::null_mut()), w!("SHELLDLL_DefView"), None) {
+            if def_view.0 != core::ptr::null_mut() {
+                if let Ok(listview) = FindWindowExW(def_view, HWND(core::ptr::null_mut()), w!("SysListView32"), None) {
+                    if listview.0 != core::ptr::null_mut() {
+                        return Some(listview);
+                    }
+                }
+            }
+        }
+        worker = next_worker;
+    }
+
+    None
+}
+
+/// Live query to retrieve desktop icon grid spacing from Windows Explorer SysListView32
+/// via SendMessageW(hwnd, LVM_GETITEMSPACING, 0, 0), with fallback to
+/// (120 logical px / 240 physical px @ 200% DPI, 98 logical px / 196 physical px @ 200% DPI).
+#[cfg(windows)]
+pub fn get_desktop_grid_metrics() -> DesktopGridMetrics {
+    unsafe {
+        let (scale, mut physical_x, mut physical_y) = {
+            let hdc = GetDC(HWND(core::ptr::null_mut()));
+            let dpi = if hdc.0 != core::ptr::null_mut() {
+                let d = GetDeviceCaps(hdc, LOGPIXELSX);
+                let _ = ReleaseDC(HWND(core::ptr::null_mut()), hdc);
+                d
+            } else {
+                96
+            };
+            let s = if dpi > 0 { dpi as f64 / 96.0 } else { 1.0 };
+            let px = (120.0 * s).round() as i32;
+            let py = (98.0 * s).round() as i32;
+            (s, px, py)
+        };
+
+        if let Some(listview_hwnd) = find_desktop_listview() {
+            const LVM_FIRST: u32 = 0x1000;
+            const LVM_GETITEMSPACING: u32 = LVM_FIRST + 51;
+            let res = SendMessageW(listview_hwnd, LVM_GETITEMSPACING, WPARAM(0), LPARAM(0));
+            let spacing = res.0 as u32;
+            let cx = (spacing & 0xFFFF) as i32;
+            let cy = ((spacing >> 16) & 0xFFFF) as i32;
+            if cx > 0 && cy > 0 {
+                physical_x = cx;
+                physical_y = cy;
+            }
+        }
+
+        let logical_x = physical_x as f64 / scale;
+        let logical_y = physical_y as f64 / scale;
+
+        DesktopGridMetrics {
+            cell_width: logical_x,
+            cell_height: logical_y,
+            logical_x,
+            logical_y,
+            physical_x,
+            physical_y,
+            scale_factor: scale,
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn get_desktop_grid_metrics() -> DesktopGridMetrics {
+    DesktopGridMetrics::default()
+}
+
 #[cfg(windows)]
 unsafe fn on_wm_moving(hwnd: HWND, rect: &mut RECT) {
-    let (grid_x, grid_y) = {
-        let cx = GetSystemMetrics(SM_CXICONSPACING);
-        let cy = GetSystemMetrics(SM_CYICONSPACING);
-        // Scale to native Windows 11 Explorer desktop icon grid (103.5 / 114.0 and 84.5 / 75.0)
-        let gx = if cx > 0 { ((cx as f64) * (103.5 / 114.0)).round() as i32 } else { 104 };
-        let gy = if cy > 0 { ((cy as f64) * (84.5 / 75.0)).round() as i32 } else { 85 };
-        (gx.max(1), gy.max(1))
-    };
+    let metrics = get_desktop_grid_metrics();
+    let (grid_x, grid_y) = (metrics.physical_x.max(1), metrics.physical_y.max(1));
 
     let config = SnapConfig {
         enabled: SNAP_ENABLED.load(Ordering::SeqCst),
@@ -414,15 +533,19 @@ mod tests {
     }
 
     #[test]
+    fn test_desktop_grid_metrics() {
+        let metrics = get_desktop_grid_metrics();
+        assert!(metrics.cell_width > 0.0);
+        assert!(metrics.cell_height > 0.0);
+        assert!(metrics.physical_x > 0);
+        assert!(metrics.physical_y > 0);
+        assert!(metrics.scale_factor > 0.0);
+        assert_eq!(metrics.logical_x, metrics.cell_width);
+        assert_eq!(metrics.logical_y, metrics.cell_height);
+    }
+
+    #[test]
     fn test_tracked_windows_registry() {
-        #[cfg(windows)]
-        unsafe {
-            println!(
-                "DEBUG_METRICS: SM_CXICONSPACING={}, SM_CYICONSPACING={}",
-                GetSystemMetrics(SM_CXICONSPACING),
-                GetSystemMetrics(SM_CYICONSPACING)
-            );
-        }
         let fake_hwnd: isize = 12345;
         let rect = Rect::new(50, 50, 350, 350);
         register_tracked_window(fake_hwnd, rect);

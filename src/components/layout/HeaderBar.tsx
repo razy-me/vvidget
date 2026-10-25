@@ -18,6 +18,7 @@ export const HeaderBar: FC<HeaderBarProps> = ({
   actions,
   widgetId,
   layoutMode = "independent",
+  onDragStateChange,
 }) => {
   const isDocked = layoutMode === "docked";
 
@@ -25,6 +26,7 @@ export const HeaderBar: FC<HeaderBarProps> = ({
   const { isDragging: isGridDragging, dragProps } = useGridDrag({
     widgetId,
     isLocked: isLocked || isDocked,
+    onDragStateChange,
   });
 
   // Native drag fallback for docked multi-widget bar
@@ -51,8 +53,11 @@ export const HeaderBar: FC<HeaderBarProps> = ({
     <header
       {...dragHandlers}
       className={cn(
-        "flex items-center justify-between px-3 py-2 select-none border-b border-[var(--fluent-stroke)]",
-        "transition-colors duration-150 touch-none",
+        "flex items-center justify-between px-3 py-2 select-none border-b",
+        isGridDragging
+          ? "border-b-[var(--fluent-accent)]/50 bg-[var(--fluent-card-subtle)] shadow-inner"
+          : "border-b-[var(--fluent-stroke)]",
+        "transition-all duration-150 touch-none",
         !isLocked
           ? isGridDragging
             ? "cursor-grabbing"

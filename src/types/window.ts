@@ -40,6 +40,7 @@ export interface HeaderBarProps {
   actions?: ReactNode;
   widgetId?: string;
   layoutMode?: LayoutMode;
+  onDragStateChange?: (isDragging: boolean) => void;
 }
 
 export interface WidgetContainerProps {

@@ -487,6 +487,22 @@ pub async fn set_widgets_locked(app: AppHandle, locked: bool) -> Result<(), Stri
   - Memory budget verified: < 90 MB RAM in docked mode, < 180 MB in multi-window mode.
   - End-to-end multi-widget launch verified from System Tray.
 
+### WP-07 Native Desktop Grid Alignment & Fluid Drag-and-Drop  [x] status: approved
+- **Covers**: R10
+- **Owns**: `src-tauri/src/window/win32.rs`, `src-tauri/src/window/snapping.rs`, `src-tauri/src/config/model.rs`, `src-tauri/src/config/storage.rs`, `src-tauri/src/lib.rs`, `src/hooks/useGridDrag.ts`, `src/components/layout/HeaderBar.tsx`, `src/components/layout/WidgetContainer.tsx`
+- **Depends on**: WP-06
+- **Parallel group**: E
+- **Acceptance criteria**:
+  - Calibrate desktop icon grid to 120 × 98 logical pixels (240 × 196 physical pixels at 200% DPI), with dynamic query `get_desktop_grid_metrics` from Win32 `SysListView32` (`LVM_GETITEMSPACING`).
+  - Standardized widget dimensions matching exact integer grid spans:
+    - Spotify / Media Controls: 3 × 3 cells (360 × 294 logical px)
+    - System Resources: 3 × 4 cells (360 × 392 logical px)
+    - Weather Forecast: 3 × 5 cells (360 × 490 logical px)
+  - Self-healing configuration migration in `storage.rs` upgrading existing widgets to 120 × 98 grid multiples and new heights.
+  - Smooth 1:1 real-time drag tracking during pointer move (`useGridDrag.ts`), with snap-on-release to the nearest desktop grid cell.
+  - Visual elevation feedback while dragging (active shadow / border accent).
+  - Screen / work area bounds clamping preventing dragging offscreen or under the taskbar.
+
 ---
 
 ## Phase Status

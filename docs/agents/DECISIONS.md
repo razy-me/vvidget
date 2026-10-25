@@ -203,6 +203,21 @@
   3. *Leaving main window open in independent mode*: Renders duplicate widgets in both the main window and floating windows, wasting resident WebView2 memory.
 - **Reason / trade-offs**: Delivers authentic Windows 11 Fluent aesthetic and adaptability, satisfies memory constraints, and provides seamless switching between desktop dock and floating widgets.
 
+## D-029 Native Desktop Grid Alignment & Dynamic ListView Spacing FFI (WP-07, Coder)
+- **Decision**: Query the real Windows 11 desktop icon grid spacing at runtime using Win32 `SendMessageW(hwnd, LVM_GETITEMSPACING, 0, 0)` on the Explorer `SysListView32` control (traversing `Progman` and fallback `WorkerW` windows), with a calibrated fallback of 120 × 98 logical pixels (240 × 196 physical pixels at 200% DPI). Standardize starter widgets to integer grid spans: Spotify 3×3 (360×294), Resources 3×4 (360×392), Weather 3×5 (360×490), and introduce self-healing configuration migration in `storage.rs` to normalize legacy positions and dimensions.
+- **Alternatives considered**:
+  1. *Hardcoding legacy 103.5 × 84.5 spacing*: Results in subtle alignment drift against actual Windows 11 desktop icon positions across various display scales.
+  2. *Only querying `GetSystemMetrics(SM_CXICONSPACING)`*: SM_CXICONSPACING reflects icon spacing metrics from classic shell dialogs which do not always match the Explorer modern desktop ListView item spacing.
+- **Reason / trade-offs**: Delivers authentic native Windows 11 desktop icon grid alignment that automatically adapts to the user's desktop icon metrics and display DPI while ensuring predictable layout geometry.
+
+## D-030 Fluid 1:1 Pointer Tracking with Snap-on-Release & Visual Elevation (WP-07, Coder)
+- **Decision**: Replace discrete grid-step dragging in `useGridDrag` with smooth 1:1 real-time cursor tracking on `pointermove` using `appWindow.setPosition(new LogicalPosition(targetX, targetY))`, clamp movements against the active monitor's work area (excluding taskbars via `currentMonitor().workArea`), snap to nearest grid cell `Math.round(targetX / gridX) * gridX` on `pointerup`, and apply dynamic visual elevation (`data-dragging="true"`, `scale-[1.01]`, accent ring and elevated shadow) in `HeaderBar` and `WidgetContainer`.
+- **Alternatives considered**:
+  1. *Snapping on pointer down*: Causes jarring coordinate jumps when user merely clicks or starts dragging a widget.
+  2. *Quantizing on every move event*: Produces stepped/choppy dragging visuals that feel sluggish and unresponsive compared to native desktop windows.
+  3. *Unclamped drag*: Allows widgets to be dragged completely off-screen or hidden behind the taskbar.
+- **Reason / trade-offs**: Provides buttery smooth 60fps tracking during active movement, clean magnetic snap-on-release to exact grid lines, off-screen prevention, and clear tactile feedback via Fluent elevation tokens.
+
 
 
 

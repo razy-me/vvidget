@@ -173,9 +173,16 @@ pub mod integration {
         }
         Ok(())
     }
+
+    /// Queries the live Windows Explorer desktop icon grid spacing or returns calibrated fallback.
+    #[tauri::command]
+    #[specta::specta]
+    pub fn get_desktop_grid_metrics() -> Result<window::DesktopGridMetrics, String> {
+        Ok(window::get_desktop_grid_metrics())
+    }
 }
 
-pub use integration::{close_widget_window, open_widget_window, sync_widget_windows, save_widget_position};
+pub use integration::{close_widget_window, open_widget_window, sync_widget_windows, save_widget_position, get_desktop_grid_metrics};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -236,6 +243,7 @@ pub fn run() {
             close_widget_window,
             sync_widget_windows,
             save_widget_position,
+            get_desktop_grid_metrics,
         ])
         .setup(move |app| {
             start_metrics_worker(
@@ -403,6 +411,7 @@ mod tests {
             let _ = serde_json::from_str::<sysinfo::SystemMetrics>(bad);
             let _ = serde_json::from_str::<geo::GeoLocation>(bad);
             let _ = serde_json::from_str::<window::Rect>(bad);
+            let _ = serde_json::from_str::<window::DesktopGridMetrics>(bad);
         }
     }
 }

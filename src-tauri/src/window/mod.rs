@@ -15,5 +15,6 @@ pub use win32::{
     is_snapping_enabled, is_window_allow_hide, register_tracked_window, remove_window_subclass,
     set_allow_hide, set_exit_size_move_callback, set_snap_to_edges, set_snap_to_widgets,
     set_snapping_enabled, set_snapping_threshold, set_window_allow_hide, unregister_tracked_window,
+    get_desktop_grid_metrics, DesktopGridMetrics,
     WIDGET_SUBCLASS_ID,
 };

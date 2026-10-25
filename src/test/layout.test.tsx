@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { HeaderBar, WidgetContainer } from "@/components/layout";
 
 describe("HeaderBar Component", () => {
@@ -99,5 +99,31 @@ describe("WidgetContainer Component", () => {
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper.style.minWidth).toBe("320px");
     expect(wrapper.style.minHeight).toBe("200px");
+  });
+
+  it("activates visual elevation feedback on pointer drag interaction", async () => {
+    const { container } = render(
+      <WidgetContainer id="drag-widget" title="Draggable Widget" layoutMode="independent">
+        <span>Content</span>
+      </WidgetContainer>
+    );
+    const header = container.querySelector("header");
+    expect(header).toBeInTheDocument();
+    const wrapper = container.firstChild as HTMLElement;
+    expect(wrapper).toHaveAttribute("data-dragging", "false");
+
+    // Initiate pointer down on header
+    await act(async () => {
+      fireEvent.pointerDown(header!, { button: 0, screenX: 100, screenY: 100, pointerId: 1 });
+    });
+    expect(wrapper).toHaveAttribute("data-dragging", "true");
+    expect(header).toHaveClass("cursor-grabbing");
+
+    // Release pointer
+    await act(async () => {
+      fireEvent.pointerUp(header!, { pointerId: 1 });
+    });
+    expect(wrapper).toHaveAttribute("data-dragging", "false");
+    expect(header).toHaveClass("cursor-grab");
   });
 });
