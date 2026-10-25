@@ -80,7 +80,7 @@ export const AppContent: FC = () => {
       <div className="w-full h-full p-0 flex flex-col bg-transparent overflow-hidden select-none">
         <WidgetContainer
           id="spotify"
-          title="Spotify Controls"
+          title="Media Controls"
           icon={<Music className="w-4 h-4 text-emerald-400" />}
           isLocked={config.lock_positions}
           layoutMode="independent"
@@ -198,7 +198,7 @@ export const AppContent: FC = () => {
         {isSpotifyVisible && (
           <WidgetContainer
             id="spotify"
-            title="Spotify Controls"
+            title="Media Controls"
             icon={<Music className="w-4 h-4 text-emerald-400" />}
             isLocked={config.lock_positions}
             layoutMode="independent"

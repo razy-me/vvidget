@@ -82,7 +82,7 @@ export const DockContainer: FC<DockContainerProps> = ({
     if (config.widgets.spotify?.visible ?? true) {
       list.push({
         id: "spotify",
-        title: "Spotify Controls",
+        title: "Media Controls",
         icon: <Music className="w-3.5 h-3.5 text-emerald-400" />,
         component: <SpotifyWidget className="w-full max-w-none" />,
       });

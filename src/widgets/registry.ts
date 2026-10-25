@@ -26,7 +26,7 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetMetadata> = {
   },
   spotify: {
     id: "spotify",
-    name: "Spotify Controls",
+    name: "Media Controls",
     description: "Windows media playback controls and currently playing track info",
     defaultWidth: 320,
     defaultHeight: 140,

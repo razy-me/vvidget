@@ -89,7 +89,7 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
     let toggle_spotify = CheckMenuItem::with_id(
         app,
         "toggle_spotify",
-        "Spotify Controls",
+        "Media Controls",
         true,
         initial_config
             .widgets

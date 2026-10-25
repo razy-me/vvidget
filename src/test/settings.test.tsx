@@ -18,7 +18,7 @@ describe("WidgetToggleList component", () => {
     );
 
     expect(screen.getByText("System Resources")).toBeInTheDocument();
-    expect(screen.getByText("Spotify Controls")).toBeInTheDocument();
+    expect(screen.getByText("Media Controls")).toBeInTheDocument();
     expect(screen.getByText("Weather Forecast")).toBeInTheDocument();
   });
 

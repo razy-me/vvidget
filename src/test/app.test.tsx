@@ -99,7 +99,7 @@ describe("App & AppContent Routing", () => {
     window.location.search = "?widget=spotify";
     render(<AppContent />);
 
-    expect(screen.getByText("Spotify Controls")).toBeInTheDocument();
+    expect(screen.getByText("Media Controls")).toBeInTheDocument();
     expect(screen.getByTestId("spotify-widget-view")).toBeInTheDocument();
   });
 
@@ -127,7 +127,7 @@ describe("App & AppContent Routing", () => {
 
     expect(screen.getByText("Widgetz Desktop Surface")).toBeInTheDocument();
     expect(screen.getByTestId("resource-widget-view")).toBeInTheDocument();
-    expect(screen.getByText("Spotify Controls")).toBeInTheDocument();
+    expect(screen.getByText("Media Controls")).toBeInTheDocument();
     expect(screen.getByText("Weather Forecast")).toBeInTheDocument();
 
     // Toggle lock button in header
@@ -151,7 +151,7 @@ describe("App & AppContent Routing", () => {
     render(<AppContent />);
 
     expect(screen.queryByTestId("resource-widget-view")).not.toBeInTheDocument();
-    expect(screen.queryByText("Spotify Controls")).not.toBeInTheDocument();
+    expect(screen.queryByText("Media Controls")).not.toBeInTheDocument();
     expect(screen.getByText("Weather Forecast")).toBeInTheDocument();
   });
 
