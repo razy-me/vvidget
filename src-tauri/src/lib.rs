@@ -117,7 +117,9 @@ pub mod integration {
                 placement.logical_x = logical_x;
                 placement.logical_y = logical_y;
             }
-            cm.save_immediate(config).await.map_err(|e| e.to_string())?;
+            cm.save_immediate(config.clone()).await.map_err(|e| e.to_string())?;
+            use tauri::Emitter;
+            let _ = app.emit("config-changed", &config);
         }
         Ok(())
     }

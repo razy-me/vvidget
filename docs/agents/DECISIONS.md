@@ -211,12 +211,13 @@
 - **Reason / trade-offs**: Delivers authentic native Windows 11 desktop icon grid alignment that automatically adapts to the user's desktop icon metrics and display DPI while ensuring predictable layout geometry.
 
 ## D-030 Fluid 1:1 Pointer Tracking with Snap-on-Release & Visual Elevation (WP-07, Coder)
-- **Decision**: Replace discrete grid-step dragging in `useGridDrag` with smooth 1:1 real-time cursor tracking on `pointermove` using `appWindow.setPosition(new LogicalPosition(targetX, targetY))`, clamp movements against the active monitor's work area (excluding taskbars via `currentMonitor().workArea`), snap to nearest grid cell `Math.round(targetX / gridX) * gridX` on `pointerup`, and apply dynamic visual elevation (`data-dragging="true"`, `scale-[1.01]`, accent ring and elevated shadow) in `HeaderBar` and `WidgetContainer`.
+- **Decision**: Replace discrete grid-step dragging in `useGridDrag` with smooth 1:1 real-time cursor tracking on `pointermove` using `appWindow.setPosition(new LogicalPosition(targetX, targetY))`, clamp movements against the combined multi-monitor virtual desktop work area queried via `availableMonitors()` (converting physical work areas to logical coordinates via each monitor's scaleFactor, falling back to `currentMonitor()`), snap to nearest grid cell `Math.round(targetX / gridX) * gridX` on `pointerup`, guard drag initiation with an `isDown` / `active` state machine preventing quick-click teleportation to `(0, 0)`, and broadcast `"config-changed"` on position saves. Cache `DesktopGridMetrics` with a 2-second TTL and validate `SendMessageW` bounds to protect high-frequency `WM_MOVING` callbacks. Apply dynamic visual elevation (`data-dragging="true"`, `scale-[1.01]`, accent ring and elevated shadow) in `HeaderBar` and `WidgetContainer`.
 - **Alternatives considered**:
   1. *Snapping on pointer down*: Causes jarring coordinate jumps when user merely clicks or starts dragging a widget.
   2. *Quantizing on every move event*: Produces stepped/choppy dragging visuals that feel sluggish and unresponsive compared to native desktop windows.
-  3. *Unclamped drag*: Allows widgets to be dragged completely off-screen or hidden behind the taskbar.
-- **Reason / trade-offs**: Provides buttery smooth 60fps tracking during active movement, clean magnetic snap-on-release to exact grid lines, off-screen prevention, and clear tactile feedback via Fluent elevation tokens.
+  3. *Single-monitor clamping*: Traps widgets on a single screen and prevents cross-display movement in multi-monitor setups.
+  4. *Unchecked synchronous SendMessageW per WM_MOVING*: Floods Windows Explorer message queues at 100+ calls/sec during drag.
+- **Reason / trade-offs**: Delivers seamless multi-monitor fluid movement, tear-free 60fps tracking without cross-process IPC bottlenecks, eliminates click teleportation race conditions, and maintains global config state coherence across all windows.
 
 
 

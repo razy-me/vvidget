@@ -1,5 +1,5 @@
 import { useRef, useCallback, useState, useEffect } from "react";
-import { getCurrentWindow, currentMonitor, LogicalPosition } from "@tauri-apps/api/window";
+import { getCurrentWindow, currentMonitor, availableMonitors, LogicalPosition } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 
 export const DESKTOP_GRID_LOGICAL_X = 120.0;
@@ -58,6 +58,7 @@ export function useGridDrag({
   const currentGridY = gridY !== DESKTOP_GRID_Y ? gridY : activeGrid.y;
 
   const dragRef = useRef<{
+    isDown: boolean;
     active: boolean;
     startScreenX: number;
     startScreenY: number;
@@ -70,6 +71,7 @@ export function useGridDrag({
     minY: number;
     maxY: number;
   }>({
+    isDown: false,
     active: false,
     startScreenX: 0,
     startScreenY: 0,
@@ -94,17 +96,16 @@ export function useGridDrag({
         return;
       }
 
+      dragRef.current.isDown = true;
+      dragRef.current.active = false;
+      dragRef.current.startScreenX = e.screenX;
+      dragRef.current.startScreenY = e.screenY;
+
       try {
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       } catch {
         // Ignored in test environment
       }
-
-      dragRef.current.active = true;
-      dragRef.current.startScreenX = e.screenX;
-      dragRef.current.startScreenY = e.screenY;
-      setIsDragging(true);
-      onDragStateChange?.(true);
 
       let currentLogicalX = dragRef.current.lastTargetX || 0;
       let currentLogicalY = dragRef.current.lastTargetY || 0;
@@ -124,29 +125,68 @@ export function useGridDrag({
         const widgetW = inner.width / s;
         const widgetH = inner.height / s;
 
-        const monitor = await currentMonitor().catch(() => null);
-        if (monitor) {
-          const mScale = monitor.scaleFactor || s;
-          const workPos = monitor.workArea?.position || monitor.position;
-          const workSize = monitor.workArea?.size || monitor.size;
-          const monLeft = workPos.x / mScale;
-          const monTop = workPos.y / mScale;
-          const monW = workSize.width / mScale;
-          const monH = workSize.height / mScale;
-          boundMinX = monLeft;
-          boundMaxX = Math.max(monLeft, monLeft + monW - widgetW);
-          boundMinY = monTop;
-          boundMaxY = Math.max(monTop, monTop + monH - widgetH);
-        } else if (typeof window !== "undefined" && window.screen) {
-          boundMinX = 0;
-          boundMaxX = Math.max(0, window.screen.availWidth - widgetW);
-          boundMinY = 0;
-          boundMaxY = Math.max(0, window.screen.availHeight - widgetH);
+        // Multi-monitor virtual desktop bounding area across all active displays
+        const monitors = await availableMonitors().catch(() => []);
+        if (monitors.length > 0) {
+          let minLeft = Infinity;
+          let maxRight = -Infinity;
+          let minTop = Infinity;
+          let maxBottom = -Infinity;
+
+          for (const m of monitors) {
+            const mScale = m.scaleFactor || s || 1.0;
+            const workPos = m.workArea?.position || m.position;
+            const workSize = m.workArea?.size || m.size;
+            const left = workPos.x / mScale;
+            const top = workPos.y / mScale;
+            const right = left + workSize.width / mScale;
+            const bottom = top + workSize.height / mScale;
+
+            if (left < minLeft) minLeft = left;
+            if (right > maxRight) maxRight = right;
+            if (top < minTop) minTop = top;
+            if (bottom > maxBottom) maxBottom = bottom;
+          }
+
+          if (isFinite(minLeft) && isFinite(maxRight)) {
+            boundMinX = minLeft;
+            boundMaxX = Math.max(minLeft, maxRight - widgetW);
+          }
+          if (isFinite(minTop) && isFinite(maxBottom)) {
+            boundMinY = minTop;
+            boundMaxY = Math.max(minTop, maxBottom - widgetH);
+          }
+        } else {
+          const monitor = await currentMonitor().catch(() => null);
+          if (monitor) {
+            const mScale = monitor.scaleFactor || s;
+            const workPos = monitor.workArea?.position || monitor.position;
+            const workSize = monitor.workArea?.size || monitor.size;
+            const monLeft = workPos.x / mScale;
+            const monTop = workPos.y / mScale;
+            const monW = workSize.width / mScale;
+            const monH = workSize.height / mScale;
+            boundMinX = monLeft;
+            boundMaxX = Math.max(monLeft, monLeft + monW - widgetW);
+            boundMinY = monTop;
+            boundMaxY = Math.max(monTop, monTop + monH - widgetH);
+          } else if (typeof window !== "undefined" && window.screen) {
+            boundMinX = 0;
+            boundMaxX = Math.max(0, window.screen.availWidth - widgetW);
+            boundMinY = 0;
+            boundMaxY = Math.max(0, window.screen.availHeight - widgetH);
+          }
         }
       } catch {
         // Fallback for non-Tauri / test environments
       }
 
+      // If user released pointer before async initialization finished, abort activation
+      if (!dragRef.current.isDown) {
+        return;
+      }
+
+      dragRef.current.active = true;
       dragRef.current.startWindowX = currentLogicalX;
       dragRef.current.startWindowY = currentLogicalY;
       dragRef.current.lastTargetX = currentLogicalX;
@@ -155,6 +195,9 @@ export function useGridDrag({
       dragRef.current.maxX = boundMaxX;
       dragRef.current.minY = boundMinY;
       dragRef.current.maxY = boundMaxY;
+
+      setIsDragging(true);
+      onDragStateChange?.(true);
     },
     [isLocked, onDragStateChange]
   );
@@ -190,16 +233,22 @@ export function useGridDrag({
 
   const onPointerUp = useCallback(
     async (e: React.PointerEvent) => {
-      if (!dragRef.current.active) return;
-      dragRef.current.active = false;
-      setIsDragging(false);
-      onDragStateChange?.(false);
+      dragRef.current.isDown = false;
 
       try {
         (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
       } catch {
         // Non-Tauri fallback
       }
+
+      // If drag was not active (e.g. quick click before async init or locked widget), exit immediately
+      if (!dragRef.current.active) {
+        return;
+      }
+
+      dragRef.current.active = false;
+      setIsDragging(false);
+      onDragStateChange?.(false);
 
       // Snap-on-release on pointerup to the nearest grid cell Math.round(targetX / gridX) * gridX
       const rawSnappedX = Math.round(dragRef.current.lastTargetX / currentGridX) * currentGridX;

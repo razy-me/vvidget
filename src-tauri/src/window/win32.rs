@@ -22,8 +22,12 @@ use super::snapping::{apply_magnetic_snapping, Rect, SnapConfig};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::RwLock;
 use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 
 pub const WIDGET_SUBCLASS_ID: usize = 0x5749_4447; // 'WIDG'
+
+static GRID_METRICS_CACHE: RwLock<Option<(Instant, DesktopGridMetrics)>> = RwLock::new(None);
+const GRID_METRICS_TTL: Duration = Duration::from_secs(2);
 
 /// Desktop icon grid spacing metrics (logical and physical pixels with scale factor).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, specta::Type)]
@@ -286,8 +290,27 @@ unsafe fn find_desktop_listview() -> Option<HWND> {
 /// Live query to retrieve desktop icon grid spacing from Windows Explorer SysListView32
 /// via SendMessageW(hwnd, LVM_GETITEMSPACING, 0, 0), with fallback to
 /// (120 logical px / 240 physical px @ 200% DPI, 98 logical px / 196 physical px @ 200% DPI).
-#[cfg(windows)]
+/// Cached with a 2-second TTL to avoid cross-process IPC stalls during high-frequency drag operations.
 pub fn get_desktop_grid_metrics() -> DesktopGridMetrics {
+    if let Ok(guard) = GRID_METRICS_CACHE.read() {
+        if let Some((timestamp, metrics)) = guard.as_ref() {
+            if timestamp.elapsed() < GRID_METRICS_TTL {
+                return *metrics;
+            }
+        }
+    }
+
+    let fresh = query_desktop_grid_metrics();
+
+    if let Ok(mut guard) = GRID_METRICS_CACHE.write() {
+        *guard = Some((Instant::now(), fresh));
+    }
+
+    fresh
+}
+
+#[cfg(windows)]
+fn query_desktop_grid_metrics() -> DesktopGridMetrics {
     unsafe {
         let (scale, mut physical_x, mut physical_y) = {
             let hdc = GetDC(HWND(core::ptr::null_mut()));
@@ -308,12 +331,16 @@ pub fn get_desktop_grid_metrics() -> DesktopGridMetrics {
             const LVM_FIRST: u32 = 0x1000;
             const LVM_GETITEMSPACING: u32 = LVM_FIRST + 51;
             let res = SendMessageW(listview_hwnd, LVM_GETITEMSPACING, WPARAM(0), LPARAM(0));
-            let spacing = res.0 as u32;
-            let cx = (spacing & 0xFFFF) as i32;
-            let cy = ((spacing >> 16) & 0xFFFF) as i32;
-            if cx > 0 && cy > 0 {
-                physical_x = cx;
-                physical_y = cy;
+            // Validate SendMessageW LRESULT: check positive and not -1
+            if res.0 > 0 && res.0 != -1 {
+                let spacing = res.0 as u32;
+                let cx = (spacing & 0xFFFF) as i32;
+                let cy = ((spacing >> 16) & 0xFFFF) as i32;
+                // Validate reasonable icon spacing bounds (between 20px and 1000px)
+                if cx >= 20 && cx <= 1000 && cy >= 20 && cy <= 1000 {
+                    physical_x = cx;
+                    physical_y = cy;
+                }
             }
         }
 
@@ -333,7 +360,7 @@ pub fn get_desktop_grid_metrics() -> DesktopGridMetrics {
 }
 
 #[cfg(not(windows))]
-pub fn get_desktop_grid_metrics() -> DesktopGridMetrics {
+fn query_desktop_grid_metrics() -> DesktopGridMetrics {
     DesktopGridMetrics::default()
 }
 
