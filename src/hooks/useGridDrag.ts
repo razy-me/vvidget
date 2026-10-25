@@ -151,8 +151,8 @@ export function useGridDrag({
         const s = scale > 0 ? scale : 1.0;
         currentLogicalX = outer.x / s;
         currentLogicalY = outer.y / s;
-        widgetW = inner.width / s || defaultW;
-        widgetH = inner.height / s || defaultH;
+        widgetW = meta?.defaultWidth || (inner.width > 0 ? inner.width / s : defaultW);
+        widgetH = meta?.defaultHeight || (inner.height > 0 ? inner.height / s : defaultH);
 
         // Multi-monitor virtual desktop bounding area across all active displays
         const monitors = await availableMonitors().catch(() => []);

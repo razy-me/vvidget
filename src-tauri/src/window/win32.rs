@@ -5,7 +5,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GetWindowLongPtrW, SetWindowLongPtrW, GWL_EXSTYLE,
     WS_EX_TOOLWINDOW, WS_EX_NOACTIVATE, WS_EX_APPWINDOW, WS_EX_LAYERED,
     SetWindowPos, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_FRAMECHANGED, SWP_HIDEWINDOW, SWP_NOACTIVATE,
-    SWP_SHOWWINDOW, HWND_TOP, ShowWindow,
+    ShowWindow,
     WM_WINDOWPOSCHANGING, WM_MOVING, WM_SYSCOMMAND, WM_NCDESTROY, WM_EXITSIZEMOVE, WM_SHOWWINDOW,
     WM_NCHITTEST, HTTRANSPARENT,
     SC_MINIMIZE, WINDOWPOS, GetWindowRect, HWND_BOTTOM,
@@ -452,22 +452,6 @@ unsafe fn on_wm_moving(hwnd: HWND, rect: &mut RECT) {
     rect.bottom = moving_rect.bottom;
 
     update_tracked_window(current_hwnd_isize, moving_rect);
-
-    // Calculate prospective non-overlapping slot and update skeleton preview in OS space
-    let prospective_slot = find_nearest_non_overlapping_slot(&moving_rect, &other_rects, grid_x, grid_y, &work_area);
-    let skel = get_skeleton_hwnd();
-    if skel != 0 {
-        let skel_hwnd = HWND(skel as *mut core::ffi::c_void);
-        let _ = SetWindowPos(
-            skel_hwnd,
-            HWND_TOP,
-            prospective_slot.left,
-            prospective_slot.top,
-            prospective_slot.width(),
-            prospective_slot.height(),
-            SWP_NOACTIVATE | SWP_SHOWWINDOW,
-        );
-    }
 }
 
 #[cfg(windows)]
