@@ -93,17 +93,17 @@ pub fn find_nearest_non_overlapping_slot(
         return candidate;
     }
 
-    let min_col = ((min_x as f32) / (gx as f32)).floor() as i32;
-    let max_col = ((max_x as f32) / (gx as f32)).ceil() as i32;
-    let min_row = ((min_y as f32) / (gy as f32)).floor() as i32;
-    let max_row = ((max_y as f32) / (gy as f32)).ceil() as i32;
+    let min_col = 0;
+    let max_col = (((max_x - min_x) as f32) / (gx as f32)).ceil() as i32;
+    let min_row = 0;
+    let max_row = (((max_y - min_y) as f32) / (gy as f32)).ceil() as i32;
 
     let mut best_rect: Option<(Rect, i64)> = None;
 
     for c in min_col..=max_col {
-        let cand_x = (c * gx).clamp(min_x, max_x);
+        let cand_x = (min_x + c * gx).clamp(min_x, max_x);
         for r in min_row..=max_row {
-            let cand_y = (r * gy).clamp(min_y, max_y);
+            let cand_y = (min_y + r * gy).clamp(min_y, max_y);
             let test_rect = Rect::new(cand_x, cand_y, cand_x + w, cand_y + h);
             if !other_widgets.iter().any(|o| rects_overlap(&test_rect, o, 2)) {
                 let dx = (cand_x - target.left) as i64;

@@ -135,6 +135,10 @@ pub mod integration {
     ) -> Result<(), String> {
         let label = format!("widget_{}", widget_id);
         if let Some(window) = app.get_webview_window(&label) {
+            #[cfg(windows)]
+            if let Ok(hwnd) = window.hwnd() {
+                crate::window::win32::unregister_tracked_window(hwnd.0 as isize);
+            }
             if let Some(win_mgr) = app.try_state::<WindowManager>() {
                 win_mgr.unregister_widget(&widget_id);
             }
@@ -164,6 +168,13 @@ pub mod integration {
         } else {
             // Independent multi-window mode: hide main window to avoid duplicate rendering and RAM waste
             if let Some(main) = app.get_webview_window("main") {
+                #[cfg(windows)]
+                if let Ok(hwnd) = main.hwnd() {
+                    crate::window::win32::unregister_tracked_window(hwnd.0 as isize);
+                }
+                if let Some(win_mgr) = app.try_state::<WindowManager>() {
+                    win_mgr.unregister_widget("main");
+                }
                 let _ = crate::window::win32::hide_window(&main);
             }
             // Launch separate floating windows for visible widgets
@@ -366,19 +377,23 @@ pub fn run() {
             window_manager_setup.set_snap_to_edges(initial_config.snap_to_edges);
 
             if let Some(main_win) = app.get_webview_window("main") {
-                let _ = window_manager_setup.setup_widget_window(
-                    &main_win,
-                    WindowSetupOptions {
-                        id: "main".to_string(),
-                        is_widget: true,
-                        no_activate: true,
-                        dark_mode: initial_config.theme != "light",
-                        target_x: Some(40.0),
-                        target_y: Some(40.0),
-                        width: 360.0,
-                        height: 640.0,
-                    },
-                );
+                if initial_config.layout_mode == "docked" {
+                    let _ = window_manager_setup.setup_widget_window(
+                        &main_win,
+                        WindowSetupOptions {
+                            id: "main".to_string(),
+                            is_widget: true,
+                            no_activate: true,
+                            dark_mode: initial_config.theme != "light",
+                            target_x: Some(40.0),
+                            target_y: Some(40.0),
+                            width: 360.0,
+                            height: 640.0,
+                        },
+                    );
+                } else {
+                    let _ = crate::window::win32::hide_window(&main_win);
+                }
             }
 
             // Pre-create translucent desktop skeleton window hidden so it is immediately ready for zero-latency drag feedback

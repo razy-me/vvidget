@@ -404,7 +404,7 @@ unsafe fn on_wm_moving(hwnd: HWND, rect: &mut RECT) {
         threshold: SNAP_THRESHOLD.load(Ordering::SeqCst),
         snap_to_edges: SNAP_TO_EDGES.load(Ordering::SeqCst),
         snap_to_widgets: SNAP_TO_WIDGETS.load(Ordering::SeqCst),
-        snap_to_grid: SNAP_TO_GRID.load(Ordering::SeqCst),
+        snap_to_grid: false, // Never snap dragged window to discrete 240px grid blocks in-flight!
         grid_size_x: grid_x,
         grid_size_y: grid_y,
     };
