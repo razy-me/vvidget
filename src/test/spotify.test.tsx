@@ -56,7 +56,44 @@ describe("TrackProgress Component", () => {
     const progressbar = screen.getByRole("progressbar");
     expect(progressbar).toBeInTheDocument();
     expect(progressbar).toHaveAttribute("aria-valuenow", "25");
-    expect(progressbar).toHaveClass("cursor-default");
+    expect(progressbar).toHaveClass("cursor-pointer");
+  });
+
+  it("handles seek bar click interaction and keyboard seeking", () => {
+    const onSeek = vi.fn();
+    render(
+      <TrackProgress
+        timeline={{
+          position_ms: 20000,
+          duration_ms: 100000,
+          last_updated_system_time_ms: Date.now(),
+        }}
+        isPlaying={false}
+        onSeek={onSeek}
+      />
+    );
+
+    const progressbar = screen.getByRole("progressbar");
+    vi.spyOn(progressbar, "getBoundingClientRect").mockReturnValue({
+      left: 0,
+      top: 0,
+      width: 200,
+      height: 10,
+      right: 200,
+      bottom: 10,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
+    });
+
+    fireEvent.click(progressbar, { clientX: 100 });
+    expect(onSeek).toHaveBeenCalledWith(50000);
+
+    fireEvent.keyDown(progressbar, { key: "ArrowRight" });
+    expect(onSeek).toHaveBeenCalledWith(55000);
+
+    fireEvent.keyDown(progressbar, { key: "ArrowLeft" });
+    expect(onSeek).toHaveBeenCalledWith(50000);
   });
 
   it("guards against epoch zero when last_updated_system_time_ms is 0 and isPlaying is true", () => {
@@ -154,11 +191,38 @@ describe("SpotifyWidget Component", () => {
   it("renders polished idle state when session is inactive", () => {
     render(<SpotifyWidget sessionOverride={DEFAULT_MEDIA_SESSION} />);
 
-    expect(screen.getByText("No Media Playing")).toBeInTheDocument();
+    expect(screen.getByText("Keine Wiedergabe aktiv")).toBeInTheDocument();
     expect(screen.getByText("Idle")).toBeInTheDocument();
     expect(
-      screen.getByText(/Start playback in Spotify or system media player/)
+      screen.getByText(/Starte die Wiedergabe in Spotify oder einem Media Player/)
     ).toBeInTheDocument();
+  });
+
+  it("renders volume slider and handles volume changes", () => {
+    render(<SpotifyWidget sessionOverride={DEFAULT_MEDIA_SESSION} />);
+
+    const slider = screen.getByLabelText("Master volume");
+    expect(slider).toBeInTheDocument();
+    expect(slider).toHaveAttribute("type", "range");
+    expect(slider).toHaveValue("50");
+
+    fireEvent.change(slider, { target: { value: "80" } });
+    expect(slider).toHaveValue("80");
+    expect(screen.getByText("80%")).toBeInTheDocument();
+  });
+
+  it("toggles mute on clicking the mute button", () => {
+    render(<SpotifyWidget sessionOverride={DEFAULT_MEDIA_SESSION} />);
+
+    const muteBtn = screen.getByLabelText("Mute");
+    expect(muteBtn).toBeInTheDocument();
+
+    fireEvent.click(muteBtn);
+    expect(screen.getByLabelText("Unmute")).toBeInTheDocument();
+    expect(screen.getByText("0%")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Unmute"));
+    expect(screen.getByLabelText("Mute")).toBeInTheDocument();
   });
 
   it("renders active track metadata and controls when media is playing", () => {

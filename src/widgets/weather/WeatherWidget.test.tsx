@@ -15,6 +15,10 @@ describe("WeatherWidget Component", () => {
       feelsLikeC: 12,
       humidity: 82,
       windSpeedKmh: 24,
+      precipitationProbability: 65,
+      uvIndex: 4,
+      sunrise: "07:15",
+      sunset: "18:22",
       condition: {
         code: 61,
         label: "Slight rain",
@@ -71,6 +75,10 @@ describe("WeatherWidget Component", () => {
     expect(screen.getByTestId("weather-condition-label")).toHaveTextContent("Slight rain");
     expect(screen.getByText("82%")).toBeInTheDocument();
     expect(screen.getByText("24 km/h")).toBeInTheDocument();
+    expect(screen.getByTestId("weather-rain-prob")).toHaveTextContent("65%");
+    expect(screen.getByTestId("weather-uv-index")).toHaveTextContent("4");
+    expect(screen.getByTestId("weather-sun-times")).toHaveTextContent("↑ 07:15 ↓ 18:22");
+    expect(screen.getByText("Open-Meteo")).toBeInTheDocument();
     expect(screen.queryByTestId("weather-offline-badge")).not.toBeInTheDocument();
   });
 

@@ -1,12 +1,20 @@
 import type { FC } from "react";
 import { useMemo, useState } from "react";
-import { Cpu, HardDrive, Layers, RefreshCw, AlertTriangle } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  Cpu,
+  HardDrive,
+  Layers,
+  RefreshCw,
+} from "lucide-react";
 import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { MiniGraph } from "./MiniGraph";
 import { MetricBar } from "./MetricBar";
 import { useSystemMetrics } from "@/hooks/useSystemMetrics";
-import { formatBytesGb, getMetricVariant } from "@/types/resources";
+import { formatBytesGb, formatNetworkSpeed, getMetricVariant } from "@/types/resources";
 import type { LayoutMode } from "@/types/config";
 import { cn } from "@/utils/cn";
 
@@ -84,8 +92,8 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
         </div>
       ) : (
         <>
-          {/* Section 1: CPU with MiniGraph sparkline */}
-          <div className="flex flex-col gap-1.5 bg-[var(--fluent-card-bg)]/40 p-2 rounded-lg border border-[var(--fluent-stroke-subtle)]">
+          {/* Section 1: CPU with MiniGraph sparkline & Top Process */}
+          <div className="flex flex-col gap-1.5 bg-[var(--fluent-card-bg)]/40 p-2 rounded-lg">
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-1.5 font-medium">
                 <Cpu className="w-3.5 h-3.5 text-sky-400" />
@@ -96,26 +104,43 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
                   </span>
                 )}
               </div>
-              <Badge
-                variant={cpuVariant}
-                size="sm"
-                className="tabular-nums font-semibold min-w-[42px] justify-center"
+              <span
+                className={cn(
+                  "text-xs tabular-nums font-semibold min-w-[36px] text-right",
+                  cpuVariant === "error"
+                    ? "text-[var(--fluent-error)]"
+                    : cpuVariant === "warning"
+                    ? "text-[var(--fluent-warning)]"
+                    : "text-[var(--fluent-text-primary)]"
+                )}
               >
                 {cpuPercent}%
-              </Badge>
+              </span>
             </div>
 
             {/* Sparkline Trend */}
             <MiniGraph
               data={cpuHistory}
               variant={cpuVariant}
-              height={30}
+              height={28}
               className="mt-0.5 rounded"
             />
+
+            {/* Top Process Indicator */}
+            {metrics?.top_process_name && (
+              <div className="flex items-center justify-between text-[10px] text-[var(--fluent-text-secondary)] pt-0.5">
+                <span className="truncate">Top: {metrics.top_process_name}</span>
+                {metrics.top_process_cpu !== null && metrics.top_process_cpu !== undefined && (
+                  <span className="tabular-nums shrink-0 ml-1">
+                    ({Math.round(metrics.top_process_cpu)}%)
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Section 2: Memory (RAM) */}
-          <div className="bg-[var(--fluent-card-bg)]/40 p-2 rounded-lg border border-[var(--fluent-stroke-subtle)]">
+          <div className="bg-[var(--fluent-card-bg)]/40 p-2 rounded-lg">
             <MetricBar
               label="Memory"
               valueDisplay={`${ramUsedGb} / ${ramTotalGb}`}
@@ -136,7 +161,7 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
 
           {/* Section 3: Disk Utilization */}
           {activeDisk && (
-            <div className="bg-[var(--fluent-card-bg)]/40 p-2 rounded-lg border border-[var(--fluent-stroke-subtle)]">
+            <div className="bg-[var(--fluent-card-bg)]/40 p-2 rounded-lg">
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-1.5 text-xs font-medium">
                   <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
@@ -145,21 +170,27 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
                   </span>
                 </div>
 
+                {/* Windows 11 Segmented Pill Switcher */}
                 {metrics && metrics.disks.length > 1 && (
-                  <div className="flex gap-1">
-                    {metrics.disks.map((d, idx) => (
-                      <button
-                        key={d.mount_point}
-                        onClick={() => setUserSelectedDiskIndex(idx)}
-                        className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
-                          activeDiskIndex === idx
-                            ? "bg-[var(--fluent-accent)] text-white font-medium"
-                            : "bg-[var(--fluent-card-bg)] text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)]"
-                        }`}
-                      >
-                        {d.mount_point.slice(0, 2)}
-                      </button>
-                    ))}
+                  <div className="flex bg-[var(--fluent-control-bg)] rounded-full p-0.5 gap-0.5">
+                    {metrics.disks.map((d, idx) => {
+                      const isActive = activeDiskIndex === idx;
+                      return (
+                        <button
+                          key={d.mount_point}
+                          type="button"
+                          onClick={() => setUserSelectedDiskIndex(idx)}
+                          className={cn(
+                            "text-[10px] px-2 py-0.5 rounded-full transition-all font-medium leading-none",
+                            isActive
+                              ? "bg-[var(--fluent-accent)] text-white shadow-sm"
+                              : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-subtle-hover)]"
+                          )}
+                        >
+                          {d.mount_point.slice(0, 2)}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -180,6 +211,42 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
               />
             </div>
           )}
+
+          {/* Section 4: Live Network Throughput */}
+          <div className="bg-[var(--fluent-card-bg)]/40 p-2 rounded-lg flex flex-col gap-1.5">
+            <div className="flex items-center justify-between text-xs font-medium">
+              <div className="flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Network</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="flex items-center gap-1.5">
+                <ArrowDown className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[10px] text-[var(--fluent-text-secondary)] leading-tight">
+                    ↓ Download
+                  </span>
+                  <span className="text-xs font-semibold tabular-nums text-[var(--fluent-text-primary)]">
+                    {formatNetworkSpeed(metrics?.network?.rx_bytes_per_sec ?? 0)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <ArrowUp className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[10px] text-[var(--fluent-text-secondary)] leading-tight">
+                    ↑ Upload
+                  </span>
+                  <span className="text-xs font-semibold tabular-nums text-[var(--fluent-text-primary)]">
+                    {formatNetworkSpeed(metrics?.network?.tx_bytes_per_sec ?? 0)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         </>
       )}
     </Card>

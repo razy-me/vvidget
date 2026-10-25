@@ -6,7 +6,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 pub use collector::MetricsCollector;
-pub use model::{bytes_to_gb, DiskMetric, MemoryMetric, SystemMetrics};
+pub use model::{bytes_to_gb, DiskMetric, MemoryMetric, NetworkMetrics, SystemMetrics};
 use crate::config::ConfigManager;
 
 /// Shared state type for caching latest sampled system metrics.
@@ -129,8 +129,8 @@ mod tests {
         let start = std::time::Instant::now();
         let _ = collector.collect_metrics(false);
         let elapsed = start.elapsed();
-        // CPU & RAM only refresh should be extremely fast (< 50ms)
-        assert!(elapsed < Duration::from_millis(50), "Metrics refresh too slow: {:?}", elapsed);
+        // CPU, RAM, Network & Process refresh should remain well within polling interval (< 150ms)
+        assert!(elapsed < Duration::from_millis(150), "Metrics refresh too slow: {:?}", elapsed);
     }
 
     #[test]

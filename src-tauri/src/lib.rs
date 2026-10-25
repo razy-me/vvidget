@@ -1,3 +1,4 @@
+pub mod audio;
 pub mod media;
 pub mod config;
 pub mod geo;
@@ -5,6 +6,7 @@ pub mod sysinfo;
 pub mod tray;
 pub mod window;
 
+use audio::{get_master_mute, get_master_volume, set_master_volume, toggle_master_mute};
 use config::{
     get_autostart_status, load_config, open_logs_folder, resolve_config_path, save_config,
     save_config_immediate, set_autostart, set_widgets_locked, ConfigManager,
@@ -433,6 +435,10 @@ pub fn run() {
             media_next_track,
             media_previous_track,
             get_media_state,
+            get_master_volume,
+            set_master_volume,
+            get_master_mute,
+            toggle_master_mute,
             open_widget_window,
             close_widget_window,
             sync_widget_windows,

@@ -2,6 +2,24 @@ use serde::{Deserialize, Serialize};
 
 /// Metric representing storage / disk partition usage.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+pub struct NetworkMetrics {
+    /// Bytes received per second.
+    pub rx_bytes_per_sec: u64,
+    /// Bytes transmitted per second.
+    pub tx_bytes_per_sec: u64,
+}
+
+impl Default for NetworkMetrics {
+    fn default() -> Self {
+        Self {
+            rx_bytes_per_sec: 0,
+            tx_bytes_per_sec: 0,
+        }
+    }
+}
+
+/// Metric representing storage / disk partition usage.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 pub struct DiskMetric {
     /// Friendly disk or drive name (e.g. "Windows", "Local Disk").
     pub name: String,
@@ -113,6 +131,12 @@ pub struct SystemMetrics {
     pub memory: MemoryMetric,
     /// Storage / disk partitions.
     pub disks: Vec<DiskMetric>,
+    /// Top CPU consuming process name if detected.
+    pub top_process_name: Option<String>,
+    /// Top CPU consuming process CPU percentage.
+    pub top_process_cpu: Option<f32>,
+    /// Live network throughput metrics.
+    pub network: NetworkMetrics,
     /// Milliseconds since UNIX epoch when sampled.
     pub timestamp_ms: u64,
 }
@@ -124,6 +148,9 @@ impl Default for SystemMetrics {
             cpu_cores: 1,
             memory: MemoryMetric::new(0, 0),
             disks: Vec::new(),
+            top_process_name: None,
+            top_process_cpu: None,
+            network: NetworkMetrics::default(),
             timestamp_ms: 0,
         }
     }
@@ -262,6 +289,12 @@ mod tests {
                 DiskMetric::new("System C", "C:\\", 512 * 1024 * 1024 * 1024, 256 * 1024 * 1024 * 1024),
                 DiskMetric::new("Data D", "D:\\", 1024 * 1024 * 1024 * 1024, 512 * 1024 * 1024 * 1024),
             ],
+            top_process_name: Some("chrome.exe".to_string()),
+            top_process_cpu: Some(14.2),
+            network: NetworkMetrics {
+                rx_bytes_per_sec: 1024 * 512,
+                tx_bytes_per_sec: 1024 * 128,
+            },
             timestamp_ms: 1729000000000,
         };
 

@@ -34,7 +34,7 @@ export const DailyForecast: FC<DailyForecastProps> = ({ items }) => {
         {items.map((item, idx) => (
           <div
             key={`${item.date}-${idx}`}
-            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] text-xs"
+            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[var(--fluent-card-bg)]/40 text-xs"
           >
             {/* Day name */}
             <span className="w-14 font-medium text-[var(--fluent-text-primary)]">

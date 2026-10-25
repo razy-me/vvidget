@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import type { FC } from "react";
-import { Music, Radio, RefreshCw, AlertCircle } from "lucide-react";
-import { Card, Badge } from "@/components/ui";
+import { Music, Radio, RefreshCw, AlertCircle, Volume2, Volume1, VolumeX } from "lucide-react";
+import { Card } from "@/components/ui";
 import { useMediaPlayback } from "@/hooks/useMediaPlayback";
+import { useMasterVolume } from "@/hooks/useMasterVolume";
 import type { MediaSession } from "@/types/media";
 import { MediaControls } from "./MediaControls";
 import { TrackProgress } from "./TrackProgress";
@@ -38,6 +39,7 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
   const hookResult = useMediaPlayback();
   const session = sessionOverride ?? hookResult.session;
   const { playPause, nextTrack, previousTrack, refresh, isLoading, error } = hookResult;
+  const { volume, isMuted, setVolume, toggleMute } = useMasterVolume();
 
   const [imgError, setImgError] = useState(false);
 
@@ -59,7 +61,7 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
       {/* Top Header Row */}
       <div className="flex items-center justify-between mb-2.5">
         <div className="flex items-center gap-1.5 min-w-0">
-          <div className="w-5 h-5 rounded-md flex items-center justify-center bg-emerald-500/10 text-emerald-400">
+          <div className="w-5 h-5 flex items-center justify-center text-[var(--fluent-text-secondary)]">
             {isActive && session.is_playing ? (
               <Radio className="w-3.5 h-3.5 animate-pulse" />
             ) : (
@@ -72,19 +74,9 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          {isActive ? (
-            <Badge
-              size="sm"
-              variant={session.is_playing ? "accent" : "default"}
-              className="text-[10px] uppercase font-semibold"
-            >
-              {session.is_playing ? "Playing" : "Paused"}
-            </Badge>
-          ) : (
-            <Badge size="sm" variant="outline" className="text-[10px]">
-              Idle
-            </Badge>
-          )}
+          <span className="text-[10px] text-[var(--fluent-text-secondary)] font-medium uppercase tracking-wider">
+            {isActive ? (session.is_playing ? "Playing" : "Paused") : "Idle"}
+          </span>
 
           <button
             type="button"
@@ -112,8 +104,8 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
         <div className="flex flex-col gap-2.5">
           {/* Track Info & Artwork */}
           <div className="flex items-center gap-3">
-            {/* Album Cover Art */}
-            <div className="relative w-14 h-14 rounded-lg overflow-hidden shrink-0 bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] shadow-sm group">
+            {/* Album Cover Art with rounded-xl (12px) */}
+            <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] shadow-sm group">
               {session.album_art_url && !imgError ? (
                 <img
                   key={session.album_art_url}
@@ -174,19 +166,59 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
           />
         </div>
       ) : (
-        /* Polished Idle State */
+        /* Polished German Locale Idle State */
         <div className="py-4 flex flex-col items-center justify-center text-center">
           <div className="w-12 h-12 rounded-full bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] flex items-center justify-center text-[var(--fluent-text-secondary)] mb-2.5 shadow-inner">
             <Music className="w-5 h-5 opacity-60" />
           </div>
           <p className="text-xs font-medium text-[var(--fluent-text-primary)]">
-            No Media Playing
+            Keine Wiedergabe aktiv
           </p>
           <p className="text-[11px] text-[var(--fluent-text-secondary)] mt-0.5 max-w-[200px] leading-relaxed">
-            Start playback in Spotify or system media player to see controls
+            Starte die Wiedergabe in Spotify oder einem Media Player
           </p>
         </div>
       )}
+
+      {/* Footer: Master Volume Slider */}
+      <div
+        className="flex items-center gap-2 pt-2 border-t border-[var(--fluent-stroke)]/40 mt-2.5"
+        data-testid="master-volume-control"
+      >
+        <button
+          type="button"
+          onClick={() => void toggleMute()}
+          title={isMuted ? "Stummschaltung aufheben" : "Stummschalten"}
+          aria-label={isMuted ? "Unmute" : "Mute"}
+          className="p-1 rounded-md text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-bg)] transition-colors active:scale-95 shrink-0"
+        >
+          {isMuted || volume === 0 ? (
+            <VolumeX className="w-3.5 h-3.5" />
+          ) : volume < 0.5 ? (
+            <Volume1 className="w-3.5 h-3.5" />
+          ) : (
+            <Volume2 className="w-3.5 h-3.5" />
+          )}
+        </button>
+
+        <input
+          type="range"
+          min="0"
+          max="100"
+          value={isMuted ? 0 : Math.round(volume * 100)}
+          onChange={(e) => {
+            const val = Number(e.target.value);
+            void setVolume(val / 100);
+          }}
+          aria-label="Master volume"
+          data-testid="volume-slider"
+          className="w-full h-1 bg-[var(--fluent-stroke)] accent-[var(--fluent-accent)] rounded-lg appearance-none cursor-pointer focus:outline-none"
+        />
+
+        <span className="text-[10px] tabular-nums font-medium text-[var(--fluent-text-secondary)] min-w-[28px] text-right">
+          {isMuted ? "0%" : `${Math.round(volume * 100)}%`}
+        </span>
+      </div>
     </Card>
   );
 };

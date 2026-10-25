@@ -15,7 +15,7 @@ export const MiniGraph: FC<MiniGraphProps> = ({
   data,
   min = 0,
   max = 100,
-  height = 32,
+  height = 28,
   className,
   variant = "accent",
 }) => {
@@ -85,7 +85,7 @@ export const MiniGraph: FC<MiniGraphProps> = ({
           d={linePath}
           fill="none"
           stroke={strokeColors}
-          strokeWidth="2.5"
+          strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
           className="transition-all duration-300 ease-linear"
@@ -96,7 +96,7 @@ export const MiniGraph: FC<MiniGraphProps> = ({
           <circle
             cx={coords[coords.length - 1].x}
             cy={coords[coords.length - 1].y}
-            r="3"
+            r="2.5"
             fill={strokeColors}
             className="animate-pulse"
           />

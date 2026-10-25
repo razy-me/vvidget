@@ -19,18 +19,37 @@ export interface OpenMeteoApiResponse {
     apparent_temperature: number;
     weather_code: number;
     wind_speed_10m: number;
+    precipitation_probability?: number;
+    uv_index?: number;
   };
   hourly?: {
     time: string[];
     temperature_2m: number[];
     weather_code: number[];
+    precipitation_probability?: number[];
+    uv_index?: number[];
   };
   daily?: {
     time: string[];
     weather_code: number[];
     temperature_2m_max: number[];
     temperature_2m_min: number[];
+    precipitation_probability_max?: number[];
+    uv_index_max?: number[];
+    sunrise?: string[];
+    sunset?: string[];
   };
+}
+
+/**
+ * Extracts and formats HH:MM from ISO timestamp (e.g. 2026-10-25T07:15 -> 07:15).
+ */
+export function formatTimeHHMM(isoString?: string): string | undefined {
+  if (!isoString) return undefined;
+  if (isoString.includes("T")) {
+    return isoString.split("T")[1]?.slice(0, 5);
+  }
+  return isoString.slice(0, 5);
 }
 
 /**
@@ -42,6 +61,29 @@ export function parseWeatherResponse(
   countryName = "",
 ): WeatherData {
   const currentRaw = raw.current;
+  const nowIsoHour = currentRaw?.time
+    ? currentRaw.time.slice(0, 13)
+    : new Date().toISOString().slice(0, 13);
+
+  // Find current or nearest hour index in hourly data
+  let startIndex = raw.hourly?.time
+    ? raw.hourly.time.findIndex((t) => t.startsWith(nowIsoHour))
+    : -1;
+  if (startIndex === -1) startIndex = 0;
+
+  const currentPrecip =
+    raw.hourly?.precipitation_probability?.[startIndex] ??
+    raw.daily?.precipitation_probability_max?.[0] ??
+    currentRaw?.precipitation_probability;
+
+  const currentUv =
+    raw.hourly?.uv_index?.[startIndex] ??
+    raw.daily?.uv_index_max?.[0] ??
+    currentRaw?.uv_index;
+
+  const todaySunrise = formatTimeHHMM(raw.daily?.sunrise?.[0]);
+  const todaySunset = formatTimeHHMM(raw.daily?.sunset?.[0]);
+
   const current: CurrentWeather = {
     temperatureC: currentRaw ? Math.round(currentRaw.temperature_2m) : 0,
     feelsLikeC: currentRaw ? Math.round(currentRaw.apparent_temperature) : 0,
@@ -50,29 +92,53 @@ export function parseWeatherResponse(
     windSpeedKmh: currentRaw ? Math.round(currentRaw.wind_speed_10m) : 0,
   };
 
+  if (currentPrecip !== undefined) {
+    current.precipitationProbability = Math.round(currentPrecip);
+  }
+  if (currentUv !== undefined) {
+    current.uvIndex = Math.round(currentUv);
+  }
+  if (todaySunrise) {
+    current.sunrise = todaySunrise;
+  }
+  if (todaySunset) {
+    current.sunset = todaySunset;
+  }
+
   const forecastDaily: DailyForecastItem[] = [];
   if (raw.daily && raw.daily.time) {
     const count = Math.min(raw.daily.time.length, 5);
     for (let i = 0; i < count; i++) {
-      forecastDaily.push({
+      const item: DailyForecastItem = {
         date: raw.daily.time[i] ?? "",
         minTempC: Math.round(raw.daily.temperature_2m_min[i] ?? 0),
         maxTempC: Math.round(raw.daily.temperature_2m_max[i] ?? 0),
         condition: getWeatherCondition(raw.daily.weather_code[i] ?? 0),
-      });
+      };
+
+      if (raw.daily.precipitation_probability_max?.[i] !== undefined) {
+        item.precipitationProbability = Math.round(
+          raw.daily.precipitation_probability_max[i] ?? 0,
+        );
+      }
+      if (raw.daily.uv_index_max?.[i] !== undefined) {
+        item.uvIndexMax = Math.round(raw.daily.uv_index_max[i] ?? 0);
+      }
+      const itemSunrise = formatTimeHHMM(raw.daily.sunrise?.[i]);
+      if (itemSunrise) {
+        item.sunrise = itemSunrise;
+      }
+      const itemSunset = formatTimeHHMM(raw.daily.sunset?.[i]);
+      if (itemSunset) {
+        item.sunset = itemSunset;
+      }
+
+      forecastDaily.push(item);
     }
   }
 
   const forecastHourly: HourlyForecastItem[] = [];
   if (raw.hourly && raw.hourly.time) {
-    const nowIsoHour = currentRaw?.time
-      ? currentRaw.time.slice(0, 13)
-      : new Date().toISOString().slice(0, 13);
-
-    // Find current or nearest hour index
-    let startIndex = raw.hourly.time.findIndex((t) => t.startsWith(nowIsoHour));
-    if (startIndex === -1) startIndex = 0;
-
     // Grab next 12 hours
     const endIndex = Math.min(startIndex + 12, raw.hourly.time.length);
     for (let i = startIndex; i < endIndex; i++) {
@@ -81,15 +147,26 @@ export function parseWeatherResponse(
       const hourPart = rawTime.includes("T") ? rawTime.split("T")[1] ?? rawTime : rawTime;
       const formattedTime = hourPart.slice(0, 5);
 
-      forecastHourly.push({
+      const item: HourlyForecastItem = {
         time: formattedTime,
         tempC: Math.round(raw.hourly.temperature_2m[i] ?? 0),
         condition: getWeatherCondition(raw.hourly.weather_code[i] ?? 0),
-      });
+      };
+
+      if (raw.hourly.precipitation_probability?.[i] !== undefined) {
+        item.precipitationProbability = Math.round(
+          raw.hourly.precipitation_probability[i] ?? 0,
+        );
+      }
+      if (raw.hourly.uv_index?.[i] !== undefined) {
+        item.uvIndex = Math.round(raw.hourly.uv_index[i] ?? 0);
+      }
+
+      forecastHourly.push(item);
     }
   }
 
-  return {
+  const result: WeatherData = {
     city: cityName,
     country: countryName,
     latitude: raw.latitude,
@@ -100,6 +177,15 @@ export function parseWeatherResponse(
     isOffline: false,
     lastUpdated: new Date().toISOString(),
   };
+
+  if (todaySunrise) {
+    result.sunrise = todaySunrise;
+  }
+  if (todaySunset) {
+    result.sunset = todaySunset;
+  }
+
+  return result;
 }
 
 /**
@@ -146,10 +232,13 @@ export async function fetchWeather(
     "current",
     "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m",
   );
-  url.searchParams.set("hourly", "temperature_2m,weather_code");
+  url.searchParams.set(
+    "hourly",
+    "temperature_2m,weather_code,precipitation_probability,uv_index",
+  );
   url.searchParams.set(
     "daily",
-    "weather_code,temperature_2m_max,temperature_2m_min",
+    "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,sunrise,sunset",
   );
   url.searchParams.set("timezone", "auto");
   url.searchParams.set("forecast_days", "5");

@@ -1,6 +1,5 @@
 import type { FC, ReactNode } from "react";
 import { ProgressBar } from "@/components/ui/ProgressBar";
-import { Badge } from "@/components/ui/Badge";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { getMetricVariant } from "@/types/resources";
 import { cn } from "@/utils/cn";
@@ -41,13 +40,18 @@ export const MetricBar: FC<MetricBarProps> = ({
           <span className="text-xs text-[var(--fluent-text-secondary)] tabular-nums">
             {valueDisplay}
           </span>
-          <Badge
-            variant={activeVariant}
-            size="sm"
-            className="tabular-nums font-semibold min-w-[42px] justify-center"
+          <span
+            className={cn(
+              "text-xs tabular-nums font-semibold min-w-[36px] text-right",
+              activeVariant === "error"
+                ? "text-[var(--fluent-error)]"
+                : activeVariant === "warning"
+                ? "text-[var(--fluent-warning)]"
+                : "text-[var(--fluent-text-primary)]"
+            )}
           >
             {roundedPercent}%
-          </Badge>
+          </span>
         </div>
       </div>
 

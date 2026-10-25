@@ -78,6 +78,41 @@ describe("openMeteo service", () => {
     expect(parsed.forecastHourly[0]?.tempC).toBe(17);
   });
 
+  it("parses UV index, precipitation probability, and sunrise/sunset", () => {
+    const extendedApiResponse: OpenMeteoApiResponse = {
+      ...mockApiResponse,
+      hourly: {
+        ...mockApiResponse.hourly!,
+        precipitation_probability: [20, 45, 60, 10],
+        uv_index: [3.2, 4.8, 2.1, 0.5],
+      },
+      daily: {
+        ...mockApiResponse.daily!,
+        precipitation_probability_max: [65, 80, 10],
+        uv_index_max: [5.4, 6.1, 4.0],
+        sunrise: ["2026-10-25T07:15", "2026-10-26T07:17", "2026-10-27T07:19"],
+        sunset: ["2026-10-25T18:22", "2026-10-26T18:20", "2026-10-27T18:18"],
+      },
+    };
+
+    const parsed = parseWeatherResponse(extendedApiResponse, "Berlin", "Germany");
+
+    expect(parsed.current.precipitationProbability).toBe(20);
+    expect(parsed.current.uvIndex).toBe(3);
+    expect(parsed.current.sunrise).toBe("07:15");
+    expect(parsed.current.sunset).toBe("18:22");
+    expect(parsed.sunrise).toBe("07:15");
+    expect(parsed.sunset).toBe("18:22");
+
+    expect(parsed.forecastDaily[0]?.precipitationProbability).toBe(65);
+    expect(parsed.forecastDaily[0]?.uvIndexMax).toBe(5);
+    expect(parsed.forecastDaily[0]?.sunrise).toBe("07:15");
+    expect(parsed.forecastDaily[0]?.sunset).toBe("18:22");
+
+    expect(parsed.forecastHourly[0]?.precipitationProbability).toBe(20);
+    expect(parsed.forecastHourly[0]?.uvIndex).toBe(3);
+  });
+
   it("handles caching of weather data and offline retrieval", () => {
     expect(getCachedWeather()).toBeNull();
 

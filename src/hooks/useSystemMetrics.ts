@@ -37,7 +37,21 @@ export const MOCK_SYSTEM_METRICS: SystemMetrics = {
       free_bytes: 277 * 1024 * 1024 * 1024,
       used_percent: 45.9,
     },
+    {
+      name: "Data Drive",
+      mount_point: "D:\\",
+      total_bytes: 1024 * 1024 * 1024 * 1024,
+      used_bytes: 512 * 1024 * 1024 * 1024,
+      free_bytes: 512 * 1024 * 1024 * 1024,
+      used_percent: 50.0,
+    },
   ],
+  top_process_name: "chrome.exe",
+  top_process_cpu: 14.2,
+  network: {
+    rx_bytes_per_sec: 2.4 * 1024 * 1024,
+    tx_bytes_per_sec: 420 * 1024,
+  },
   timestamp_ms: Date.now(),
 };
 

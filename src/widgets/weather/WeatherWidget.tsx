@@ -102,6 +102,11 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
 
   const { current, city, country, forecastHourly, forecastDaily } = weather;
   const locationLabel = country ? `${city}, ${country}` : city;
+  const sunrise = current.sunrise ?? weather.sunrise ?? forecastDaily[0]?.sunrise;
+  const sunset = current.sunset ?? weather.sunset ?? forecastDaily[0]?.sunset;
+  const rainProbability =
+    current.precipitationProbability ?? forecastDaily[0]?.precipitationProbability ?? 0;
+  const uvIndex = current.uvIndex ?? forecastDaily[0]?.uvIndexMax ?? 0;
 
   return (
     <Card
@@ -149,7 +154,7 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
         </div>
       </div>
 
-      {/* Hero Display: Temperature, Icon & Details */}
+      {/* Hero Display: Temperature, Bare Icon & Details */}
       <div className="flex items-center justify-between px-1">
         <div>
           <div className="flex items-baseline gap-1">
@@ -172,16 +177,26 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
               • Feels like {current.feelsLikeC}°
             </span>
           </div>
+          {(sunrise || sunset) && (
+            <div
+              className="text-[11px] text-[var(--fluent-text-secondary)]/80 mt-1 flex items-center gap-2"
+              data-testid="weather-sun-times"
+            >
+              {sunrise && <span>↑ {sunrise}</span>}
+              {" "}
+              {sunset && <span>↓ {sunset}</span>}
+            </div>
+          )}
         </div>
 
-        <div className="p-2 rounded-2xl bg-white/5 border border-[var(--fluent-stroke)] flex items-center justify-center">
-          <WeatherIcon name={current.condition.iconName} className="w-8 h-8" />
+        <div className="flex items-center justify-center shrink-0">
+          <WeatherIcon name={current.condition.iconName} className="w-10 h-10" />
         </div>
       </div>
 
       {/* Environmental Sub-metrics: Humidity & Wind */}
       <div className="grid grid-cols-2 gap-2 text-xs">
-        <div className="flex items-center gap-2 p-1.5 rounded-lg bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)]">
+        <div className="flex items-center gap-2 p-2 rounded-lg bg-[var(--fluent-card-bg)]/40">
           <Droplets className="w-3.5 h-3.5 text-sky-400 shrink-0" />
           <div className="flex flex-col min-w-0">
             <span className="text-[10px] text-[var(--fluent-text-secondary)]">Humidity</span>
@@ -189,7 +204,7 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 p-1.5 rounded-lg bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)]">
+        <div className="flex items-center gap-2 p-2 rounded-lg bg-[var(--fluent-card-bg)]/40">
           <Wind className="w-3.5 h-3.5 text-teal-400 shrink-0" />
           <div className="flex flex-col min-w-0">
             <span className="text-[10px] text-[var(--fluent-text-secondary)]">Wind</span>
@@ -198,16 +213,41 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
         </div>
       </div>
 
-      {/* Forecast Sub-view Mode Switcher */}
+      {/* UV-Index and Rain Probability row */}
+      <div
+        className="flex items-center justify-between px-1 text-xs"
+        data-testid="weather-extra-metrics"
+      >
+        <div className="flex items-center gap-1.5">
+          <span className="text-[var(--fluent-text-secondary)] text-[11px]">Regen:</span>
+          <span
+            className="font-medium text-[11px] text-sky-400"
+            data-testid="weather-rain-prob"
+          >
+            {rainProbability}%
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[var(--fluent-text-secondary)] text-[11px]">UV-Index:</span>
+          <span
+            className="font-medium text-[11px] text-amber-400"
+            data-testid="weather-uv-index"
+          >
+            {uvIndex}
+          </span>
+        </div>
+      </div>
+
+      {/* Forecast Sub-view Mode Switcher: Windows 11 Segmented Pill */}
       <div className="flex items-center justify-between pt-1 border-t border-[var(--fluent-stroke)]">
-        <div className="flex gap-1">
+        <div className="bg-[var(--fluent-control-bg)] rounded-full p-0.5 flex gap-0.5">
           <button
             type="button"
             onClick={() => setActiveTab("hourly")}
-            className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors ${
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
               activeTab === "hourly"
-                ? "bg-[var(--fluent-accent)]/15 text-[var(--fluent-accent)]"
-                : "text-[var(--fluent-text-secondary)] hover:bg-[var(--fluent-control-bg)] hover:text-[var(--fluent-text-primary)]"
+                ? "bg-[var(--fluent-accent)] text-white shadow-xs"
+                : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)]"
             }`}
             data-testid="tab-hourly-btn"
           >
@@ -218,10 +258,10 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
           <button
             type="button"
             onClick={() => setActiveTab("daily")}
-            className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors ${
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
               activeTab === "daily"
-                ? "bg-[var(--fluent-accent)]/15 text-[var(--fluent-accent)]"
-                : "text-[var(--fluent-text-secondary)] hover:bg-[var(--fluent-control-bg)] hover:text-[var(--fluent-text-primary)]"
+                ? "bg-[var(--fluent-accent)] text-white shadow-xs"
+                : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)]"
             }`}
             data-testid="tab-daily-btn"
           >
@@ -229,10 +269,6 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
             <span>5 Days</span>
           </button>
         </div>
-
-        <span className="text-[10px] text-[var(--fluent-text-secondary)]">
-          Open-Meteo
-        </span>
       </div>
 
       {/* Sub-view Content: Hourly Trend vs Daily Forecast */}
@@ -241,6 +277,13 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
       ) : (
         <DailyForecast items={forecastDaily} />
       )}
+
+      {/* Attribution Watermark */}
+      <div className="flex justify-end pt-0.5">
+        <span className="text-[9px] text-[var(--fluent-text-secondary)]/60 select-none">
+          Open-Meteo
+        </span>
+      </div>
     </Card>
   );
 };

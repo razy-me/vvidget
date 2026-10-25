@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { bytesToGb, formatBytesGb, getMetricVariant } from "@/types/resources";
+import { bytesToGb, formatBytesGb, formatNetworkSpeed, getMetricVariant } from "@/types/resources";
 import { MiniGraph } from "@/widgets/resources/MiniGraph";
 import { MetricBar } from "@/widgets/resources/MetricBar";
 import { ResourceWidget } from "@/widgets/resources/ResourceWidget";
@@ -30,6 +30,20 @@ describe("Resource utility functions", () => {
     expect(formatBytesGb(bytesFraction, 1)).toBe("8.2 GB");
   });
 
+  it("formats network transfer rate into KB/s and MB/s", () => {
+    expect(formatNetworkSpeed(0)).toBe("0 KB/s");
+    expect(formatNetworkSpeed(-100)).toBe("0 KB/s");
+
+    // 500 KB/s
+    expect(formatNetworkSpeed(500 * 1024)).toBe("500 KB/s");
+
+    // 2.4 MB/s
+    expect(formatNetworkSpeed(2.4 * 1024 * 1024)).toBe("2.4 MB/s");
+
+    // 120 MB/s
+    expect(formatNetworkSpeed(120 * 1024 * 1024)).toBe("120 MB/s");
+  });
+
   it("evaluates metric variants based on danger/warning thresholds", () => {
     expect(getMetricVariant(40)).toBe("accent");
     expect(getMetricVariant(79)).toBe("accent");
@@ -41,9 +55,9 @@ describe("Resource utility functions", () => {
 });
 
 describe("MiniGraph component", () => {
-  it("renders SVG sparkline with correct coordinates", () => {
+  it("renders SVG sparkline with correct coordinates and 1.5 stroke width", () => {
     const { container } = render(
-      <MiniGraph data={[10, 20, 30, 40]} height={32} variant="accent" />
+      <MiniGraph data={[10, 20, 30, 40]} height={28} variant="accent" />
     );
 
     const svg = container.querySelector("svg");
@@ -53,6 +67,7 @@ describe("MiniGraph component", () => {
     expect(path).toBeDefined();
     expect(path?.getAttribute("d")).toContain("M 0.0");
     expect(path?.getAttribute("d")).toContain("L 100.0");
+    expect(path?.getAttribute("stroke-width")).toBe("1.5");
   });
 
   it("handles empty data gracefully without throwing", () => {
@@ -63,7 +78,7 @@ describe("MiniGraph component", () => {
 });
 
 describe("MetricBar component", () => {
-  it("renders metric label, value and badge percentage", () => {
+  it("renders metric label, value and percentage text", () => {
     render(
       <MetricBar
         label="Memory"
@@ -94,15 +109,48 @@ describe("MetricBar component", () => {
 });
 
 describe("ResourceWidget component", () => {
-  it("renders CPU, Memory and Disk information", () => {
+  it("renders CPU, Memory, Disk and Network information", () => {
     render(<ResourceWidget />);
 
     expect(screen.getByText("CPU")).toBeDefined();
     expect(screen.getByText("Memory")).toBeDefined();
     expect(screen.getByText(/Storage/)).toBeDefined();
+    expect(screen.getByText("Network")).toBeDefined();
 
     // CPU core count
     expect(screen.getByText(`(${MOCK_SYSTEM_METRICS.cpu_cores} Cores)`)).toBeDefined();
+
+    // Network throughput rows
+    expect(screen.getByText(/Download/i)).toBeDefined();
+    expect(screen.getByText(/Upload/i)).toBeDefined();
+    expect(screen.getByText("2.4 MB/s")).toBeDefined();
+    expect(screen.getByText("420 KB/s")).toBeDefined();
+  });
+
+  it("renders top process badge below sparkline when available", () => {
+    render(<ResourceWidget />);
+
+    expect(screen.getByText(/Top: chrome\.exe/i)).toBeDefined();
+    expect(screen.getByText(/\(14%\)/i)).toBeDefined();
+  });
+
+  it("allows switching active disk using segmented pill switcher", () => {
+    render(<ResourceWidget />);
+
+    // Defaults to C:
+    expect(screen.getByText("Storage (C:)")).toBeDefined();
+
+    // Click D: disk switcher pill
+    const diskBtnD = screen.getByRole("button", { name: "D:" });
+    fireEvent.click(diskBtnD);
+
+    // Active disk switched to D:
+    expect(screen.getByText("Storage (D:)")).toBeDefined();
+
+    // Click back to C:
+    const diskBtnC = screen.getByRole("button", { name: "C:" });
+    fireEvent.click(diskBtnC);
+    expect(screen.getByText("Storage (C:)")).toBeDefined();
   });
 
   it("renders within WidgetContainer with lock toggle in independent mode", () => {
@@ -122,11 +170,5 @@ describe("ResourceWidget component", () => {
     const lockBtn = screen.getByRole("button", { name: /Lock System Resources position/i });
     fireEvent.click(lockBtn);
     expect(onToggleLock).toHaveBeenCalledTimes(1);
-  });
-
-  it("defaults active disk display to system drive C: even when multiple drives present", () => {
-    render(<ResourceWidget />);
-    // MOCK_SYSTEM_METRICS has drive C:
-    expect(screen.getByText("Storage (C:)")).toBeDefined();
   });
 });

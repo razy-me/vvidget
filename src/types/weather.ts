@@ -14,6 +14,10 @@ export interface CurrentWeather {
   condition: WeatherCondition;
   humidity: number;
   windSpeedKmh: number;
+  precipitationProbability?: number;
+  uvIndex?: number;
+  sunrise?: string;
+  sunset?: string;
 }
 
 export interface DailyForecastItem {
@@ -21,12 +25,18 @@ export interface DailyForecastItem {
   minTempC: number;
   maxTempC: number;
   condition: WeatherCondition;
+  precipitationProbability?: number;
+  uvIndexMax?: number;
+  sunrise?: string;
+  sunset?: string;
 }
 
 export interface HourlyForecastItem {
   time: string;
   tempC: number;
   condition: WeatherCondition;
+  precipitationProbability?: number;
+  uvIndex?: number;
 }
 
 export interface WeatherData {
@@ -39,7 +49,11 @@ export interface WeatherData {
   forecastHourly: HourlyForecastItem[];
   isOffline: boolean;
   lastUpdated: string;
+  sunrise?: string;
+  sunset?: string;
 }
+
+export type WeatherResponse = WeatherData;
 
 export interface GeocodingResult {
   id: number;

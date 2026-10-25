@@ -59,7 +59,7 @@ export const HourlyTrend: FC<HourlyTrendProps> = ({ items }) => {
         {items.map((item, idx) => (
           <div
             key={`${item.time}-${idx}`}
-            className="flex flex-col items-center justify-between min-w-[46px] p-1.5 rounded-lg bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] shrink-0 transition-transform hover:scale-105"
+            className="flex flex-col items-center justify-between min-w-[46px] p-1.5 rounded-lg bg-[var(--fluent-card-bg)]/40 shrink-0 transition-transform hover:scale-105"
           >
             <span className="text-[10px] text-[var(--fluent-text-secondary)]">{item.time}</span>
             <div className="my-1">
