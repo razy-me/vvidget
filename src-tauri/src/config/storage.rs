@@ -99,8 +99,8 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
                 // Self-healing migration: upgrade to exact desktop icon grid aspect ratios and dimensions (103.5x84.5)
                 let mut upgraded = false;
                 for (id, placement) in parsed.widgets.iter_mut() {
-                    if id == "resources" && (placement.logical_height < 250.0 || (placement.logical_width - 310.5).abs() > 1.0) {
-                        placement.logical_height = 253.5;
+                    if id == "resources" && (placement.logical_height < 330.0 || (placement.logical_width - 310.5).abs() > 1.0) {
+                        placement.logical_height = 338.0;
                         placement.logical_width = 310.5;
                         upgraded = true;
                     }
@@ -109,8 +109,8 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
                         placement.logical_width = 310.5;
                         upgraded = true;
                     }
-                    if id == "weather" && (placement.logical_height < 330.0 || (placement.logical_width - 310.5).abs() > 1.0) {
-                        placement.logical_height = 338.0;
+                    if id == "weather" && (placement.logical_height < 415.0 || (placement.logical_width - 310.5).abs() > 1.0) {
+                        placement.logical_height = 422.5;
                         placement.logical_width = 310.5;
                         upgraded = true;
                     }

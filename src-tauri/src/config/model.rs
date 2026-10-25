@@ -110,7 +110,7 @@ impl Default for AppConfig {
                 logical_x: 828.0,
                 logical_y: 84.5,
                 logical_width: 310.5,
-                logical_height: 253.5,
+                logical_height: 338.0,
                 scale_factor: 1.0,
                 monitor_id: None,
             },
@@ -122,7 +122,7 @@ impl Default for AppConfig {
                 id: "spotify".to_string(),
                 visible: true,
                 logical_x: 828.0,
-                logical_y: 338.0,
+                logical_y: 422.5,
                 logical_width: 310.5,
                 logical_height: 253.5,
                 scale_factor: 1.0,
@@ -138,7 +138,7 @@ impl Default for AppConfig {
                 logical_x: 517.5,
                 logical_y: 84.5,
                 logical_width: 310.5,
-                logical_height: 338.0,
+                logical_height: 422.5,
                 scale_factor: 1.0,
                 monitor_id: None,
             },
@@ -182,7 +182,7 @@ mod tests {
         let res = &config.widgets["resources"];
         assert!(res.visible);
         assert_eq!(res.logical_width, 310.5);
-        assert_eq!(res.logical_height, 253.5);
+        assert_eq!(res.logical_height, 338.0);
 
         let spotify = &config.widgets["spotify"];
         assert!(spotify.visible);
@@ -192,7 +192,7 @@ mod tests {
         let weather = &config.widgets["weather"];
         assert!(weather.visible);
         assert_eq!(weather.logical_width, 310.5);
-        assert_eq!(weather.logical_height, 338.0);
+        assert_eq!(weather.logical_height, 422.5);
     }
 
     #[test]
