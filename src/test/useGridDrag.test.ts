@@ -559,4 +559,38 @@ describe("useGridDrag Hook", () => {
     expect(result.current.skeletonSlot).toBeNull();
     expect(invoke).toHaveBeenCalledWith("hide_skeleton_preview");
   });
+
+  it("adapts skeleton preview dimensions to match specific widget metadata (e.g. weather 360x512)", async () => {
+    const appWindow = getCurrentWindow();
+    vi.mocked(appWindow.innerSize).mockResolvedValueOnce({ width: 360, height: 512 } as unknown as import("@tauri-apps/api/dpi").PhysicalSize);
+
+    const { result } = renderHook(() =>
+      useGridDrag({
+        widgetId: "weather",
+        otherWidgets: [],
+      })
+    );
+
+    await act(async () => {
+      await result.current.dragProps.onPointerDown({
+        button: 0,
+        screenX: 200,
+        screenY: 200,
+        pointerId: 2,
+        target: document.createElement("div"),
+        currentTarget: { setPointerCapture: vi.fn() },
+      } as unknown as React.PointerEvent);
+    });
+
+    expect(result.current.skeletonSlot).not.toBeNull();
+    expect(result.current.skeletonSlot?.width).toBe(360);
+    expect(result.current.skeletonSlot?.height).toBe(512);
+    expect(invoke).toHaveBeenCalledWith(
+      "update_skeleton_preview",
+      expect.objectContaining({
+        width: 360,
+        height: 512,
+      })
+    );
+  });
 });

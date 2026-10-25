@@ -3,7 +3,7 @@ pub mod monitor;
 pub mod snapping;
 pub mod win32;
 
-pub use manager::{WidgetWindowInfo, WindowManager, WindowSetupOptions};
+pub use manager::{ActiveWidgetRect, WidgetWindowInfo, WindowManager, WindowSetupOptions};
 pub use monitor::{
     clamp_logical_position, clamp_to_monitors, logical_to_physical, physical_to_logical,
     LogicalRect, MonitorBounds, PhysicalRect,

@@ -113,9 +113,15 @@ pub mod integration {
     ) -> Result<(), String> {
         if let Some(cm) = app.try_state::<ConfigManager>() {
             let mut config = cm.get_config().await;
-            if let Some(placement) = config.widgets.get_mut(&widget_id) {
+            let (w, h) = if let Some(placement) = config.widgets.get_mut(&widget_id) {
                 placement.logical_x = logical_x;
                 placement.logical_y = logical_y;
+                (placement.logical_width, placement.logical_height)
+            } else {
+                (360.0, 256.0)
+            };
+            if let Some(wm) = app.try_state::<WindowManager>() {
+                wm.update_window_position(&widget_id, logical_x, logical_y, w, h);
             }
             cm.save_immediate(config.clone()).await.map_err(|e| e.to_string())?;
             use tauri::Emitter;
@@ -183,6 +189,20 @@ pub mod integration {
         Ok(window::get_desktop_grid_metrics())
     }
 
+    /// Returns live positions of all active widget windows from WindowManager memory.
+    #[tauri::command]
+    #[specta::specta]
+    pub async fn get_active_widget_rects<R: Runtime>(
+        app: tauri::AppHandle<R>,
+        exclude_id: Option<String>,
+    ) -> Result<Vec<window::ActiveWidgetRect>, String> {
+        if let Some(wm) = app.try_state::<WindowManager>() {
+            let list = wm.get_active_widget_rects(exclude_id.as_deref());
+            return Ok(list);
+        }
+        Ok(vec![])
+    }
+
     /// Shows or updates the position and size of the translucent desktop skeleton preview window during drag.
     #[tauri::command]
     #[specta::specta]
@@ -195,29 +215,36 @@ pub mod integration {
     ) -> Result<(), String> {
         const SKELETON_LABEL: &str = "widget_skeleton";
         if let Some(window) = app.get_webview_window(SKELETON_LABEL) {
-            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }));
-            let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
-            if !window.is_visible().unwrap_or(false) {
-                let _ = window.show();
-            }
+            let scale = window.scale_factor().unwrap_or(1.0);
+            let px = (x * scale).round() as i32;
+            let py = (y * scale).round() as i32;
+            let pw = (width * scale).round() as i32;
+            let ph = (height * scale).round() as i32;
+
             #[cfg(windows)]
             {
                 if let Ok(hwnd) = window.hwnd() {
                     unsafe {
                         use windows::Win32::UI::WindowsAndMessaging::{
-                            SetWindowPos, HWND_BOTTOM, SWP_NOMOVE, SWP_NOSIZE, SWP_NOACTIVATE,
+                            SetWindowPos, SWP_NOACTIVATE, SWP_SHOWWINDOW, SWP_NOZORDER,
                         };
                         let _ = SetWindowPos(
                             windows::Win32::Foundation::HWND(hwnd.0 as *mut core::ffi::c_void),
-                            HWND_BOTTOM,
-                            0,
-                            0,
-                            0,
-                            0,
-                            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+                            windows::Win32::Foundation::HWND(core::ptr::null_mut()),
+                            px,
+                            py,
+                            pw,
+                            ph,
+                            SWP_NOACTIVATE | SWP_NOZORDER | SWP_SHOWWINDOW,
                         );
                     }
                 }
+            }
+            #[cfg(not(windows))]
+            {
+                let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }));
+                let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
+                let _ = window.show();
             }
             return Ok(());
         }
@@ -230,7 +257,7 @@ pub mod integration {
         .title("Widgetz Skeleton")
         .inner_size(width, height)
         .position(x, y)
-        .resizable(false)
+        .resizable(true)
         .decorations(false)
         .transparent(true)
         .shadow(false)
@@ -259,6 +286,18 @@ pub mod integration {
     ) -> Result<(), String> {
         const SKELETON_LABEL: &str = "widget_skeleton";
         if let Some(window) = app.get_webview_window(SKELETON_LABEL) {
+            #[cfg(windows)]
+            {
+                if let Ok(hwnd) = window.hwnd() {
+                    unsafe {
+                        use windows::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE};
+                        let _ = ShowWindow(
+                            windows::Win32::Foundation::HWND(hwnd.0 as *mut core::ffi::c_void),
+                            SW_HIDE,
+                        );
+                    }
+                }
+            }
             let _ = window.hide();
         }
         Ok(())
@@ -266,8 +305,8 @@ pub mod integration {
 }
 
 pub use integration::{
-    close_widget_window, get_desktop_grid_metrics, hide_skeleton_preview, open_widget_window,
-    save_widget_position, sync_widget_windows, update_skeleton_preview,
+    close_widget_window, get_active_widget_rects, get_desktop_grid_metrics, hide_skeleton_preview,
+    open_widget_window, save_widget_position, sync_widget_windows, update_skeleton_preview,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -330,6 +369,7 @@ pub fn run() {
             sync_widget_windows,
             save_widget_position,
             get_desktop_grid_metrics,
+            get_active_widget_rects,
             update_skeleton_preview,
             hide_skeleton_preview,
         ])

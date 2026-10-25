@@ -240,12 +240,12 @@ pub unsafe fn apply_skeleton_window_styles(raw_hwnd: *mut core::ffi::c_void) -> 
     SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex_style as isize);
     SetWindowPos(
         hwnd,
-        HWND_BOTTOM,
+        HWND(core::ptr::null_mut()),
         0,
         0,
         0,
         0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOZORDER | SWP_FRAMECHANGED,
     )
     .map_err(|e| format!("SetWindowPos failed: {}", e))?;
 

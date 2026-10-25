@@ -2,6 +2,7 @@ import { useRef, useCallback, useState, useEffect } from "react";
 import { getCurrentWindow, currentMonitor, availableMonitors, LogicalPosition } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { findNearestNonOverlappingSlot, type GridRect } from "@/utils/gridCollision";
+import { getWidgetMetadata } from "@/widgets/registry";
 
 export const DESKTOP_GRID_LOGICAL_X = 120.0;
 export const DESKTOP_GRID_LOGICAL_Y = 128.0;
@@ -35,6 +36,10 @@ export function useGridDrag({
   onPositionChange,
   onDragStateChange,
 }: UseGridDragOptions) {
+  const meta = widgetId ? getWidgetMetadata(widgetId) : undefined;
+  const defaultW = meta?.defaultWidth || 360;
+  const defaultH = meta?.defaultHeight || 256;
+
   const [isDragging, setIsDragging] = useState(false);
   const [skeletonSlot, setSkeletonSlot] = useState<SkeletonSlot | null>(null);
   const [activeGrid, setActiveGrid] = useState<{ x: number; y: number }>({
@@ -99,8 +104,8 @@ export function useGridDrag({
     lastSkeletonX: -99999,
     lastSkeletonY: -99999,
     occupiedWidgets: [],
-    widgetW: 360,
-    widgetH: 256,
+    widgetW: defaultW,
+    widgetH: defaultH,
     minX: 0,
     maxX: 1920,
     minY: 0,
@@ -131,23 +136,23 @@ export function useGridDrag({
 
       let currentLogicalX = dragRef.current.lastTargetX || 0;
       let currentLogicalY = dragRef.current.lastTargetY || 0;
-      let widgetW = 360;
-      let widgetH = 256;
+      let widgetW = defaultW;
+      let widgetH = defaultH;
       let boundMinX = 0;
-      let boundMaxX = Math.max(0, (typeof window !== "undefined" && window.screen?.availWidth ? window.screen.availWidth : 1920) - 360);
+      let boundMaxX = Math.max(0, (typeof window !== "undefined" && window.screen?.availWidth ? window.screen.availWidth : 1920) - defaultW);
       let boundMinY = 0;
-      let boundMaxY = Math.max(0, (typeof window !== "undefined" && window.screen?.availHeight ? window.screen.availHeight : 1080) - 256);
+      let boundMaxY = Math.max(0, (typeof window !== "undefined" && window.screen?.availHeight ? window.screen.availHeight : 1080) - defaultH);
 
       try {
         const appWindow = getCurrentWindow();
         const scale = await appWindow.scaleFactor().catch(() => 1.0);
         const outer = await appWindow.outerPosition().catch(() => ({ x: 0, y: 0 }));
-        const inner = await appWindow.innerSize().catch(() => ({ width: 360 * scale, height: 256 * scale }));
+        const inner = await appWindow.innerSize().catch(() => ({ width: defaultW * scale, height: defaultH * scale }));
         const s = scale > 0 ? scale : 1.0;
         currentLogicalX = outer.x / s;
         currentLogicalY = outer.y / s;
-        widgetW = inner.width / s;
-        widgetH = inner.height / s;
+        widgetW = inner.width / s || defaultW;
+        widgetH = inner.height / s || defaultH;
 
         // Multi-monitor virtual desktop bounding area across all active displays
         const monitors = await availableMonitors().catch(() => []);
@@ -205,33 +210,41 @@ export function useGridDrag({
         // Fallback for non-Tauri / test environments
       }
 
-      // Retrieve other visible widgets to prevent collisions and overlapping during both preview and drop
+      // Query live window positions from WindowManager first for 100% accurate real-time collision detection
       let occupied = otherWidgets || [];
       if (!otherWidgets || otherWidgets.length === 0) {
         try {
-          const cfg = await invoke<{
-            widgets?: Record<
-              string,
-              {
-                id: string;
-                visible?: boolean;
-                logical_x: number;
-                logical_y: number;
-                logical_width: number;
-                logical_height: number;
-              }
-            >;
-          }>("load_config");
-          if (cfg?.widgets) {
-            occupied = Object.values(cfg.widgets)
-              .filter((w) => w.id !== widgetId && w.visible !== false)
-              .map((w) => ({
-                id: w.id,
-                x: w.logical_x,
-                y: w.logical_y,
-                width: w.logical_width,
-                height: w.logical_height,
-              }));
+          const live = await invoke<Array<{ id: string; x: number; y: number; width: number; height: number }>>(
+            "get_active_widget_rects",
+            { excludeId: widgetId }
+          );
+          if (live && live.length > 0) {
+            occupied = live;
+          } else {
+            const cfg = await invoke<{
+              widgets?: Record<
+                string,
+                {
+                  id: string;
+                  visible?: boolean;
+                  logical_x: number;
+                  logical_y: number;
+                  logical_width: number;
+                  logical_height: number;
+                }
+              >;
+            }>("load_config");
+            if (cfg?.widgets) {
+              occupied = Object.values(cfg.widgets)
+                .filter((w) => w.id !== widgetId && w.visible !== false)
+                .map((w) => ({
+                  id: w.id,
+                  x: w.logical_x,
+                  y: w.logical_y,
+                  width: w.logical_width,
+                  height: w.logical_height,
+                }));
+            }
           }
         } catch {
           // Non-Tauri fallback
@@ -249,8 +262,8 @@ export function useGridDrag({
       dragRef.current.startWindowY = currentLogicalY;
       dragRef.current.lastTargetX = currentLogicalX;
       dragRef.current.lastTargetY = currentLogicalY;
-      dragRef.current.widgetW = widgetW || 360;
-      dragRef.current.widgetH = widgetH || 256;
+      dragRef.current.widgetW = widgetW;
+      dragRef.current.widgetH = widgetH;
       dragRef.current.minX = boundMinX;
       dragRef.current.maxX = boundMaxX;
       dragRef.current.minY = boundMinY;
@@ -290,7 +303,7 @@ export function useGridDrag({
       setIsDragging(true);
       onDragStateChange?.(true);
     },
-    [widgetId, isLocked, currentGridX, currentGridY, otherWidgets, onDragStateChange]
+    [widgetId, isLocked, currentGridX, currentGridY, otherWidgets, defaultW, defaultH, onDragStateChange]
   );
 
   const onPointerMove = useCallback(

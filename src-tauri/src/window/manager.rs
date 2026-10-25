@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
+use serde::{Deserialize, Serialize};
 use tauri::{Position, Runtime, Size, WebviewWindow};
 
 use super::monitor::{clamp_to_monitors, logical_to_physical, physical_to_logical, LogicalRect, MonitorBounds, PhysicalRect};
@@ -36,6 +37,15 @@ impl Default for WindowSetupOptions {
             height: 400.0,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+pub struct ActiveWidgetRect {
+    pub id: String,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -127,6 +137,28 @@ impl WindowManager {
             }
         }
         None
+    }
+
+    pub fn get_active_widget_rects(&self, exclude_id: Option<&str>) -> Vec<ActiveWidgetRect> {
+        let mut list = Vec::new();
+        if let Ok(map) = self.widgets.read() {
+            for (id, info) in map.iter() {
+                if let Some(ex) = exclude_id {
+                    if id == ex {
+                        continue;
+                    }
+                }
+                let scale = if info.scale_factor > 0.0 { info.scale_factor } else { 1.0 };
+                list.push(ActiveWidgetRect {
+                    id: id.clone(),
+                    x: info.rect.x as f64 / scale,
+                    y: info.rect.y as f64 / scale,
+                    width: info.rect.width as f64 / scale,
+                    height: info.rect.height as f64 / scale,
+                });
+            }
+        }
+        list
     }
 
     pub fn handle_window_moved(&self, hwnd: isize, rect: Rect) {
