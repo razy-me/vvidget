@@ -1,5 +1,5 @@
-# TOFIX WP-07 — Round 1
-Diff: ca9662417c4d8185cfb12fe2f5ba089a87340d8f..43cd187c9526f8d5e917dffeaba987556003574b   Verdict: CHANGES_REQUESTED
+# TOFIX WP-07 — Round 2
+Diff: ca9662417c4d8185cfb12fe2f5ba089a87340d8f..1f3e5c5f1cf172bc0067594f54b33bd96d6714bd   Verdict: APPROVED
 
 | # | Sev | File:Line | Finding | Suggested fix | Status |
 |---|-----|-----------|---------|---------------|--------|
