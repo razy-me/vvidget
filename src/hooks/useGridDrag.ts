@@ -211,15 +211,17 @@ export function useGridDrag({
       }
 
       // Query live window positions from WindowManager first for 100% accurate real-time collision detection
-      let occupied = otherWidgets || [];
-      if (!otherWidgets || otherWidgets.length === 0) {
+      let occupied: GridRect[] = [];
+      if (otherWidgets && otherWidgets.length > 0) {
+        occupied = otherWidgets.filter((w) => !widgetId || w.id !== widgetId);
+      } else {
         try {
           const live = await invoke<Array<{ id: string; x: number; y: number; width: number; height: number }>>(
             "get_active_widget_rects",
             { excludeId: widgetId }
           );
           if (live && live.length > 0) {
-            occupied = live;
+            occupied = live.filter((w) => !widgetId || w.id !== widgetId);
           } else {
             const cfg = await invoke<{
               widgets?: Record<
@@ -508,12 +510,18 @@ export function useGridDrag({
     window.addEventListener("pointerup", handleWindowPointerUp);
     window.addEventListener("pointercancel", handleWindowPointerUp);
     window.addEventListener("mouseup", handleWindowPointerUp);
+    document.addEventListener("pointermove", handleWindowPointerMove);
+    document.addEventListener("pointerup", handleWindowPointerUp);
+    document.addEventListener("mouseup", handleWindowPointerUp);
 
     return () => {
       window.removeEventListener("pointermove", handleWindowPointerMove);
       window.removeEventListener("pointerup", handleWindowPointerUp);
       window.removeEventListener("pointercancel", handleWindowPointerUp);
       window.removeEventListener("mouseup", handleWindowPointerUp);
+      document.removeEventListener("pointermove", handleWindowPointerMove);
+      document.removeEventListener("pointerup", handleWindowPointerUp);
+      document.removeEventListener("mouseup", handleWindowPointerUp);
     };
   }, [isDragging, currentGridX, currentGridY, onPositionChange, endDrag]);
 
@@ -527,7 +535,6 @@ export function useGridDrag({
       onPointerMove,
       onPointerUp,
       onPointerCancel: onPointerUp,
-      onLostPointerCapture: onPointerUp,
     },
   };
 }

@@ -84,17 +84,13 @@ pub mod integration {
             let wm_event = win_mgr.inner().clone();
             let widget_id_event = widget_id.clone();
             let window_clone = window.clone();
+            let (known_w, known_h) = (placement.logical_width, placement.logical_height);
             window.on_window_event(move |event| {
                 if let tauri::WindowEvent::Moved(pos) = event {
                     let scale = window_clone.scale_factor().unwrap_or(1.0);
                     let logical_x = (pos.x as f64) / scale;
                     let logical_y = (pos.y as f64) / scale;
-                    let size = window_clone
-                        .inner_size()
-                        .unwrap_or(tauri::PhysicalSize { width: 311, height: 254 });
-                    let logical_w = (size.width as f64) / scale;
-                    let logical_h = (size.height as f64) / scale;
-                    wm_event.update_window_position(&widget_id_event, logical_x, logical_y, logical_w, logical_h);
+                    wm_event.update_window_position(&widget_id_event, logical_x, logical_y, known_w, known_h);
                 }
             });
         }
@@ -264,19 +260,9 @@ pub mod integration {
                 if let Ok(hwnd) = window.hwnd() {
                     unsafe {
                         use windows::Win32::UI::WindowsAndMessaging::{
-                            ShowWindow, SW_HIDE, SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER, SWP_NOSIZE, SWP_HIDEWINDOW,
+                            ShowWindow, SW_HIDE,
                         };
                         let raw_h = windows::Win32::Foundation::HWND(hwnd.0 as *mut core::ffi::c_void);
-                        // Move off-screen immediately to eliminate any visible lingering pixels
-                        let _ = SetWindowPos(
-                            raw_h,
-                            windows::Win32::Foundation::HWND(core::ptr::null_mut()),
-                            -10000,
-                            -10000,
-                            0,
-                            0,
-                            SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOSIZE | SWP_HIDEWINDOW,
-                        );
                         let _ = ShowWindow(raw_h, SW_HIDE);
                         // Force desktop wallpaper redraw over the previous area
                         crate::window::win32::invalidate_screen_rect(0, 0, 8000, 8000);

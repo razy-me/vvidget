@@ -8,7 +8,6 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_WINDOWPOSCHANGING, WM_MOVING, WM_SYSCOMMAND, WM_NCDESTROY, WM_EXITSIZEMOVE, WM_SHOWWINDOW,
     WM_NCHITTEST, HTTRANSPARENT,
     SC_MINIMIZE, WINDOWPOS, GetWindowRect, HWND_BOTTOM,
-    FindWindowW, FindWindowExW, SendMessageW,
 };
 #[cfg(windows)]
 use windows::Win32::Graphics::Gdi::{
@@ -320,47 +319,6 @@ pub fn apply_acrylic_effect<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>
     Ok(())
 }
 
-/// Attempts to find the desktop's SysListView32 window under Progman or WorkerW.
-#[cfg(windows)]
-unsafe fn find_desktop_listview() -> Option<HWND> {
-    use windows::core::w;
-
-    // 1. Check Progman -> SHELLDLL_DefView -> SysListView32
-    if let Ok(progman) = FindWindowW(w!("Progman"), None) {
-        if progman.0 != core::ptr::null_mut() {
-            if let Ok(def_view) = FindWindowExW(progman, HWND(core::ptr::null_mut()), w!("SHELLDLL_DefView"), None) {
-                if def_view.0 != core::ptr::null_mut() {
-                    if let Ok(listview) = FindWindowExW(def_view, HWND(core::ptr::null_mut()), w!("SysListView32"), None) {
-                        if listview.0 != core::ptr::null_mut() {
-                            return Some(listview);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // 2. WorkerW check (when active wallpaper / desktop slides run in Explorer)
-    let mut worker: HWND = HWND(core::ptr::null_mut());
-    while let Ok(next_worker) = FindWindowExW(HWND(core::ptr::null_mut()), worker, w!("WorkerW"), None) {
-        if next_worker.0 == core::ptr::null_mut() {
-            break;
-        }
-        if let Ok(def_view) = FindWindowExW(next_worker, HWND(core::ptr::null_mut()), w!("SHELLDLL_DefView"), None) {
-            if def_view.0 != core::ptr::null_mut() {
-                if let Ok(listview) = FindWindowExW(def_view, HWND(core::ptr::null_mut()), w!("SysListView32"), None) {
-                    if listview.0 != core::ptr::null_mut() {
-                        return Some(listview);
-                    }
-                }
-            }
-        }
-        worker = next_worker;
-    }
-
-    None
-}
-
 /// Live query to retrieve desktop icon grid spacing from Windows Explorer SysListView32
 /// via SendMessageW(hwnd, LVM_GETITEMSPACING, 0, 0), with fallback to
 /// (120 logical px / 240 physical px @ 200% DPI, 98 logical px / 196 physical px @ 200% DPI).
@@ -386,7 +344,7 @@ pub fn get_desktop_grid_metrics() -> DesktopGridMetrics {
 #[cfg(windows)]
 fn query_desktop_grid_metrics() -> DesktopGridMetrics {
     unsafe {
-        let (scale, mut physical_x, mut physical_y) = {
+        let (scale, physical_x, physical_y) = {
             let hdc = GetDC(HWND(core::ptr::null_mut()));
             let dpi = if hdc.0 != core::ptr::null_mut() {
                 let d = GetDeviceCaps(hdc, LOGPIXELSX);
@@ -401,25 +359,10 @@ fn query_desktop_grid_metrics() -> DesktopGridMetrics {
             (s, px, py)
         };
 
-        if let Some(listview_hwnd) = find_desktop_listview() {
-            const LVM_FIRST: u32 = 0x1000;
-            const LVM_GETITEMSPACING: u32 = LVM_FIRST + 51;
-            let res = SendMessageW(listview_hwnd, LVM_GETITEMSPACING, WPARAM(0), LPARAM(0));
-            // Validate SendMessageW LRESULT: check positive and not -1
-            if res.0 > 0 && res.0 != -1 {
-                let spacing = res.0 as u32;
-                let cx = (spacing & 0xFFFF) as i32;
-                let cy = ((spacing >> 16) & 0xFFFF) as i32;
-                // Validate reasonable icon spacing bounds (between 20px and 1000px)
-                if cx >= 20 && cx <= 1000 && cy >= 20 && cy <= 1000 {
-                    physical_x = cx;
-                    physical_y = cy;
-                }
-            }
-        }
-
-        let logical_x = physical_x as f64 / scale;
-        let logical_y = physical_y as f64 / scale;
+        // Standard desktop widget grid pitch in logical pixels is strictly 120.0 x 128.0,
+        // perfectly aligning with widget card dimensions (width 360, heights 256, 384, 512).
+        let logical_x = 120.0;
+        let logical_y = 128.0;
 
         DesktopGridMetrics {
             cell_width: logical_x,
