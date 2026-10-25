@@ -45,11 +45,11 @@ impl Default for DesktopGridMetrics {
     fn default() -> Self {
         Self {
             cell_width: 120.0,
-            cell_height: 98.0,
+            cell_height: 128.0,
             logical_x: 120.0,
-            logical_y: 98.0,
+            logical_y: 128.0,
             physical_x: 120,
-            physical_y: 98,
+            physical_y: 128,
             scale_factor: 1.0,
         }
     }
@@ -323,7 +323,7 @@ fn query_desktop_grid_metrics() -> DesktopGridMetrics {
             };
             let s = if dpi > 0 { dpi as f64 / 96.0 } else { 1.0 };
             let px = (120.0 * s).round() as i32;
-            let py = (98.0 * s).round() as i32;
+            let py = (128.0 * s).round() as i32;
             (s, px, py)
         };
 

@@ -96,34 +96,91 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
     match fs::read_to_string(target_path) {
         Ok(content) => match serde_json::from_str::<AppConfig>(&content) {
             Ok(mut parsed) => {
-                // Self-healing migration: upgrade to exact desktop icon grid aspect ratios and dimensions (120x98)
+                // Self-healing migration: upgrade to exact desktop icon grid aspect ratios and dimensions (120x128)
                 let mut upgraded = false;
                 for (id, placement) in parsed.widgets.iter_mut() {
-                    if id == "resources" && ((placement.logical_width - 360.0).abs() > 0.1 || (placement.logical_height - 392.0).abs() > 0.1) {
+                    if id == "resources" && ((placement.logical_width - 360.0).abs() > 0.1 || (placement.logical_height - 384.0).abs() > 0.1) {
                         placement.logical_width = 360.0;
-                        placement.logical_height = 392.0;
+                        placement.logical_height = 384.0;
                         upgraded = true;
                     }
-                    if id == "spotify" && ((placement.logical_width - 360.0).abs() > 0.1 || (placement.logical_height - 294.0).abs() > 0.1) {
+                    if id == "spotify" && ((placement.logical_width - 360.0).abs() > 0.1 || (placement.logical_height - 256.0).abs() > 0.1) {
                         placement.logical_width = 360.0;
-                        placement.logical_height = 294.0;
+                        placement.logical_height = 256.0;
                         upgraded = true;
                     }
-                    if id == "weather" && ((placement.logical_width - 360.0).abs() > 0.1 || (placement.logical_height - 490.0).abs() > 0.1) {
+                    if id == "weather" && ((placement.logical_width - 360.0).abs() > 0.1 || (placement.logical_height - 512.0).abs() > 0.1) {
                         placement.logical_width = 360.0;
-                        placement.logical_height = 490.0;
+                        placement.logical_height = 512.0;
                         upgraded = true;
                     }
 
-                    // Quantize any off-grid coordinates to exact multiples of the desktop icon grid (120x98)
+                    // Quantize any off-grid coordinates to exact multiples of the desktop icon grid (120x128)
                     let snapped_x = (placement.logical_x / 120.0).round() * 120.0;
-                    let snapped_y = (placement.logical_y / 98.0).round() * 98.0;
+                    let snapped_y = (placement.logical_y / 128.0).round() * 128.0;
                     if (placement.logical_x - snapped_x).abs() > 0.1 || (placement.logical_y - snapped_y).abs() > 0.1 {
                         placement.logical_x = snapped_x;
                         placement.logical_y = snapped_y;
                         upgraded = true;
                     }
                 }
+
+                // Self-healing collision resolution: ensure no visible widgets overlap on startup
+                let mut keys: Vec<String> = parsed.widgets.keys().cloned().collect();
+                keys.sort();
+                let mut occupied: Vec<(String, f64, f64, f64, f64)> = Vec::new();
+                for id in keys {
+                    let placement = match parsed.widgets.get_mut(&id) {
+                        Some(p) => p,
+                        None => continue,
+                    };
+                    if !placement.visible {
+                        continue;
+                    }
+                    let mut x = placement.logical_x;
+                    let mut y = placement.logical_y;
+                    let w = placement.logical_width;
+                    let h = placement.logical_height;
+
+                    let overlaps = occupied.iter().any(|(_, ox, oy, ow, oh)| {
+                        x < ox + ow - 2.0 && x + w > ox + 2.0 && y < oy + oh - 2.0 && y + h > oy + 2.0
+                    });
+
+                    if overlaps {
+                        let mut found = false;
+                        for r in 1i32..=15i32 {
+                            for dx in -r..=r {
+                                for dy in -r..=r {
+                                    if dx.abs() != r && dy.abs() != r {
+                                        continue;
+                                    }
+                                    let cand_x = (x + dx as f64 * 120.0).max(0.0);
+                                    let cand_y = (y + dy as f64 * 128.0).max(0.0);
+                                    let cand_overlaps = occupied.iter().any(|(_, ox, oy, ow, oh)| {
+                                        cand_x < ox + ow - 2.0 && cand_x + w > ox + 2.0 && cand_y < oy + oh - 2.0 && cand_y + h > oy + 2.0
+                                    });
+                                    if !cand_overlaps {
+                                        placement.logical_x = cand_x;
+                                        placement.logical_y = cand_y;
+                                        x = cand_x;
+                                        y = cand_y;
+                                        upgraded = true;
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if found {
+                                    break;
+                                }
+                            }
+                            if found {
+                                break;
+                            }
+                        }
+                    }
+                    occupied.push((id.clone(), x, y, w, h));
+                }
+
                 if upgraded {
                     let _ = save_config_atomic(target_path, &parsed);
                 }
@@ -608,7 +665,7 @@ mod tests {
                     "id": "spotify",
                     "visible": true,
                     "logical_x": 828.0,
-                    "logical_y": 422.5,
+                    "logical_y": 512.0,
                     "logical_width": 310.5,
                     "logical_height": 253.5,
                     "scale_factor": 1.0
@@ -631,17 +688,17 @@ mod tests {
 
         let res = &loaded.widgets["resources"];
         assert_eq!(res.logical_width, 360.0);
-        assert_eq!(res.logical_height, 392.0);
+        assert_eq!(res.logical_height, 384.0);
         assert_eq!(res.logical_x, 840.0); // 828.0 / 120.0 = 6.9 -> round to 7 * 120.0 = 840.0
-        assert_eq!(res.logical_y, 98.0);  // 84.5 / 98.0 = 0.86 -> round to 1 * 98.0 = 98.0
+        assert_eq!(res.logical_y, 128.0); // 84.5 / 128.0 = 0.66 -> round to 1 * 128.0 = 128.0
 
         let spotify = &loaded.widgets["spotify"];
         assert_eq!(spotify.logical_width, 360.0);
-        assert_eq!(spotify.logical_height, 294.0);
+        assert_eq!(spotify.logical_height, 256.0);
 
         let weather = &loaded.widgets["weather"];
         assert_eq!(weather.logical_width, 360.0);
-        assert_eq!(weather.logical_height, 490.0);
+        assert_eq!(weather.logical_height, 512.0);
 
         let _ = fs::remove_dir_all(&dir);
     }

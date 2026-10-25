@@ -64,7 +64,7 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
     <Card
       variant="acrylic"
       className={cn(
-        "w-full max-w-[340px] p-3 flex flex-col gap-3 text-[var(--fluent-text-primary)] select-none",
+        "w-full p-3 flex flex-col gap-3 text-[var(--fluent-text-primary)] select-none",
         className
       )}
       data-testid="resource-widget"

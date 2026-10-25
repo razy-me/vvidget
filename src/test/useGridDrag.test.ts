@@ -10,8 +10,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 vi.mock("@tauri-apps/api/window", () => {
   const setPositionMock = vi.fn().mockResolvedValue(undefined);
-  const outerPositionMock = vi.fn().mockResolvedValue({ x: 120, y: 98 });
-  const innerSizeMock = vi.fn().mockResolvedValue({ width: 360, height: 294 });
+  const outerPositionMock = vi.fn().mockResolvedValue({ x: 120, y: 128 });
+  const innerSizeMock = vi.fn().mockResolvedValue({ width: 360, height: 256 });
   const scaleFactorMock = vi.fn().mockResolvedValue(1.0);
   const currentMonitorMock = vi.fn().mockResolvedValue({
     position: { x: 0, y: 0 },
@@ -64,9 +64,9 @@ describe("useGridDrag Hook", () => {
     vi.clearAllMocks();
   });
 
-  it("exports calibrated default grid cell metrics 120.0 x 98.0", () => {
+  it("exports calibrated default grid cell metrics 120.0 x 128.0", () => {
     expect(DESKTOP_GRID_LOGICAL_X).toBe(120.0);
-    expect(DESKTOP_GRID_LOGICAL_Y).toBe(98.0);
+    expect(DESKTOP_GRID_LOGICAL_Y).toBe(128.0);
   });
 
   it("starts in non-dragging state and updates on pointer down/up", async () => {
@@ -118,7 +118,7 @@ describe("useGridDrag Hook", () => {
 
     const appWindow = getCurrentWindow();
 
-    // Mouse down at screen (200, 200), initial window position (120, 98)
+    // Mouse down at screen (200, 200), initial window position (120, 128)
     await act(async () => {
       await result.current.dragProps.onPointerDown({
         button: 0,
@@ -138,11 +138,11 @@ describe("useGridDrag Hook", () => {
       } as unknown as React.PointerEvent);
     });
 
-    // 1:1 real-time tracking: 120 + 35 = 155, 98 + 45 = 143
+    // 1:1 real-time tracking: 120 + 35 = 155, 128 + 45 = 173
     expect(appWindow.setPosition).toHaveBeenCalledWith(
-      expect.objectContaining({ x: 155, y: 143 })
+      expect.objectContaining({ x: 155, y: 173 })
     );
-    expect(onPosChange).toHaveBeenCalledWith(155, 143);
+    expect(onPosChange).toHaveBeenCalledWith(155, 173);
   });
 
   it("snaps to nearest grid cell on release on pointerup", async () => {
@@ -151,14 +151,14 @@ describe("useGridDrag Hook", () => {
       useGridDrag({
         widgetId: "weather",
         gridX: 120.0,
-        gridY: 98.0,
+        gridY: 128.0,
         onPositionChange: onPosChange,
       })
     );
 
     const appWindow = getCurrentWindow();
 
-    // Mouse down at (100, 100), window at (120, 98)
+    // Mouse down at (100, 100), window at (120, 128)
     await act(async () => {
       await result.current.dragProps.onPointerDown({
         button: 0,
@@ -170,13 +170,13 @@ describe("useGridDrag Hook", () => {
       } as unknown as React.PointerEvent);
     });
 
-    // Move to (100 + 130, 100 + 105) -> raw (250, 203)
+    // Move to (100 + 130, 100 + 132) -> raw (250, 260)
     // 250 / 120 = 2.083 -> Math.round is 2 -> 240.0
-    // 203 / 98 = 2.071 -> Math.round is 2 -> 196.0
+    // 260 / 128 = 2.031 -> Math.round is 2 -> 256.0
     await act(async () => {
       await result.current.dragProps.onPointerMove({
         screenX: 230,
-        screenY: 205,
+        screenY: 232,
       } as unknown as React.PointerEvent);
     });
 
@@ -188,14 +188,14 @@ describe("useGridDrag Hook", () => {
       } as unknown as React.PointerEvent);
     });
 
-    // Snapped to exact grid cell (240, 196)
+    // Snapped to exact grid cell (240, 256)
     expect(appWindow.setPosition).toHaveBeenLastCalledWith(
-      expect.objectContaining({ x: 240, y: 196 })
+      expect.objectContaining({ x: 240, y: 256 })
     );
     expect(invoke).toHaveBeenCalledWith("save_widget_position", {
       widgetId: "weather",
       logicalX: 240,
-      logicalY: 196,
+      logicalY: 256,
     });
   });
 
@@ -241,7 +241,7 @@ describe("useGridDrag Hook", () => {
     });
 
     expect(appWindow.setPosition).toHaveBeenCalledWith(
-      expect.objectContaining({ x: 1560, y: 786 })
+      expect.objectContaining({ x: 1560, y: 824 })
     );
   });
 
@@ -371,9 +371,9 @@ describe("useGridDrag Hook", () => {
       } as unknown as React.PointerEvent);
     });
 
-    // 120 + 50 = 170, 98 + 50 = 148
+    // 120 + 50 = 170, 128 + 50 = 178
     expect(appWindow.setPosition).toHaveBeenCalledWith(
-      expect.objectContaining({ x: 170, y: 148 })
+      expect.objectContaining({ x: 170, y: 178 })
     );
   });
 
@@ -445,5 +445,62 @@ describe("useGridDrag Hook", () => {
     expect(appWindow.setPosition).toHaveBeenCalledWith(
       expect.objectContaining({ x: 3480 })
     );
+  });
+
+  it("avoids colliding with another widget on pointer release by snapping to adjacent free slot", async () => {
+    const onPosChange = vi.fn();
+    const otherWidgets = [
+      // Resources already occupies (240, 256, 360, 384)
+      { id: "resources", x: 240, y: 256, width: 360, height: 384 },
+    ];
+
+    const { result } = renderHook(() =>
+      useGridDrag({
+        widgetId: "spotify",
+        otherWidgets,
+        onPositionChange: onPosChange,
+      })
+    );
+
+    const appWindow = getCurrentWindow();
+
+    // Mouse down at (100, 100), window at (120, 128)
+    await act(async () => {
+      await result.current.dragProps.onPointerDown({
+        button: 0,
+        screenX: 100,
+        screenY: 100,
+        pointerId: 1,
+        target: document.createElement("div"),
+        currentTarget: { setPointerCapture: vi.fn() },
+      } as unknown as React.PointerEvent);
+    });
+
+    // Move to (240, 256) where Resources is already located
+    await act(async () => {
+      await result.current.dragProps.onPointerMove({
+        screenX: 220,
+        screenY: 228,
+      } as unknown as React.PointerEvent);
+    });
+
+    // Release mouse
+    await act(async () => {
+      await result.current.dragProps.onPointerUp({
+        pointerId: 1,
+        currentTarget: { releasePointerCapture: vi.fn() },
+      } as unknown as React.PointerEvent);
+    });
+
+    // The snapped position must not overlap Resources!
+    const calls = vi.mocked(appWindow.setPosition).mock.calls;
+    const finalSetCall = calls[calls.length - 1][0] as { x: number; y: number };
+    const overlaps =
+      finalSetCall.x < otherWidgets[0].x + otherWidgets[0].width - 2 &&
+      finalSetCall.x + 360 > otherWidgets[0].x + 2 &&
+      finalSetCall.y < otherWidgets[0].y + otherWidgets[0].height - 2 &&
+      finalSetCall.y + 256 > otherWidgets[0].y + 2;
+
+    expect(overlaps).toBe(false);
   });
 });

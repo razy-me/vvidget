@@ -53,7 +53,7 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
   return (
     <Card
       variant="acrylic"
-      className={`w-full max-w-[340px] p-3 text-[var(--fluent-text-primary)] transition-all select-none overflow-hidden ${className}`}
+      className={`w-full p-3 text-[var(--fluent-text-primary)] transition-all select-none overflow-hidden ${className}`}
       data-testid="spotify-widget"
     >
       {/* Top Header Row */}

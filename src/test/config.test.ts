@@ -36,18 +36,18 @@ describe("AppConfig data contracts and defaults", () => {
 
     const resources = DEFAULT_CONFIG.widgets.resources;
     expect(resources.visible).toBe(true);
-    expect(resources.logical_width).toBe(320);
-    expect(resources.logical_height).toBe(180);
+    expect(resources.logical_width).toBe(360);
+    expect(resources.logical_height).toBe(384);
 
     const spotify = DEFAULT_CONFIG.widgets.spotify;
     expect(spotify.visible).toBe(true);
-    expect(spotify.logical_width).toBe(320);
-    expect(spotify.logical_height).toBe(140);
+    expect(spotify.logical_width).toBe(360);
+    expect(spotify.logical_height).toBe(256);
 
     const weather = DEFAULT_CONFIG.widgets.weather;
     expect(weather.visible).toBe(true);
-    expect(weather.logical_width).toBe(320);
-    expect(weather.logical_height).toBe(160);
+    expect(weather.logical_width).toBe(360);
+    expect(weather.logical_height).toBe(512);
   });
 
   it("defines standard polling rates", () => {

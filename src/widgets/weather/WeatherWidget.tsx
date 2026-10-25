@@ -50,7 +50,7 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
     return (
       <Card
         variant="acrylic"
-        className={`w-full max-w-sm p-4 space-y-4 animate-pulse select-none ${className}`}
+        className={`w-full p-4 space-y-4 animate-pulse select-none ${className}`}
         data-testid="weather-widget-loading"
       >
         <div className="flex items-center justify-between">
@@ -71,7 +71,7 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
     return (
       <Card
         variant="acrylic"
-        className={`w-full max-w-sm p-4 space-y-3 select-none ${className}`}
+        className={`w-full p-4 space-y-3 select-none ${className}`}
         data-testid="weather-widget-error"
       >
         <div className="flex items-center justify-between text-rose-400">
@@ -106,7 +106,7 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
   return (
     <Card
       variant="acrylic"
-      className={`w-full max-w-sm p-3.5 space-y-3 select-none ${className}`}
+      className={`w-full p-3 space-y-3 select-none ${className}`}
       data-testid="weather-widget"
     >
       {/* Top Header: Location, Offline badge & Refresh */}

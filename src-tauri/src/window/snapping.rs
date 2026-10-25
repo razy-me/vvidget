@@ -76,7 +76,7 @@ impl Default for SnapConfig {
             snap_to_widgets: true,
             snap_to_grid: true,
             grid_size_x: 120,
-            grid_size_y: 98,
+            grid_size_y: 128,
         }
     }
 }
@@ -87,7 +87,7 @@ impl SnapConfig {
         let s = if scale > 0.0 { scale } else { 1.0 };
         Self {
             grid_size_x: (120.0 * s).round() as i32,
-            grid_size_y: (98.0 * s).round() as i32,
+            grid_size_y: (128.0 * s).round() as i32,
             ..Default::default()
         }
     }
@@ -536,25 +536,25 @@ mod tests {
     fn test_snap_config_default_and_dpi_scaling() {
         let default_config = SnapConfig::default();
         assert_eq!(default_config.grid_size_x, 120);
-        assert_eq!(default_config.grid_size_y, 98);
+        assert_eq!(default_config.grid_size_y, 128);
 
-        // At 200% DPI, grid should scale to 240 x 196
+        // At 200% DPI, grid should scale to 240 x 256
         let dpi_200 = SnapConfig::with_dpi(2.0);
         assert_eq!(dpi_200.grid_size_x, 240);
-        assert_eq!(dpi_200.grid_size_y, 196);
+        assert_eq!(dpi_200.grid_size_y, 256);
     }
 
     #[test]
-    fn test_snap_to_desktop_grid_120_98() {
+    fn test_snap_to_desktop_grid_120_128() {
         let work_area = Rect::new(0, 0, 1920, 1080);
-        // Window is moved to (235, 192) - within 16px of (240, 196), which is 2*120, 2*98
-        let mut moving = Rect::new(235, 192, 595, 486);
+        // Window is moved to (235, 250) - within 16px of (240, 256), which is 2*120, 2*128
+        let mut moving = Rect::new(235, 250, 595, 544);
         let config = SnapConfig::default();
 
         let res = apply_magnetic_snapping(&mut moving, &work_area, &[], &config);
         assert!(res.snapped_x, "Should snap horizontally to 2 * 120 = 240");
-        assert!(res.snapped_y, "Should snap vertically to 2 * 98 = 196");
+        assert!(res.snapped_y, "Should snap vertically to 2 * 128 = 256");
         assert_eq!(moving.left, 240);
-        assert_eq!(moving.top, 196);
+        assert_eq!(moving.top, 256);
     }
 }
