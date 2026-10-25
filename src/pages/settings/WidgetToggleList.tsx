@@ -2,7 +2,19 @@ import { type FC } from "react";
 import { Badge, Card } from "@/components/ui";
 import { getAllWidgetMetadata, type WidgetId } from "@/widgets/registry";
 import type { AppConfig, WidgetPlacement } from "@/types/config";
-import { Cpu, Music, CloudSun, RotateCcw } from "lucide-react";
+import {
+  Cpu,
+  Music,
+  CloudSun,
+  Gauge,
+  Gamepad2,
+  Sliders,
+  Calendar,
+  Clock,
+  Bluetooth,
+  Battery,
+  RotateCcw,
+} from "lucide-react";
 
 interface WidgetToggleListProps {
   config: AppConfig;
@@ -15,6 +27,13 @@ const WIDGET_ICONS: Record<WidgetId, FC<{ className?: string }>> = {
   resources: Cpu,
   spotify: Music,
   weather: CloudSun,
+  speedtest: Gauge,
+  launcher: Gamepad2,
+  quick_settings: Sliders,
+  calendar: Calendar,
+  clock: Clock,
+  bluetooth: Bluetooth,
+  battery: Battery,
 };
 
 export const WidgetToggleList: FC<WidgetToggleListProps> = ({

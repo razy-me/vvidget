@@ -288,11 +288,94 @@ pub mod integration {
         }
         Ok(())
     }
+
+    /// Duplicates an existing Quick Settings widget instance or creates a new one from default,
+    /// assigning a new unique ID, cloning configuration & placement with offset, and opening its window.
+    #[tauri::command]
+    #[specta::specta]
+    pub async fn duplicate_quick_settings_widget<R: Runtime>(
+        app: tauri::AppHandle<R>,
+        source_id: Option<String>,
+    ) -> Result<String, String> {
+        let millis = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| e.to_string())?
+            .as_millis();
+        let new_id = format!("quick_settings_{}", millis);
+
+        if let Some(cm) = app.try_state::<ConfigManager>() {
+            let mut config = cm.get_config().await;
+
+            let src_key = source_id.as_deref().unwrap_or("quick_settings");
+            let mut placement = config
+                .widgets
+                .get(src_key)
+                .cloned()
+                .unwrap_or(crate::config::WidgetPlacement {
+                    id: new_id.clone(),
+                    visible: true,
+                    logical_x: 120.0,
+                    logical_y: 128.0,
+                    logical_width: 360.0,
+                    logical_height: 256.0,
+                    scale_factor: 1.0,
+                    monitor_id: None,
+                });
+
+            placement.id = new_id.clone();
+            placement.visible = true;
+            placement.logical_x += 40.0;
+            placement.logical_y += 40.0;
+            config.widgets.insert(new_id.clone(), placement);
+
+            let mut instance = if let Some(ref src) = source_id {
+                config.quick_settings_instances.get(src).cloned().unwrap_or_default()
+            } else if let Some(existing) = config.quick_settings_instances.get("quick_settings") {
+                existing.clone()
+            } else {
+                crate::config::QuickSettingsInstance::default()
+            };
+            instance.id = new_id.clone();
+            config.quick_settings_instances.insert(new_id.clone(), instance);
+
+            cm.save_immediate(config.clone()).await.map_err(|e| e.to_string())?;
+            use tauri::Emitter;
+            let _ = app.emit("config-changed", &config);
+
+            open_widget_window(app.clone(), new_id.clone()).await?;
+
+            Ok(new_id)
+        } else {
+            Err("ConfigManager not available".to_string())
+        }
+    }
+
+    /// Removes a widget instance from config, closes its window, and emits config-changed.
+    #[tauri::command]
+    #[specta::specta]
+    pub async fn remove_widget_instance<R: Runtime>(
+        app: tauri::AppHandle<R>,
+        widget_id: String,
+    ) -> Result<(), String> {
+        let _ = close_widget_window(app.clone(), widget_id.clone()).await;
+
+        if let Some(cm) = app.try_state::<ConfigManager>() {
+            let mut config = cm.get_config().await;
+            config.widgets.remove(&widget_id);
+            config.quick_settings_instances.remove(&widget_id);
+
+            cm.save_immediate(config.clone()).await.map_err(|e| e.to_string())?;
+            use tauri::Emitter;
+            let _ = app.emit("config-changed", &config);
+        }
+        Ok(())
+    }
 }
 
 pub use integration::{
-    close_widget_window, get_active_widget_rects, get_desktop_grid_metrics, hide_skeleton_preview,
-    open_widget_window, save_widget_position, sync_widget_windows, update_skeleton_preview,
+    close_widget_window, duplicate_quick_settings_widget, get_active_widget_rects,
+    get_desktop_grid_metrics, hide_skeleton_preview, open_widget_window, remove_widget_instance,
+    save_widget_position, sync_widget_windows, update_skeleton_preview,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -358,6 +441,8 @@ pub fn run() {
             get_active_widget_rects,
             update_skeleton_preview,
             hide_skeleton_preview,
+            duplicate_quick_settings_widget,
+            remove_widget_instance,
         ])
         .setup(move |app| {
             start_metrics_worker(

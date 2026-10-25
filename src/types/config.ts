@@ -29,6 +29,35 @@ export interface WeatherSettings {
 export type LayoutMode = "independent" | "docked";
 export type AppTheme = "auto" | "light" | "dark";
 
+export interface LauncherItem {
+  id: string;
+  name: string;
+  path_or_uri: string;
+  icon_type?: string;
+  source: "steam" | "epic" | "custom";
+  last_launched?: number;
+}
+
+export interface QuickSettingsInstance {
+  id: string;
+  title: string;
+  pinned_actions: string[];
+}
+
+export interface CalendarNote {
+  id: string;
+  text: string;
+  completed?: boolean;
+}
+
+export interface SpeedtestResult {
+  timestamp: number;
+  ping_ms: number;
+  jitter_ms: number;
+  download_mbps: number;
+  upload_mbps: number;
+}
+
 export interface AppConfig {
   version: number;
   lock_positions: boolean;
@@ -40,6 +69,10 @@ export interface AppConfig {
   polling_rates: PollingRates;
   weather_settings: WeatherSettings;
   widgets: Record<string, WidgetPlacement>;
+  launcher_items?: LauncherItem[];
+  quick_settings_instances?: Record<string, QuickSettingsInstance>;
+  calendar_events?: Record<string, CalendarNote[]>;
+  speedtest_history?: SpeedtestResult[];
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
@@ -93,4 +126,8 @@ export const DEFAULT_CONFIG: AppConfig = {
       monitor_id: null,
     },
   },
+  launcher_items: [],
+  quick_settings_instances: {},
+  calendar_events: {},
+  speedtest_history: [],
 };

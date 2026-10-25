@@ -80,6 +80,92 @@ impl Default for WeatherSettings {
 pub const DESKTOP_GRID_LOGICAL_X: f64 = 120.0;
 pub const DESKTOP_GRID_LOGICAL_Y: f64 = 128.0;
 
+/// Discovered or user-pinned application/game in the Launcher widget.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(default)]
+pub struct LauncherItem {
+    pub id: String,
+    pub name: String,
+    pub path_or_uri: String,
+    pub icon_type: Option<String>,
+    pub source: String, // "steam" | "epic" | "custom"
+    pub last_launched: Option<u64>,
+}
+
+impl Default for LauncherItem {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            path_or_uri: String::new(),
+            icon_type: None,
+            source: "custom".to_string(),
+            last_launched: None,
+        }
+    }
+}
+
+/// Dynamic instance configuration for Quick Settings widget.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(default)]
+pub struct QuickSettingsInstance {
+    pub id: String,
+    pub title: String,
+    pub pinned_actions: Vec<String>,
+}
+
+impl Default for QuickSettingsInstance {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            title: "Quick Settings".to_string(),
+            pinned_actions: Vec::new(),
+        }
+    }
+}
+
+/// Calendar day task note.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(default)]
+pub struct CalendarNote {
+    pub id: String,
+    pub text: String,
+    pub completed: Option<bool>,
+}
+
+impl Default for CalendarNote {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            text: String::new(),
+            completed: Some(false),
+        }
+    }
+}
+
+/// Internet speedtest benchmark result entry.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(default)]
+pub struct SpeedtestResult {
+    pub timestamp: u64,
+    pub ping_ms: f64,
+    pub jitter_ms: f64,
+    pub download_mbps: f64,
+    pub upload_mbps: f64,
+}
+
+impl Default for SpeedtestResult {
+    fn default() -> Self {
+        Self {
+            timestamp: 0,
+            ping_ms: 0.0,
+            jitter_ms: 0.0,
+            download_mbps: 0.0,
+            upload_mbps: 0.0,
+        }
+    }
+}
+
 /// Root application configuration persisted in %APPDATA%/Widgetz/config.json.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(default)]
@@ -96,6 +182,10 @@ pub struct AppConfig {
     pub polling_rates: PollingRates,
     pub weather_settings: WeatherSettings,
     pub widgets: HashMap<String, WidgetPlacement>,
+    pub launcher_items: Vec<LauncherItem>,
+    pub quick_settings_instances: HashMap<String, QuickSettingsInstance>,
+    pub calendar_events: HashMap<String, Vec<CalendarNote>>,
+    pub speedtest_history: Vec<SpeedtestResult>,
 }
 
 impl Default for AppConfig {
@@ -155,6 +245,10 @@ impl Default for AppConfig {
             polling_rates: PollingRates::default(),
             weather_settings: WeatherSettings::default(),
             widgets,
+            launcher_items: Vec::new(),
+            quick_settings_instances: HashMap::new(),
+            calendar_events: HashMap::new(),
+            speedtest_history: Vec::new(),
         }
     }
 }
@@ -193,6 +287,12 @@ mod tests {
         assert!(weather.visible);
         assert_eq!(weather.logical_width, 360.0);
         assert_eq!(weather.logical_height, 512.0);
+
+        // Verify extended collections default to empty
+        assert!(config.launcher_items.is_empty());
+        assert!(config.quick_settings_instances.is_empty());
+        assert!(config.calendar_events.is_empty());
+        assert!(config.speedtest_history.is_empty());
     }
 
     #[test]
@@ -225,6 +325,24 @@ mod tests {
     }
 
     #[test]
+    fn test_extended_models_defaults() {
+        let launcher = LauncherItem::default();
+        assert_eq!(launcher.source, "custom");
+        assert!(launcher.icon_type.is_none());
+
+        let qs = QuickSettingsInstance::default();
+        assert_eq!(qs.title, "Quick Settings");
+        assert!(qs.pinned_actions.is_empty());
+
+        let note = CalendarNote::default();
+        assert_eq!(note.completed, Some(false));
+
+        let speedtest = SpeedtestResult::default();
+        assert_eq!(speedtest.ping_ms, 0.0);
+        assert_eq!(speedtest.download_mbps, 0.0);
+    }
+
+    #[test]
     fn test_config_serde_roundtrip_complete() {
         let mut original = AppConfig::default();
         original.lock_positions = true;
@@ -234,6 +352,24 @@ mod tests {
         original.weather_settings.manual_city = Some("Berlin".to_string());
         original.weather_settings.latitude = Some(52.52);
         original.weather_settings.longitude = Some(13.405);
+
+        original.launcher_items.push(LauncherItem {
+            id: "steam_game_1".to_string(),
+            name: "Portal 2".to_string(),
+            path_or_uri: "steam://rungameid/620".to_string(),
+            icon_type: Some("steam".to_string()),
+            source: "steam".to_string(),
+            last_launched: Some(1670000000),
+        });
+
+        original.quick_settings_instances.insert(
+            "quick_settings_1".to_string(),
+            QuickSettingsInstance {
+                id: "quick_settings_1".to_string(),
+                title: "Media Toggles".to_string(),
+                pinned_actions: vec!["volume".to_string(), "bluetooth".to_string()],
+            },
+        );
 
         let json = serde_json::to_string(&original).expect("Serialization failed");
         let parsed: AppConfig = serde_json::from_str(&json).expect("Deserialization failed");
