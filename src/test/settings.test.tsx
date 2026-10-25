@@ -146,4 +146,26 @@ describe("SettingsModal component", () => {
     fireEvent.pointerUp(slider);
     expect(screen.getByText("45 minutes")).toBeInTheDocument();
   });
+
+  it("clears coordinates and updates manual city on submit", async () => {
+    render(<SettingsModal />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Weather")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Weather"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("city-input")).toBeInTheDocument();
+    });
+
+    const input = screen.getByTestId("city-input");
+    fireEvent.change(input, { target: { value: "Tokyo" } });
+    fireEvent.click(screen.getByTestId("city-submit-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Tokyo")).toBeInTheDocument();
+    });
+  });
 });

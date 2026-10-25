@@ -4,6 +4,7 @@ import { bytesToGb, formatBytesGb, getMetricVariant } from "@/types/resources";
 import { MiniGraph } from "@/widgets/resources/MiniGraph";
 import { MetricBar } from "@/widgets/resources/MetricBar";
 import { ResourceWidget } from "@/widgets/resources/ResourceWidget";
+import { WidgetContainer } from "@/components/layout";
 import { MOCK_SYSTEM_METRICS } from "@/hooks/useSystemMetrics";
 
 describe("Resource utility functions", () => {
@@ -96,7 +97,6 @@ describe("ResourceWidget component", () => {
   it("renders CPU, Memory and Disk information", () => {
     render(<ResourceWidget />);
 
-    expect(screen.getByText("System Resources")).toBeDefined();
     expect(screen.getByText("CPU")).toBeDefined();
     expect(screen.getByText("Memory")).toBeDefined();
     expect(screen.getByText(/Storage/)).toBeDefined();
@@ -105,10 +105,20 @@ describe("ResourceWidget component", () => {
     expect(screen.getByText(`(${MOCK_SYSTEM_METRICS.cpu_cores} Cores)`)).toBeDefined();
   });
 
-  it("triggers lock toggle when lock button clicked", () => {
+  it("renders within WidgetContainer with lock toggle in independent mode", () => {
     const onToggleLock = vi.fn();
-    render(<ResourceWidget onToggleLock={onToggleLock} isLocked={false} />);
+    render(
+      <WidgetContainer
+        id="resources"
+        title="System Resources"
+        isLocked={false}
+        onToggleLock={onToggleLock}
+      >
+        <ResourceWidget />
+      </WidgetContainer>
+    );
 
+    expect(screen.getByText("System Resources")).toBeDefined();
     const lockBtn = screen.getByRole("button", { name: /Lock System Resources position/i });
     fireEvent.click(lockBtn);
     expect(onToggleLock).toHaveBeenCalledTimes(1);

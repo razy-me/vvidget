@@ -87,7 +87,7 @@ describe("openMeteo service", () => {
     const cached = getCachedWeather();
     expect(cached).not.toBeNull();
     expect(cached?.city).toBe("Munich");
-    expect(cached?.isOffline).toBe(true);
+    expect(cached?.isOffline).toBe(false);
     expect(cached?.current.temperatureC).toBe(17);
   });
 

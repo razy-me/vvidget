@@ -110,7 +110,7 @@ export function getCachedWeather(): WeatherData | null {
     const raw = localStorage.getItem(CACHE_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as WeatherData;
-    parsed.isOffline = true;
+    parsed.isOffline = false;
     return parsed;
   } catch {
     return null;
@@ -173,7 +173,7 @@ export async function fetchWeather(
   } catch (error: unknown) {
     const cached = getCachedWeather();
     if (cached) {
-      return cached;
+      return { ...cached, isOffline: true };
     }
     const message = error instanceof Error ? error.message : "Failed to fetch weather";
     throw new Error(message);

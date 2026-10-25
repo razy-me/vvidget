@@ -73,12 +73,7 @@ export const DockContainer: FC<DockContainerProps> = ({
         title: "System Resources",
         icon: <Cpu className="w-3.5 h-3.5 text-sky-400" />,
         component: (
-          <ResourceWidget
-            isLocked={isLocked}
-            layoutMode="docked"
-            onOpenSettings={handleOpenSettings}
-            className="w-full"
-          />
+          <ResourceWidget className="w-full border-0 shadow-none bg-transparent p-0" />
         ),
       });
     }

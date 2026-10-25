@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { AppContent, App } from "@/App";
+import { AppContent, App, ErrorBoundary } from "@/App";
 import type { AppConfig } from "@/types/config";
 import { DEFAULT_CONFIG } from "@/types/config";
 
@@ -41,21 +41,7 @@ vi.mock("@/components/docking", () => ({
 }));
 
 vi.mock("@/widgets/resources/ResourceWidget", () => ({
-  ResourceWidget: ({
-    isLocked,
-    onToggleLock,
-    onOpenSettings,
-  }: {
-    isLocked?: boolean;
-    onToggleLock?: () => void;
-    onOpenSettings?: () => void;
-  }) => (
-    <div data-testid="resource-widget-view">
-      Resources (Locked: {String(isLocked)})
-      <button onClick={onToggleLock}>Toggle Lock</button>
-      <button onClick={onOpenSettings}>Open Settings</button>
-    </div>
-  ),
+  ResourceWidget: () => <div data-testid="resource-widget-view">Resources</div>,
 }));
 
 vi.mock("@/widgets/spotify/SpotifyWidget", () => ({
@@ -99,11 +85,12 @@ describe("App & AppContent Routing", () => {
     window.location.search = "?widget=resources";
     render(<AppContent />);
 
+    expect(screen.getByText("System Resources")).toBeInTheDocument();
     expect(screen.getByTestId("resource-widget-view")).toBeInTheDocument();
     expect(screen.queryByTestId("dock-container-view")).not.toBeInTheDocument();
 
-    // Verify interaction
-    const toggleBtn = screen.getByText("Toggle Lock");
+    // Verify interaction on WidgetContainer lock button
+    const toggleBtn = screen.getByRole("button", { name: /Lock System Resources position/i });
     fireEvent.click(toggleBtn);
     expect(mockSetWidgetsLocked).toHaveBeenCalledWith(true);
   });
@@ -174,5 +161,25 @@ describe("App & AppContent Routing", () => {
 
     render(<App />);
     expect(screen.getByText("Widgetz Desktop Surface")).toBeInTheDocument();
+  });
+
+  it("catches errors with ErrorBoundary and displays recovery UI", () => {
+    const ProblemChild = () => {
+      throw new Error("Simulated widget crash");
+    };
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    render(
+      <ErrorBoundary>
+        <ProblemChild />
+      </ErrorBoundary>
+    );
+
+    expect(screen.getByTestId("error-boundary-fallback")).toBeInTheDocument();
+    expect(screen.getByText("Something went wrong")).toBeInTheDocument();
+    expect(screen.getByText("Simulated widget crash")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Reload Widget/i })).toBeInTheDocument();
+
+    consoleError.mockRestore();
   });
 });

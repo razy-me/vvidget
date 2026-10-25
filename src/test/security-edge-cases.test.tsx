@@ -202,7 +202,6 @@ describe("Multi-Disk Interaction in ResourceWidget (R5)", () => {
 
     render(<ResourceWidget />);
 
-    expect(screen.getByText("System Resources")).toBeInTheDocument();
     expect(screen.getByText("CPU")).toBeInTheDocument();
     expect(screen.getByText("Memory")).toBeInTheDocument();
     expect(screen.queryByText(/Storage/)).not.toBeInTheDocument();

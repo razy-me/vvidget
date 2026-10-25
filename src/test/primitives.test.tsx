@@ -106,4 +106,35 @@ describe("Tooltip Primitive", () => {
     vi.advanceTimersByTime(300);
     vi.useRealTimers();
   });
+
+  it("resets timer on rapid consecutive show triggers without timer leaks", () => {
+    vi.useFakeTimers();
+    render(
+      <Tooltip content="Rapid Hint" delay={200}>
+        <button>Button</button>
+      </Tooltip>
+    );
+    const container = screen.getByText("Button").parentElement!;
+
+    // Trigger rapid mouseEnter followed by focus
+    fireEvent.mouseEnter(container);
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    fireEvent.focus(container);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    // At t=250ms, first timer was cancelled at t=100ms and second timer was scheduled for t=300ms
+    // So at t=250ms tooltip should not yet be visible
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(60);
+    });
+    // At t=310ms, second timer has completed
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Rapid Hint");
+
+    vi.useRealTimers();
+  });
 });

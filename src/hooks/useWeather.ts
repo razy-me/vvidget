@@ -134,7 +134,7 @@ export function useWeather(): UseWeatherReturn {
       if (controller.signal.aborted) return;
       const cached = getCachedWeather();
       if (cached) {
-        setWeather(cached);
+        setWeather({ ...cached, isOffline: true });
       } else {
         const msg = err instanceof Error ? err.message : "Unable to retrieve weather data";
         setError(msg);

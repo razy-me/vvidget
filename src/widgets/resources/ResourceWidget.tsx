@@ -1,13 +1,14 @@
 import type { FC } from "react";
 import { useMemo, useState } from "react";
 import { Cpu, HardDrive, Layers, RefreshCw, AlertTriangle } from "lucide-react";
-import { WidgetContainer } from "@/components/layout/WidgetContainer";
+import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { MiniGraph } from "./MiniGraph";
 import { MetricBar } from "./MetricBar";
 import { useSystemMetrics } from "@/hooks/useSystemMetrics";
 import { formatBytesGb, getMetricVariant } from "@/types/resources";
 import type { LayoutMode } from "@/types/config";
+import { cn } from "@/utils/cn";
 
 export interface ResourceWidgetProps {
   isLocked?: boolean;
@@ -19,11 +20,6 @@ export interface ResourceWidgetProps {
 }
 
 export const ResourceWidget: FC<ResourceWidgetProps> = ({
-  isLocked = false,
-  layoutMode = "independent",
-  onToggleLock,
-  onClose,
-  onOpenSettings,
   className,
 }) => {
   const { metrics, cpuHistory, error, refresh } = useSystemMetrics();
@@ -65,19 +61,13 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
   const diskVariant = getMetricVariant(diskPercent);
 
   return (
-    <WidgetContainer
-      id="resources"
-      title="System Resources"
-      icon={<Cpu className="w-4 h-4 text-sky-400" />}
-      isLocked={isLocked}
-      layoutMode={layoutMode}
-      onToggleLock={onToggleLock}
-      onClose={onClose}
-      onOpenSettings={onOpenSettings}
-      minWidth={280}
-      minHeight={160}
-      className={className}
-      contentClassName="gap-3 p-3"
+    <Card
+      variant="acrylic"
+      className={cn(
+        "w-full max-w-[340px] p-3 flex flex-col gap-3 text-[var(--fluent-text-primary)] select-none",
+        className
+      )}
+      data-testid="resource-widget"
     >
       {error && !metrics ? (
         <div className="flex flex-col items-center justify-center p-4 text-center text-xs text-[var(--fluent-text-secondary)] gap-2">
@@ -192,6 +182,6 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
           )}
         </>
       )}
-    </WidgetContainer>
+    </Card>
   );
 };

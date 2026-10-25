@@ -82,6 +82,32 @@ export function useConfig(): UseConfigReturn {
     };
   }, [reloadConfig]);
 
+  // Flush debounced placement writes on beforeunload or unmount
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+        if (isTauri()) {
+          void safeInvoke("save_config_immediate", { config: latestConfigRef.current });
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+        if (isTauri()) {
+          void safeInvoke("save_config_immediate", { config: latestConfigRef.current });
+        }
+      }
+    };
+  }, []);
+
   // Persists configuration change to backend
   const updateConfig = useCallback(
     async (updater: (prev: AppConfig) => AppConfig, immediate = false): Promise<void> => {
@@ -142,6 +168,7 @@ export function useConfig(): UseConfigReturn {
         if (isTauri()) {
           void safeInvoke("save_config", { config: latestConfigRef.current });
         }
+        debounceTimerRef.current = null;
       }, 500);
     },
     [],

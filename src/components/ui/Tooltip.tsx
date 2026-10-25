@@ -29,6 +29,9 @@ export const Tooltip: FC<TooltipProps> = ({
   }, []);
 
   const showTooltip = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
     timeoutRef.current = setTimeout(() => {
       setIsVisible(true);
     }, delay);

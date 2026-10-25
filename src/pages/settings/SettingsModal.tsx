@@ -142,6 +142,8 @@ export const SettingsModal: FC = () => {
         ...prev.weather_settings,
         use_windows_location: false,
         manual_city: cityInput.trim() ? cityInput.trim() : null,
+        latitude: null,
+        longitude: null,
       },
     }), true);
     showFeedback();

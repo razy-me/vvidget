@@ -26,6 +26,10 @@
   
   /* Elevation Shadows */
   --fluent-shadow-flyout: 0 8px 16px rgba(0, 0, 0, 0.28), 0 0 1px rgba(0, 0, 0, 0.14);
+
+  /* Control Fill Tokens - Dark Theme */
+  --fluent-control-bg: rgba(255, 255, 255, 0.06);
+  --fluent-control-active: rgba(255, 255, 255, 0.10);
 }
 
 .theme-light {
@@ -42,6 +46,10 @@
   --fluent-accent: #0067c0;
   --fluent-accent-dark: #003e92;
   --fluent-accent-subtle: rgba(0, 103, 192, 0.12);
+
+  /* Control Fill Tokens - Light Theme */
+  --fluent-control-bg: rgba(0, 0, 0, 0.04);
+  --fluent-control-active: rgba(0, 0, 0, 0.08);
 }
 
 /* Acrylic backdrop filter class for web preview / fallback */

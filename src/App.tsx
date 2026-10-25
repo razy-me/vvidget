@@ -1,4 +1,4 @@
-import { useMemo, useCallback, type FC } from "react";
+import { useMemo, useCallback, Component, type FC, type ErrorInfo, type ReactNode } from "react";
 import { ThemeProvider } from "@/theme";
 import { useConfig } from "@/hooks/useConfig";
 import { SettingsModal } from "@/pages/settings";
@@ -8,6 +8,7 @@ import { ResourceWidget } from "@/widgets/resources/ResourceWidget";
 import { SpotifyWidget } from "@/widgets/spotify/SpotifyWidget";
 import { WeatherWidget } from "@/widgets/weather/WeatherWidget";
 import {
+  Cpu,
   Music,
   CloudSun,
   LayoutGrid,
@@ -15,6 +16,8 @@ import {
   Settings,
   Lock,
   Unlock,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 
 export const AppContent: FC = () => {
@@ -56,13 +59,18 @@ export const AppContent: FC = () => {
   if (widgetId === "resources") {
     return (
       <div className="w-full h-full min-h-screen p-2 flex items-center justify-center bg-transparent">
-        <ResourceWidget
+        <WidgetContainer
+          id="resources"
+          title="System Resources"
+          icon={<Cpu className="w-4 h-4 text-sky-400" />}
           isLocked={config.lock_positions}
           layoutMode="independent"
           onToggleLock={handleToggleLock}
           onOpenSettings={handleOpenSettings}
           className="w-full max-w-[340px]"
-        />
+        >
+          <ResourceWidget className="border-0 shadow-none bg-transparent p-0" />
+        </WidgetContainer>
       </div>
     );
   }
@@ -173,13 +181,18 @@ export const AppContent: FC = () => {
       {/* Grid of Independent Widgets */}
       <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
         {isResourcesVisible && (
-          <ResourceWidget
+          <WidgetContainer
+            id="resources"
+            title="System Resources"
+            icon={<Cpu className="w-4 h-4 text-sky-400" />}
             isLocked={config.lock_positions}
             layoutMode="independent"
             onToggleLock={handleToggleLock}
             onOpenSettings={handleOpenSettings}
             className="w-full"
-          />
+          >
+            <ResourceWidget className="border-0 shadow-none bg-transparent p-0" />
+          </WidgetContainer>
         )}
 
         {isSpotifyVisible && (
@@ -216,13 +229,81 @@ export const AppContent: FC = () => {
   );
 };
 
+export interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+export interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("Uncaught error caught by ErrorBoundary:", error, errorInfo);
+  }
+
+  handleReload = () => {
+    this.setState({ hasError: false, error: null });
+    window.location.reload();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      return (
+        <div
+          role="alert"
+          className="min-h-screen p-4 flex flex-col items-center justify-center text-center bg-[var(--fluent-acrylic-bg)] text-[var(--fluent-text-primary)] select-none"
+          data-testid="error-boundary-fallback"
+        >
+          <div className="p-6 rounded-2xl border border-[var(--fluent-stroke)] bg-[var(--fluent-card-bg)] backdrop-blur-xl max-w-sm w-full flex flex-col items-center gap-3 shadow-xl">
+            <AlertCircle className="w-8 h-8 text-[var(--fluent-error)]" />
+            <div className="space-y-1">
+              <h2 className="text-sm font-semibold">Something went wrong</h2>
+              <p className="text-xs text-[var(--fluent-text-secondary)] line-clamp-3">
+                {this.state.error?.message || "An unexpected error occurred in Widgetz."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={this.handleReload}
+              className="mt-2 px-4 py-1.5 rounded-lg text-xs font-medium bg-[var(--fluent-accent)] text-black hover:opacity-90 transition-opacity flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Reload Widget</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export const App: FC = () => {
   const { config, setTheme } = useConfig();
 
   return (
-    <ThemeProvider initialTheme={config.theme} onThemeChange={setTheme}>
-      <AppContent />
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider initialTheme={config.theme} onThemeChange={setTheme}>
+        <AppContent />
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 };
 
