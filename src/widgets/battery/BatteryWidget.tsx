@@ -59,6 +59,16 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
     }
   };
 
+  // Pick battery icon according to level & charging state - HOOK AT TOP LEVEL
+  const BatteryIcon = useMemo(() => {
+    if (!status) return Battery;
+    if (status.is_charging) return BatteryCharging;
+    if (status.charge_percent > 85) return BatteryFull;
+    if (status.charge_percent > 25) return Battery;
+    if (status.charge_percent > 10) return BatteryLow;
+    return BatteryWarning;
+  }, [status?.charge_percent, status?.is_charging]);
+
   // 1. Desktop Mode (No Battery Detected)
   if (status && !status.has_battery) {
     if (isDismissed) {
@@ -176,15 +186,6 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
   const badgeInfo = getChargingBadgeInfo(charge_percent, is_charging, is_plugged_in);
   const isHighDrain = isHighDrainRate(drain_rate_percent_per_min);
   const formattedDrainRate = formatDrainRate(drain_rate_percent_per_min, is_charging);
-
-  // Pick battery icon according to level & charging state
-  const BatteryIcon = useMemo(() => {
-    if (is_charging) return BatteryCharging;
-    if (charge_percent > 85) return BatteryFull;
-    if (charge_percent > 25) return Battery;
-    if (charge_percent > 10) return BatteryLow;
-    return BatteryWarning;
-  }, [charge_percent, is_charging]);
 
   // Color progress bar depending on percentage
   const progressVariant: "error" | "warning" | "accent" =
