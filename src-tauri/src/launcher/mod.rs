@@ -1,6 +1,94 @@
 use std::path::{Path, PathBuf};
 use tauri::Manager;
 use crate::config::LauncherItem;
+use base64::Engine;
+
+/// Helper to convert a local image or icon file to a data URL if it exists.
+pub fn file_to_data_url(path: &Path) -> Option<String> {
+    if !path.exists() || !path.is_file() {
+        return None;
+    }
+    let bytes = std::fs::read(path).ok()?;
+    if bytes.is_empty() {
+        return None;
+    }
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let mime = match ext.as_str() {
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "ico" => "image/x-icon",
+        "webp" => "image/webp",
+        _ => "application/octet-stream",
+    };
+
+    let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+    Some(format!("data:{};base64,{}", mime, encoded))
+}
+
+/// Attempts to find a Steam game icon in the candidate Steam roots.
+pub fn find_steam_icon_url(appid: &str, steam_roots: &[PathBuf]) -> Option<String> {
+    // 1. Check librarycache direct file or subdirectories: librarycache/<appid>_icon.jpg or <appid>/...
+    for root in steam_roots {
+        let librarycache_dir = root.join("appcache").join("librarycache");
+        let direct_icon = librarycache_dir.join(format!("{}_icon.jpg", appid));
+        if let Some(url) = file_to_data_url(&direct_icon) {
+            return Some(url);
+        }
+
+        let app_cache_dir = librarycache_dir.join(appid);
+        if app_cache_dir.is_dir() {
+            // Check logo.png or any *.jpg / *.ico inside
+            let logo_png = app_cache_dir.join("logo.png");
+            if let Some(url) = file_to_data_url(&logo_png) {
+                return Some(url);
+            }
+            if let Ok(entries) = std::fs::read_dir(&app_cache_dir) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.is_file() {
+                        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase();
+                        if (name.ends_with(".jpg") || name.ends_with(".png") || name.ends_with(".ico"))
+                            && !name.contains("600x900")
+                            && !name.contains("header")
+                        {
+                            if let Some(url) = file_to_data_url(&p) {
+                                return Some(url);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Check steam/games/<hash>.ico
+        let steam_games_dir = root.join("steam").join("games");
+        if steam_games_dir.is_dir() {
+            if let Ok(entries) = std::fs::read_dir(&steam_games_dir) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.is_file() {
+                        let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                        if ext == "ico" {
+                            let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                            if stem.starts_with(appid) || stem == appid {
+                                if let Some(url) = file_to_data_url(&p) {
+                                    return Some(url);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
 
 /// Parses key-value pairs from Valve's KeyValues (VDF) text format.
 pub fn parse_vdf_key_values(content: &str) -> Vec<(String, String)> {
@@ -133,6 +221,7 @@ pub fn parse_epic_manifest_item(content: &str) -> Option<LauncherItem> {
         name: display_name.to_string(),
         path_or_uri: uri,
         icon_type: Some("epic".to_string()),
+        icon_url: None,
         source: "epic".to_string(),
         last_launched: None,
     })
@@ -216,11 +305,14 @@ pub fn scan_steam_games() -> Vec<LauncherItem> {
                             continue;
                         }
 
+                        let icon_url = find_steam_icon_url(&appid, &candidate_roots);
+
                         let item = LauncherItem {
                             id: format!("steam_{}", appid),
                             name,
                             path_or_uri: format!("steam://rungameid/{}", appid),
                             icon_type: Some("steam".to_string()),
+                            icon_url,
                             source: "steam".to_string(),
                             last_launched: None,
                         };
@@ -610,6 +702,37 @@ mod tests {
         );
         assert_eq!(item.source, "epic");
         assert_eq!(item.icon_type, Some("epic".to_string()));
+        assert_eq!(item.icon_url, None);
+    }
+
+    #[test]
+    fn test_file_to_data_url_and_find_steam_icon() {
+        let temp_dir = std::env::temp_dir().join("vvidget_steam_test");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let test_file = temp_dir.join("620_icon.jpg");
+        let fake_jpg_bytes = b"\xFF\xD8\xFF\xE0\x00\x10JFIF";
+        let _ = std::fs::write(&test_file, fake_jpg_bytes);
+
+        let data_url = file_to_data_url(&test_file);
+        assert!(data_url.is_some());
+        let url_str = data_url.unwrap();
+        assert!(url_str.starts_with("data:image/jpeg;base64,"));
+
+        // Test non-existent file
+        assert!(file_to_data_url(&temp_dir.join("nonexistent.ico")).is_none());
+
+        // Test find_steam_icon_url with custom mock steam root
+        let mock_steam = temp_dir.join("mock_steam");
+        let mock_cache = mock_steam.join("appcache").join("librarycache");
+        let _ = std::fs::create_dir_all(&mock_cache);
+        let _ = std::fs::write(mock_cache.join("620_icon.jpg"), fake_jpg_bytes);
+
+        let found = find_steam_icon_url("620", &[mock_steam.clone()]);
+        assert!(found.is_some());
+        assert!(found.unwrap().starts_with("data:image/jpeg;base64,"));
+
+        // Clean up
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 
     #[test]

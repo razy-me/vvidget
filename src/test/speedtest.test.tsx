@@ -124,7 +124,7 @@ describe("SpeedtestWidget Component", () => {
     expect(screen.getByTestId("history-bar-1")).toBeInTheDocument();
   });
 
-  it("handles test initiation click event", () => {
+  it("handles test initiation click event from action button and center gauge", () => {
     const startTestMock = vi.fn();
     const hookWithMock = {
       ...mockIdleHook,
@@ -136,6 +136,14 @@ describe("SpeedtestWidget Component", () => {
     fireEvent.click(startBtn);
 
     expect(startTestMock).toHaveBeenCalledTimes(1);
+
+    // Also verify center gauge circle button triggers startTest
+    const gaugeBtn = screen.getByTestId("speedtest-gauge-button");
+    expect(gaugeBtn).toBeInTheDocument();
+    expect(screen.getByTestId("speedtest-gauge-hover-hint")).toBeInTheDocument();
+    fireEvent.click(gaugeBtn);
+
+    expect(startTestMock).toHaveBeenCalledTimes(2);
   });
 
   it("displays error message cleanly on failure", () => {

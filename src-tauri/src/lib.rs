@@ -15,7 +15,7 @@ pub mod window;
 use actions::{execute_quick_action, update_quick_settings_instance};
 use audio::{get_master_mute, get_master_volume, set_master_volume, toggle_master_mute};
 use battery::{get_battery_status, open_power_settings};
-use bluetooth::{get_bluetooth_devices, open_bluetooth_settings};
+use bluetooth::{get_bluetooth_devices, open_bluetooth_settings, toggle_bluetooth_device};
 use calendar::{add_calendar_note, get_calendar_events, remove_calendar_note, toggle_calendar_note};
 use config::{
     get_autostart_status, load_config, open_logs_folder, resolve_config_path, save_config,
@@ -503,6 +503,7 @@ pub fn run() {
             open_power_settings,
             get_bluetooth_devices,
             open_bluetooth_settings,
+            toggle_bluetooth_device,
         ])
         .setup(move |app| {
             start_metrics_worker(

@@ -161,6 +161,45 @@ describe("BluetoothWidget Component", () => {
     expect(mockInvoke).toHaveBeenCalledWith("open_bluetooth_settings");
   });
 
+  it("calls toggle_bluetooth_device when quick action connect/disconnect button is clicked", async () => {
+    mockInvoke.mockImplementation((cmd: string, args: any) => {
+      if (cmd === "toggle_bluetooth_device") {
+        return Promise.resolve(!args.connect ? false : true);
+      }
+      return Promise.resolve();
+    });
+
+    await act(async () => {
+      render(<BluetoothWidget initialDevices={mockDevices} autoFetch={false} />);
+    });
+
+    // Test disconnecting an already connected device (bt-audio-1)
+    const disconnectBtn = screen.getByTestId("device-toggle-btn-bt-audio-1");
+    expect(disconnectBtn).toHaveTextContent("Trennen");
+
+    await act(async () => {
+      fireEvent.click(disconnectBtn);
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("toggle_bluetooth_device", {
+      deviceId: "bt-audio-1",
+      connect: false,
+    });
+
+    // Test connecting a disconnected device (bt-input-1)
+    const connectBtn = screen.getByTestId("device-toggle-btn-bt-input-1");
+    expect(connectBtn).toHaveTextContent("Verbinden");
+
+    await act(async () => {
+      fireEvent.click(connectBtn);
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("toggle_bluetooth_device", {
+      deviceId: "bt-input-1",
+      connect: true,
+    });
+  });
+
   it("handles fetch error gracefully and shows error message", async () => {
     mockInvoke.mockImplementationOnce((cmd: string) => {
       if (cmd === "get_bluetooth_devices") {

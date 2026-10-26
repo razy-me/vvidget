@@ -88,6 +88,7 @@ pub struct LauncherItem {
     pub name: String,
     pub path_or_uri: String,
     pub icon_type: Option<String>,
+    pub icon_url: Option<String>,
     pub source: String, // "steam" | "epic" | "custom"
     pub last_launched: Option<u64>,
 }
@@ -99,6 +100,7 @@ impl Default for LauncherItem {
             name: String::new(),
             path_or_uri: String::new(),
             icon_type: None,
+            icon_url: None,
             source: "custom".to_string(),
             last_launched: None,
         }
@@ -358,6 +360,7 @@ mod tests {
             name: "Portal 2".to_string(),
             path_or_uri: "steam://rungameid/620".to_string(),
             icon_type: Some("steam".to_string()),
+            icon_url: None,
             source: "steam".to_string(),
             last_launched: Some(1670000000),
         });

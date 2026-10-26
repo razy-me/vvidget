@@ -82,6 +82,7 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
   const [devices, setDevices] = useState<BluetoothDeviceInfo[]>(initialDevices ?? []);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const fetchDevices = useCallback(async () => {
     setIsLoading(true);
@@ -95,6 +96,25 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
+    }
+  }, []);
+
+  const handleToggleDevice = useCallback(async (device: BluetoothDeviceInfo) => {
+    setTogglingId(device.id);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const targetState = !device.connected;
+      const result = await invoke<boolean>("toggle_bluetooth_device", {
+        deviceId: device.id,
+        connect: targetState,
+      });
+      setDevices((prev) =>
+        prev.map((d) => (d.id === device.id ? { ...d, connected: result } : d))
+      );
+    } catch (err) {
+      console.error("Failed to toggle bluetooth device:", err);
+    } finally {
+      setTogglingId(null);
     }
   }, []);
 
@@ -131,16 +151,16 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
       variant="acrylic"
       padded={false}
       className={cn(
-        "w-full h-full p-3 flex flex-col justify-between text-[var(--fluent-text-primary)] select-none overflow-hidden",
+        "w-full h-full p-2.5 flex flex-col justify-between text-[var(--fluent-text-primary)] select-none overflow-hidden",
         className
       )}
       data-testid="bluetooth-widget"
     >
       {/* Header */}
-      <header className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--fluent-stroke)] flex-shrink-0">
+      <header className="flex items-center justify-between gap-2 pb-1.5 border-b border-[var(--fluent-stroke)] flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex-shrink-0">
-            <Bluetooth className="w-4 h-4" />
+          <div className="p-1 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20 flex-shrink-0">
+            <Bluetooth className="w-3.5 h-3.5" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
@@ -180,7 +200,7 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
       </header>
 
       {/* Body: Error, Device List or Empty State */}
-      <div className="flex-1 overflow-y-auto space-y-1.5 my-2 pr-0.5 custom-scrollbar min-h-0">
+      <div className="flex-1 overflow-y-auto space-y-1.5 my-1.5 pr-0.5 custom-scrollbar min-h-0">
         {error ? (
           <div className="h-full flex flex-col items-center justify-center p-3 text-center gap-1 text-[var(--fluent-error)]">
             <AlertCircle className="w-5 h-5 opacity-80" />
@@ -209,11 +229,12 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
         ) : (
           sortedDevices.map((device) => {
             const DeviceIcon = getDeviceIcon(device);
+            const isToggling = togglingId === device.id;
             return (
               <div
                 key={device.id}
                 data-testid={`device-item-${device.id}`}
-                className="flex items-center justify-between p-2 rounded-lg bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] border border-[var(--fluent-stroke)] transition-colors gap-2"
+                className="group relative flex items-center justify-between p-2 rounded-lg bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] border border-[var(--fluent-stroke)] transition-colors gap-2"
               >
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div
@@ -253,15 +274,46 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
                   </div>
                 </div>
 
-                {device.battery_level != null && (
-                  <div
-                    data-testid={`device-battery-${device.id}`}
-                    className="flex items-center gap-1 text-[11px] font-medium text-[var(--fluent-text-secondary)] px-1.5 py-0.5 rounded bg-[var(--fluent-subtle-bg)] border border-[var(--fluent-stroke)] flex-shrink-0"
+                {/* Battery and Quick-Toggle container */}
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {device.battery_level != null && (
+                    <div
+                      data-testid={`device-battery-${device.id}`}
+                      className="flex items-center gap-1 text-[11px] font-medium text-[var(--fluent-text-secondary)] px-1.5 py-0.5 rounded bg-[var(--fluent-subtle-bg)] border border-[var(--fluent-stroke)] flex-shrink-0 group-hover:opacity-40 transition-opacity"
+                    >
+                      <Battery className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>{device.battery_level}%</span>
+                    </div>
+                  )}
+
+                  {/* Quick-action Hover Button: Trennen / Verbinden */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleToggleDevice(device);
+                    }}
+                    disabled={isToggling}
+                    data-testid={`device-toggle-btn-${device.id}`}
+                    title={device.connected ? "Trennen" : "Verbinden"}
+                    className={cn(
+                      "px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer flex items-center justify-center border",
+                      device.connected
+                        ? "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20 hover:border-red-500/40"
+                        : "bg-[var(--fluent-accent-subtle)] text-[var(--fluent-accent)] border-[var(--fluent-accent)]/30 hover:bg-[var(--fluent-accent)]/20 hover:border-[var(--fluent-accent)]",
+                      "opacity-0 group-hover:opacity-100 focus:opacity-100",
+                      isToggling && "opacity-60 pointer-events-none"
+                    )}
                   >
-                    <Battery className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>{device.battery_level}%</span>
-                  </div>
-                )}
+                    {isToggling ? (
+                      <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                    ) : device.connected ? (
+                      "Trennen"
+                    ) : (
+                      "Verbinden"
+                    )}
+                  </button>
+                </div>
               </div>
             );
           })

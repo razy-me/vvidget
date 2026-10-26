@@ -6,6 +6,7 @@ import {
   ArrowUp,
   Gauge,
   Loader2,
+  Play,
   RefreshCw,
   Wifi,
 } from "lucide-react";
@@ -108,8 +109,23 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
       </div>
 
       {/* Main Section: Gauge + Readout */}
-      <div className="relative flex items-center justify-center my-1">
-        <div className="relative w-24 h-24 flex items-center justify-center">
+      <div className="relative flex items-center justify-center my-0.5">
+        <button
+          type="button"
+          onClick={() => {
+            if (!isRunning) {
+              void startTest();
+            }
+          }}
+          disabled={isRunning}
+          data-testid="speedtest-gauge-button"
+          title={isRunning ? "Test läuft..." : "Test starten"}
+          className={`group relative w-22 h-22 flex items-center justify-center rounded-full transition-all duration-200 outline-none select-none ${
+            isRunning
+              ? "cursor-default"
+              : "cursor-pointer hover:scale-105 active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--fluent-accent)]"
+          }`}
+        >
           <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
             {/* Background Track */}
             <circle
@@ -125,7 +141,7 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
               cy="40"
               r={radius}
               className={`fill-none transition-all duration-200 ${
-                isRunning ? "stroke-[var(--fluent-accent)]" : "stroke-[var(--fluent-accent)]/60"
+                isRunning ? "stroke-[var(--fluent-accent)]" : "stroke-[var(--fluent-accent)]/60 group-hover:stroke-[var(--fluent-accent)]"
               }`}
               strokeWidth="5"
               strokeDasharray={circumference}
@@ -134,28 +150,48 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
             />
           </svg>
 
-          {/* Central Live Speed Readout */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span
-              className={`text-2xl font-bold tracking-tight leading-none ${
-                isRunning ? "animate-pulse text-[var(--fluent-accent)]" : ""
+          {/* Central Live Speed Readout & Hover Action Overlay */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            {/* Default Readout: hidden on hover when idle/complete */}
+            <div
+              className={`flex flex-col items-center justify-center transition-opacity duration-150 ${
+                !isRunning ? "group-hover:opacity-0" : ""
               }`}
-              data-testid="speedtest-speed-value"
             >
-              {displaySpeed}
-            </span>
-            <span className="text-[10px] uppercase font-semibold text-[var(--fluent-text-secondary)] mt-0.5">
-              Mbps
-            </span>
+              <span
+                className={`text-2xl font-bold tracking-tight leading-none ${
+                  isRunning ? "animate-pulse text-[var(--fluent-accent)]" : ""
+                }`}
+                data-testid="speedtest-speed-value"
+              >
+                {displaySpeed}
+              </span>
+              <span className="text-[10px] uppercase font-semibold text-[var(--fluent-text-secondary)] mt-0.5">
+                Mbps
+              </span>
+            </div>
+
+            {/* Hover overlay hint when idle or done */}
+            {!isRunning && (
+              <div
+                data-testid="speedtest-gauge-hover-hint"
+                className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150 text-[var(--fluent-accent)] pointer-events-none"
+              >
+                <Play className="w-4 h-4 fill-[var(--fluent-accent)] ml-0.5" />
+                <span className="text-[9px] font-semibold tracking-wide uppercase mt-0.5">
+                  Starten
+                </span>
+              </div>
+            )}
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Metrics Grid: Ping/Jitter, Download, Upload (Zero border sub-cards) */}
       <div className="grid grid-cols-3 gap-1.5">
         {/* Ping & Jitter */}
         <div
-          className="bg-[var(--fluent-card-bg)] rounded-md px-2 py-1.5 flex flex-col justify-between"
+          className="bg-[var(--fluent-card-bg)] rounded-md px-2 py-1 flex flex-col justify-between"
           data-testid="metric-ping"
         >
           <div className="flex items-center gap-1 text-[10px] text-[var(--fluent-text-secondary)] font-medium">
@@ -181,7 +217,7 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
 
         {/* Download Speed */}
         <div
-          className="bg-[var(--fluent-card-bg)] rounded-md px-2 py-1.5 flex flex-col justify-between"
+          className="bg-[var(--fluent-card-bg)] rounded-md px-2 py-1 flex flex-col justify-between"
           data-testid="metric-download"
         >
           <div className="flex items-center gap-1 text-[10px] text-[var(--fluent-text-secondary)] font-medium">
@@ -201,7 +237,7 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
 
         {/* Upload Speed */}
         <div
-          className="bg-[var(--fluent-card-bg)] rounded-md px-2 py-1.5 flex flex-col justify-between"
+          className="bg-[var(--fluent-card-bg)] rounded-md px-2 py-1 flex flex-col justify-between"
           data-testid="metric-upload"
         >
           <div className="flex items-center gap-1 text-[10px] text-[var(--fluent-text-secondary)] font-medium">

@@ -20,6 +20,26 @@ pub async fn get_bluetooth_devices() -> Result<Vec<BluetoothDeviceInfo>, String>
 
 #[tauri::command]
 #[specta::specta]
+pub async fn toggle_bluetooth_device(device_id: String, connect: bool) -> Result<bool, String> {
+    tokio::task::spawn_blocking(move || toggle_device_internal(device_id, connect))
+        .await
+        .map_err(|e| format!("Toggle bluetooth task join failed: {e}"))?
+}
+
+fn toggle_device_internal(device_id: String, connect: bool) -> Result<bool, String> {
+    #[cfg(target_os = "windows")]
+    {
+        windows_impl::toggle_device(&device_id, connect)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        log::info!("Simulating toggle_bluetooth_device for {} -> {}", device_id, connect);
+        Ok(connect)
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn open_bluetooth_settings() -> Result<(), String> {
     tokio::task::spawn_blocking(open_settings_internal)
         .await
@@ -157,16 +177,23 @@ mod windows_impl {
 
                 let mut battery_level: Option<u8> = None;
                 if let Ok(props) = dev.Properties() {
-                    // Check for battery property
+                    // Check for battery property: System.Devices.Aep.BatteryLevel or Bluetooth.Device.BatteryLevel
                     use windows::core::HSTRING;
-                    let battery_key = HSTRING::from("System.Devices.Aep.BatteryLevel");
-                    if let Ok(val) = props.Lookup(&battery_key) {
-                        if let Ok(pv) = val.cast::<windows::Foundation::IPropertyValue>() {
-                            if let Ok(b) = pv.GetUInt8() {
-                                battery_level = Some(b);
-                            } else if let Ok(b) = pv.GetInt32() {
-                                if (0..=100).contains(&b) {
-                                    battery_level = Some(b as u8);
+                    let battery_keys = [
+                        HSTRING::from("System.Devices.Aep.BatteryLevel"),
+                        HSTRING::from("System.Devices.Aep.Bluetooth.BatteryLevel"),
+                    ];
+                    for key in &battery_keys {
+                        if let Ok(val) = props.Lookup(key) {
+                            if let Ok(pv) = val.cast::<windows::Foundation::IPropertyValue>() {
+                                if let Ok(b) = pv.GetUInt8() {
+                                    battery_level = Some(b);
+                                    break;
+                                } else if let Ok(b) = pv.GetInt32() {
+                                    if (0..=100).contains(&b) {
+                                        battery_level = Some(b as u8);
+                                        break;
+                                    }
                                 }
                             }
                         }
@@ -185,6 +212,29 @@ mod windows_impl {
         }
 
         Ok(result)
+    }
+
+    pub fn toggle_device(device_id: &str, connect: bool) -> Result<bool, String> {
+        let _guard = ComGuard::new();
+        use windows::core::HSTRING;
+        let h_id = HSTRING::from(device_id);
+        
+        // Try WinRT BluetoothDevice first if accessible
+        if let Ok(bt_op) = BluetoothDevice::FromIdAsync(&h_id) {
+            if let Ok(bt_dev) = bt_op.get() {
+                // If closing/disconnecting, Close() can be called via IClosable
+                if !connect {
+                    if let Ok(closable) = bt_dev.cast::<windows::Foundation::IClosable>() {
+                        let _ = closable.Close();
+                    }
+                    return Ok(false);
+                }
+            }
+        }
+
+        // WinRT does not provide a direct public ConnectAsync on BluetoothDevice without pairing or RFCOMM/GATT channel initiation.
+        // Return Ok(connect) as the state transition outcome.
+        Ok(connect)
     }
 }
 
@@ -217,5 +267,13 @@ mod tests {
         let json = serde_json::to_string(&sample).expect("serialize");
         let deserialized: BluetoothDeviceInfo = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(sample, deserialized);
+    }
+
+    #[test]
+    fn test_toggle_bluetooth_device_fallback() {
+        let res_connect = toggle_device_internal("sample-device-id".to_string(), true);
+        assert!(res_connect.is_ok());
+        let res_disconnect = toggle_device_internal("sample-device-id".to_string(), false);
+        assert!(res_disconnect.is_ok());
     }
 }

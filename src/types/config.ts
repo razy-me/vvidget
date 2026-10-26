@@ -34,6 +34,7 @@ export interface LauncherItem {
   name: string;
   path_or_uri: string;
   icon_type?: string;
+  icon_url?: string;
   source: "steam" | "epic" | "custom";
   last_launched?: number;
 }

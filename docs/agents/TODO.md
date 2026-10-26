@@ -25,7 +25,7 @@ Based on Gemini 4 Argon audit feedback: 5 Work Packages addressing system-level 
     - Battery sparkline placeholder state ("Sammle Daten...") with soft gradient when `<= 1` sample.
   - **Acceptance**: `npm.cmd test -- WeatherWidget battery wmoCodes` passes.
 
-- [ ] **WP-03: Resources Flex & Typography Fix + Media Cover Blur**
+- [x] **WP-03: Resources Flex & Typography Fix + Media Cover Blur**
   - **Files**: `src/widgets/resources/ResourceWidget.tsx`, `src/widgets/resources/MetricBar.tsx`, `src-tauri/src/media/gsmtc.rs`, `src/widgets/spotify/SpotifyWidget.tsx`, plus tests.
   - **Scope**:
     - Fix `MetricBar` text collision with `justify-between` and German labels ("Arbeitsspeicher", "Systemlaufwerk"). Unify CPU/RAM/Storage 3-bar layout.
