@@ -1,7 +1,6 @@
 import type { FC } from "react";
 import { useState } from "react";
 import {
-  Gamepad2,
   Plus,
   Play,
   Search,
@@ -152,53 +151,48 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
       )}
       data-testid="game-launcher-widget"
     >
-      {/* Header with Title and Add Button */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Gamepad2 className="w-4 h-4 text-[var(--fluent-accent)]" />
-          <h2 className="text-xs font-semibold tracking-wide">Game & App Launcher</h2>
+      {/* Compact Search & Action Header: [ Suchen... ] [ + ] [ Refresh ] */}
+      <div className="flex items-center gap-1.5 w-full">
+        <div className="relative flex-1 min-w-0">
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fluent-text-tertiary)] pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Suchen nach Spiel oder App..."
+            className="w-full pl-8 pr-7 py-1.5 text-xs rounded-lg bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] text-[var(--fluent-text-primary)] placeholder-[var(--fluent-text-tertiary)] focus:outline-none focus:border-[var(--fluent-accent)] transition-all"
+            aria-label="Spiele durchsuchen"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--fluent-text-tertiary)] hover:text-[var(--fluent-text-primary)]"
+              aria-label="Suche zurücksetzen"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => void scanGames()}
-            title="Spiele neu scannen"
-            disabled={isLoading}
-            className="p-1 rounded-md text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-hover)] transition-colors"
-            aria-label="Spiele neu scannen"
-          >
-            <RefreshCw className={cn("w-3.5 h-3.5", isLoading && "animate-spin")} />
-          </button>
-          <button
-            onClick={handleOpenAddModal}
-            className="px-2 py-1 text-xs rounded-md bg-[var(--fluent-accent-subtle)] text-[var(--fluent-accent)] hover:bg-[var(--fluent-accent)] hover:text-white transition-all flex items-center gap-1 font-medium"
-            aria-label="Spiel oder App hinzufügen"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Hinzufügen</span>
-          </button>
-        </div>
-      </div>
 
-      {/* Top Search Bar */}
-      <div className="relative w-full">
-        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--fluent-text-tertiary)] pointer-events-none" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Suchen nach Spiel oder App..."
-          className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] text-[var(--fluent-text-primary)] placeholder-[var(--fluent-text-tertiary)] focus:outline-none focus:border-[var(--fluent-accent)] transition-all"
-          aria-label="Spiele durchsuchen"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery("")}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--fluent-text-tertiary)] hover:text-[var(--fluent-text-primary)]"
-            aria-label="Suche zurücksetzen"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        )}
+        <button
+          onClick={handleOpenAddModal}
+          className="h-8 px-2.5 rounded-lg bg-[var(--fluent-accent)] text-black hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-1 font-semibold text-xs shrink-0 shadow-sm"
+          title="Spiel oder App hinzufügen"
+          aria-label="Spiel oder App hinzufügen"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Hinzufügen</span>
+        </button>
+
+        <button
+          onClick={() => void scanGames()}
+          title="Spiele neu scannen"
+          disabled={isLoading}
+          className="h-8 w-8 rounded-lg border border-[var(--fluent-stroke)] bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] transition-colors flex items-center justify-center shrink-0"
+          aria-label="Spiele neu scannen"
+        >
+          <RefreshCw className={cn("w-3.5 h-3.5", isLoading && "animate-spin")} />
+        </button>
       </div>
 
       {/* Category Filter Pills */}
@@ -263,9 +257,23 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
               >
                 {/* Left: Icon / Avatar + Title + Badge */}
                 <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                  {item.icon_url ? (
+                    <img
+                      src={item.icon_url}
+                      alt={item.name}
+                      className="w-8 h-8 rounded-md object-cover shadow-sm shrink-0 transition-transform group-hover:scale-105 border border-[var(--fluent-stroke-subtle)]"
+                      onError={(e) => {
+                        // Fallback gracefully to initials if image fails to load
+                        (e.currentTarget as HTMLElement).style.display = "none";
+                        const fallback = e.currentTarget.nextElementSibling;
+                        if (fallback) (fallback as HTMLElement).classList.remove("hidden");
+                      }}
+                    />
+                  ) : null}
                   <div
                     className={cn(
                       "w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold shrink-0 shadow-sm transition-transform group-hover:scale-105",
+                      item.icon_url && "hidden",
                       item.source === "steam"
                         ? "bg-sky-500/20 text-sky-300"
                         : item.source === "epic"

@@ -33,7 +33,7 @@ Based on Gemini 4 Argon audit feedback: 5 Work Packages addressing system-level 
     - In `SpotifyWidget`, add dynamic soft-blurred cover backdrop (`blur(40px) opacity-15`).
   - **Acceptance**: `npm.cmd test -- resources spotify` passes.
 
-- [ ] **WP-04: Bluetooth Battery & Quick-Toggle + Speedtest Polish**
+- [x] **WP-04: Bluetooth Battery & Quick-Toggle + Speedtest Polish**
   - **Files**: `src-tauri/src/bluetooth/mod.rs`, `src-tauri/src/lib.rs`, `src/widgets/bluetooth/BluetoothWidget.tsx`, `src/widgets/speedtest/SpeedtestWidget.tsx`, plus tests.
   - **Scope**:
     - Reduce top header padding in `BluetoothWidget` so 2 devices fit without scrollbar clipping.

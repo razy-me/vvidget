@@ -188,22 +188,22 @@ export const CalendarWidget: FC<CalendarWidgetProps> = ({
           )}
         </div>
 
-        {/* Quick add note input */}
-        <form onSubmit={handleAddNote} className="flex items-center gap-1.5 pb-2 shrink-0">
+        {/* Quick add note input with inline accent button */}
+        <form onSubmit={handleAddNote} className="relative flex items-center pb-2 shrink-0">
           <input
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             placeholder="Notiz hinzufügen..."
-            className="flex-1 min-w-0 px-2 py-1 text-xs rounded-md border border-[var(--fluent-stroke)] bg-[var(--fluent-card-bg)] text-[var(--fluent-text-primary)] placeholder-[var(--fluent-text-tertiary)] focus:outline-none focus:border-[var(--fluent-accent)] transition-colors"
+            className="w-full pl-2.5 pr-7 py-1 text-xs rounded-md border border-[var(--fluent-stroke)] bg-[var(--fluent-card-bg)] text-[var(--fluent-text-primary)] placeholder-[var(--fluent-text-tertiary)] focus:outline-none focus:border-[var(--fluent-accent)] transition-colors"
           />
           <button
             type="submit"
             aria-label="Notiz hinzufügen"
             disabled={!inputText.trim()}
-            className="p-1 rounded-md bg-[var(--fluent-accent)] text-black hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity shrink-0"
+            className="absolute right-1 top-[3px] p-1 rounded bg-[var(--fluent-accent)] text-black hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 flex items-center justify-center shadow-xs"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-3 h-3 stroke-[2.5]" />
           </button>
         </form>
 

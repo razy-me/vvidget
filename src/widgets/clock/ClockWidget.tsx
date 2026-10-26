@@ -226,70 +226,78 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
         <div
           role="tablist"
           aria-label="Uhr Navigation"
-          className="grid grid-cols-4 p-0.5 rounded-lg bg-[var(--fluent-card-bg)]/80 border border-[var(--fluent-stroke-subtle)]"
+          className="grid grid-cols-4 gap-1 p-0.5 rounded-lg bg-[var(--fluent-card-bg)]/80 border border-[var(--fluent-stroke-subtle)]"
         >
           <button
             type="button"
             role="tab"
+            aria-label="Uhr"
+            title="Uhr"
             aria-selected={activeTab === "uhr"}
             onClick={() => setActiveTab("uhr")}
             className={cn(
-              "flex items-center justify-center gap-1.5 py-1 px-2 rounded-md text-xs font-medium transition-all",
+              "flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-md text-[11px] font-medium transition-all overflow-hidden",
               activeTab === "uhr"
                 ? "bg-[var(--fluent-accent)] text-black font-semibold shadow-sm"
                 : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-hover)]"
             )}
           >
             <ClockIcon className="w-3.5 h-3.5 shrink-0" />
-            <span>Uhr</span>
+            <span className={cn(activeTab !== "uhr" && "hidden")}>Uhr</span>
           </button>
 
           <button
             type="button"
             role="tab"
+            aria-label="Timer"
+            title="Timer"
             aria-selected={activeTab === "timer"}
             onClick={() => setActiveTab("timer")}
             className={cn(
-              "flex items-center justify-center gap-1.5 py-1 px-2 rounded-md text-xs font-medium transition-all",
+              "flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-md text-[11px] font-medium transition-all overflow-hidden",
               activeTab === "timer"
                 ? "bg-[var(--fluent-accent)] text-black font-semibold shadow-sm"
                 : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-hover)]"
             )}
           >
             <Hourglass className="w-3.5 h-3.5 shrink-0" />
-            <span>Timer</span>
+            <span className={cn(activeTab !== "timer" && "hidden")}>Timer</span>
           </button>
 
           <button
             type="button"
             role="tab"
+            aria-label="Stoppuhr"
+            title="Stoppuhr"
             aria-selected={activeTab === "stoppuhr"}
             onClick={() => setActiveTab("stoppuhr")}
             className={cn(
-              "flex items-center justify-center gap-1.5 py-1 px-2 rounded-md text-xs font-medium transition-all",
+              "flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-md text-[11px] font-medium transition-all overflow-hidden",
               activeTab === "stoppuhr"
                 ? "bg-[var(--fluent-accent)] text-black font-semibold shadow-sm"
                 : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-hover)]"
             )}
           >
             <TimerIcon className="w-3.5 h-3.5 shrink-0" />
-            <span>Stoppuhr</span>
+            <span className={cn(activeTab !== "stoppuhr" && "hidden")}>Stoppuhr</span>
           </button>
 
           <button
             type="button"
             role="tab"
+            aria-label="Wecker"
+            title="Wecker"
             aria-selected={activeTab === "wecker"}
             onClick={() => setActiveTab("wecker")}
             className={cn(
-              "flex items-center justify-center gap-1.5 py-1 px-2 rounded-md text-xs font-medium transition-all",
+              "flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-md text-[11px] font-medium transition-all overflow-hidden",
               activeTab === "wecker"
                 ? "bg-[var(--fluent-accent)] text-black font-semibold shadow-sm"
                 : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-hover)]"
             )}
           >
             <Bell className="w-3.5 h-3.5 shrink-0" />
-            <span>Wecker</span>
+            <span className={cn(activeTab !== "wecker" && "hidden")}>Wecker</span>
           </button>
         </div>
       </div>
@@ -446,11 +454,6 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
               >
                 {germanDate}
               </div>
-            </div>
-
-            {/* Bottom Info Footer */}
-            <div className="pt-2 border-t border-[var(--fluent-stroke-subtle)] text-center text-[10px] text-[var(--fluent-text-tertiary)] shrink-0">
-              {selectedTz.label}
             </div>
           </div>
         )}

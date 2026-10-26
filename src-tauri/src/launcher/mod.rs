@@ -246,7 +246,7 @@ pub fn scan_steam_games() -> Vec<LauncherItem> {
     candidate_roots.push(PathBuf::from("D:\\Steam"));
     candidate_roots.push(PathBuf::from("E:\\Steam"));
 
-    for root in candidate_roots {
+    for root in &candidate_roots {
         if root.exists() && root.is_dir() {
             let vdf_file = root.join("steamapps").join("libraryfolders.vdf");
             if vdf_file.exists() {
@@ -259,8 +259,8 @@ pub fn scan_steam_games() -> Vec<LauncherItem> {
                     }
                 }
             }
-            if !library_paths.contains(&root) {
-                library_paths.push(root);
+            if !library_paths.contains(root) {
+                library_paths.push(root.clone());
             }
         }
     }

@@ -10,6 +10,7 @@ const mockItems: LauncherItem[] = [
     path_or_uri: "steam://rungameid/620",
     source: "steam",
     icon_type: "steam",
+    icon_url: "data:image/jpeg;base64,fakeportal2icon",
   },
   {
     id: "steam_1942280",
@@ -39,13 +40,14 @@ describe("GameLauncherWidget Component", () => {
     vi.clearAllMocks();
   });
 
-  it("renders header, search bar, category pills, and games list", async () => {
+  it("renders compact search header, category pills, and games list with real icon", async () => {
     await act(async () => {
       render(<GameLauncherWidget initialItems={mockItems} autoScan={false} />);
     });
 
-    expect(screen.getByText("Game & App Launcher")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Suchen nach Spiel oder App...")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Spiel oder App hinzufügen" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Spiele neu scannen" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Alle" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Steam" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Epic" })).toBeInTheDocument();
@@ -55,6 +57,11 @@ describe("GameLauncherWidget Component", () => {
     expect(screen.getByText("Brotato")).toBeInTheDocument();
     expect(screen.getByText("Fortnite")).toBeInTheDocument();
     expect(screen.getByText("GeForce NOW")).toBeInTheDocument();
+
+    // Verify real icon image rendered for item with icon_url
+    const portalImg = screen.getByAltText("Portal 2");
+    expect(portalImg).toBeInTheDocument();
+    expect(portalImg).toHaveAttribute("src", "data:image/jpeg;base64,fakeportal2icon");
   });
 
   it("filters items using search query", async () => {
