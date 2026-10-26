@@ -19,7 +19,7 @@
 
 ## Folder Map
 ```
-c:\Widgetz\
+c:\vvidget\
 ├── docs\agents\               # Specifications, plans, decisions, context
 ├── src-tauri\
 │   ├── Cargo.toml             # Comprehensive dependencies, Windows Win32/WinRT features
@@ -56,18 +56,18 @@ c:\Widgetz\
 - **PowerShell / Windows**: Always invoke `npm.cmd` rather than `npm` on this machine.
 - **Styling**: Use Windows 11 Fluent tokens (`--fluent-acrylic-bg`, `--fluent-stroke`, Segoe UI Variable). Acrylic backdrop uses native `window-vibrancy` in Rust; CSS provides translucent fallback.
 - **Errors**: Rust returns `Result<T, String>` across Tauri IPC. Frontend wraps calls in try/catch or typed specta bindings.
-- **Logging**: Use `tauri-plugin-log` via `log::{info, warn, error}`. Logs write to `%APPDATA%/Widgetz/logs/`.
+- **Logging**: Use `tauri-plugin-log` via `log::{info, warn, error}`. Logs write to `%APPDATA%/vvidget/logs/`.
 - **Validation**: All IPC and config inputs must be strictly validated before applying.
 - **Window Management**: Display widgets must use `WS_EX_TOOLWINDOW` and `WS_EX_NOACTIVATE` to avoid Alt+Tab and focus theft. Settings modal retains standard focus and activation.
 
 ## Env Vars
-- `VITE_APP_NAME`: Name of the desktop application (default: `Widgetz`).
+- `VITE_APP_NAME`: Name of the desktop application (default: `vvidget`).
 - `VITE_APP_VERSION`: Semantic version string.
 
 ## Shared Types / Schemas
 - `WidgetId = "weather" | "spotify" | "resources"`
 - `WidgetMetadata`: metadata including dimensions, category, title, description in `src/widgets/registry.ts`.
-- `AppConfig`: persisted in `%APPDATA%/Widgetz/config.json`.
+- `AppConfig`: persisted in `%APPDATA%/vvidget/config.json`.
 - `SystemMetrics`: CPU, RAM, Disk data emitted via Tauri event `metrics-update`.
 - `MediaSession`: GSMTC metadata and playback state emitted via `media-metadata-update`.
 
@@ -91,7 +91,7 @@ c:\Widgetz\
 - `get_autostart_status() -> Result<bool, String>` & `set_autostart(enabled: bool) -> Result<(), String>`
 - `open_logs_folder() -> Result<(), String>`
 - `useConfig()`: React hook with optimistic updates, 500ms debounce placement sync, and cross-window `"config-changed"` event listener.
-- **Gotchas**: Corrupt config is automatically archived to `%APPDATA%/Widgetz/config.json.corrupt.<timestamp>` and default config restored without panicking.
+- **Gotchas**: Corrupt config is automatically archived to `%APPDATA%/vvidget/config.json.corrupt.<timestamp>` and default config restored without panicking.
 
 ## Module: System Tray & Settings Lifecycle (`src-tauri/src/tray`, `src/pages/settings`)
 - `setup_tray(app: &AppHandle) -> Result<TrayIcon, Error>`: Native tray icon with context menu (Lock, Widgets toggles, Layout mode, Settings, Logs, Quit).
@@ -127,7 +127,7 @@ c:\Widgetz\
 - `media_play_pause() -> Result<(), String>`: Asynchronous toggle for playback state via GSMTC `TryTogglePlayPauseAsync`.
 - `media_next_track() -> Result<(), String>` & `media_previous_track() -> Result<(), String>`: Skip controls via GSMTC async APIs.
 - `start_media_monitor(app_handle)`: Background worker monitoring GSMTC session changes and emitting `"media-metadata-update"` events only when metadata/state changes.
-- `handle_album_art_protocol`: Custom URI scheme `widgetz://album-art?t=<track_id>` serving binary album artwork streams from in-memory cache, bypassing Base64 JSON overhead.
+- `handle_album_art_protocol`: Custom URI scheme `vvidget://album-art?t=<track_id>` serving binary album artwork streams from in-memory cache, bypassing Base64 JSON overhead.
 - `useMediaPlayback()`: React hook with optimistic playback state toggling and `"media-metadata-update"` event listener.
 - `TrackProgress`: Decoupled 60fps client-side timeline interpolating current position from `last_updated_system_time_ms` + `position_ms` without IPC spam.
 - `MediaControls`: Fluent interactive previous/play/pause/next control buttons with accessible aria labels and state disabling.

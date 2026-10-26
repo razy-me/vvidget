@@ -24,7 +24,7 @@
 
 ### Fixed / Security / Performance
 - **Zero Drift Alignment**: Widgets snapped side-by-side or stacked vertically align with 0px overlap and exact 8px/16px insets.
-- **Release Executable**: Fresh release binary built at `C:\Widgetz\src-tauri\target\release\widgetz.exe`.
+- **Release Executable**: Fresh release binary built at `C:\vvidget\src-tauri\target\release\vvidget.exe`.
 
 ### Migration & Deployment Notes
 - **Env Vars / Config**: Backward-compatible config self-healing migration automatically adapts older configs to the 12x9 grid.

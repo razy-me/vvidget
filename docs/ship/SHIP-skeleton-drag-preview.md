@@ -15,14 +15,14 @@
 ## Changelog & PR Summary
 ### Added / Changed
 - **Skeleton Drag Preview (`widget_skeleton`)**:
-  - Implemented dynamic desktop skeleton card rendering in [SkeletonWidget.tsx](file:///c:/Widgetz/src/components/layout/SkeletonWidget.tsx) featuring Fluent acrylic material, rounded corners, dashed accent glow border (`border-2 border-dashed border-[var(--fluent-accent)]/80`), header silhouette, placeholder pulse bars, and "Drop Target" indicator.
-  - Added dedicated route `index.html?view=skeleton` in [App.tsx](file:///c:/Widgetz/src/App.tsx).
-  - Added Win32 click-through (`WS_EX_TRANSPARENT`), non-activating (`WS_EX_NOACTIVATE`), and desktop tool window (`WS_EX_TOOLWINDOW`) styles in [win32.rs](file:///c:/Widgetz/src-tauri/src/window/win32.rs).
-  - Added backend Tauri commands `update_skeleton_preview` and `hide_skeleton_preview` in [lib.rs](file:///c:/Widgetz/src-tauri/src/lib.rs).
-  - Updated [useGridDrag.ts](file:///c:/Widgetz/src/hooks/useGridDrag.ts) to compute the prospective non-overlapping snap target on `pointermove` and update the skeleton preview window at 60fps with zero mouse-blocking lag.
+  - Implemented dynamic desktop skeleton card rendering in [SkeletonWidget.tsx](file:///c:/vvidget/src/components/layout/SkeletonWidget.tsx) featuring Fluent acrylic material, rounded corners, dashed accent glow border (`border-2 border-dashed border-[var(--fluent-accent)]/80`), header silhouette, placeholder pulse bars, and "Drop Target" indicator.
+  - Added dedicated route `index.html?view=skeleton` in [App.tsx](file:///c:/vvidget/src/App.tsx).
+  - Added Win32 click-through (`WS_EX_TRANSPARENT`), non-activating (`WS_EX_NOACTIVATE`), and desktop tool window (`WS_EX_TOOLWINDOW`) styles in [win32.rs](file:///c:/vvidget/src-tauri/src/window/win32.rs).
+  - Added backend Tauri commands `update_skeleton_preview` and `hide_skeleton_preview` in [lib.rs](file:///c:/vvidget/src-tauri/src/lib.rs).
+  - Updated [useGridDrag.ts](file:///c:/vvidget/src/hooks/useGridDrag.ts) to compute the prospective non-overlapping snap target on `pointermove` and update the skeleton preview window at 60fps with zero mouse-blocking lag.
 - **Unit Test Coverage**:
-  - Created [skeletonWidget.test.tsx](file:///c:/Widgetz/src/test/skeletonWidget.test.tsx) asserting component styling, accessibility roles, and click-through classes.
-  - Enhanced [useGridDrag.test.ts](file:///c:/Widgetz/src/test/useGridDrag.test.ts) verifying full skeleton lifecycle (`pointerdown` activation, `pointermove` grid target updates, and `pointerup` cleanup).
+  - Created [skeletonWidget.test.tsx](file:///c:/vvidget/src/test/skeletonWidget.test.tsx) asserting component styling, accessibility roles, and click-through classes.
+  - Enhanced [useGridDrag.test.ts](file:///c:/vvidget/src/test/useGridDrag.test.ts) verifying full skeleton lifecycle (`pointerdown` activation, `pointermove` grid target updates, and `pointerup` cleanup).
 
 ### Fixed / Security / Performance
 - **Zero Click Interception**: Win32 `WS_EX_TRANSPARENT` ensures the skeleton window never steals mouse clicks or blocks desktop interactions beneath it.

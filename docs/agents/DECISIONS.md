@@ -45,7 +45,7 @@
 - **Reason / trade-offs**: Dedicated background thread with native `sysinfo` delivers sub-millisecond metric collection and <0.1% CPU consumption.
 
 ## D-007 Atomic Config Persistence in AppData (P1, Planner)
-- **Decision**: Store JSON configuration in `%APPDATA%/Widgetz/config.json` using atomic file replacement (write to `.tmp` file and rename).
+- **Decision**: Store JSON configuration in `%APPDATA%/vvidget/config.json` using atomic file replacement (write to `.tmp` file and rename).
 - **Alternatives considered**:
   1. *Direct file overwriting*: Risks corrupted / 0-byte configuration files if the app or machine crashes mid-write.
   2. *SQLite embedded database*: Over-engineered for a simple desktop widget configuration object (<5KB).
@@ -81,7 +81,7 @@
 - **Reason / trade-offs**: Robust, thread-safe media detection with zero UI hitching.
 
 ## D-012 Structured Logging with tauri-plugin-log & Safe Config Fallback (Phase 1, Orchestrator)
-- **Decision**: Use `tauri-plugin-log` with file rotation in `%APPDATA%/Widgetz/logs/` and automatically recover from corrupted configs by archiving to `.corrupt.<timestamp>` and restoring defaults.
+- **Decision**: Use `tauri-plugin-log` with file rotation in `%APPDATA%/vvidget/logs/` and automatically recover from corrupted configs by archiving to `.corrupt.<timestamp>` and restoring defaults.
 - **Alternatives considered**:
   1. *Standard stdout/eprintln*: Logs are lost when running as a detached GUI process without a console.
   2. *Crash on malformed config*: Bricks the app until user manually deletes AppData files.
@@ -110,7 +110,7 @@
 - **Reason / trade-offs**: Acrylic provides consistent translucent frosted glass effect regardless of window focus state.
 
 ## D-016 Album Art Custom URI Protocol & Client-Side Timeline Interpolation (Plan Review, Orchestrator)
-- **Decision**: Serve album art through a custom Tauri protocol (`widgetz://album-art?t=<trackId>`) and interpolate playback progress in React from `lastUpdatedSystemTimeMs` + `positionMs`.
+- **Decision**: Serve album art through a custom Tauri protocol (`vvidget://album-art?t=<trackId>`) and interpolate playback progress in React from `lastUpdatedSystemTimeMs` + `positionMs`.
 - **Alternatives considered**:
   1. *Base64 serialization over JSON IPC every second*: Massive JSON serialization overhead and GC pressure.
   2. *High-frequency GSMTC polling*: GSMTC does not fire regular progress ticks, wasting CPU.
@@ -180,7 +180,7 @@
 - **Reason / trade-offs**: Provides instantaneous UI rendering upon widget launch with zero initial 0.0% glitch, sub-0.2% CPU overhead, and adaptive background event streaming.
 
 ## D-026 GSMTC Priority Session Arbitration & Binary URI Protocol Streaming (WP-04, Coder)
-- **Decision**: Prioritize Spotify sessions by inspecting `SourceAppUserModelId` with fallback to `GetCurrentSession()` and the first available active playback session. Deliver album art through a custom Tauri URI protocol `widgetz://album-art?t=<trackId>` backed by an in-memory `OnceLock<Mutex<HashMap<String, AlbumArtData>>>` capped at 30 items, and decouple playback timeline updates by locally interpolating `position_ms` at 60fps via `requestAnimationFrame` on the client rather than polling IPC. Add `"Foundation_Collections"` to `windows` crate features in `Cargo.toml` to support `GetSessions()` vector traversal.
+- **Decision**: Prioritize Spotify sessions by inspecting `SourceAppUserModelId` with fallback to `GetCurrentSession()` and the first available active playback session. Deliver album art through a custom Tauri URI protocol `vvidget://album-art?t=<trackId>` backed by an in-memory `OnceLock<Mutex<HashMap<String, AlbumArtData>>>` capped at 30 items, and decouple playback timeline updates by locally interpolating `position_ms` at 60fps via `requestAnimationFrame` on the client rather than polling IPC. Add `"Foundation_Collections"` to `windows` crate features in `Cargo.toml` to support `GetSessions()` vector traversal.
 - **Alternatives considered**:
   1. *Streaming Base64 artwork through JSON IPC*: Emits multi-megabyte strings through IPC on every track change, causing severe serialization overhead and garbage collection pauses.
   2. *Polling GSMTC playback position every second via IPC*: Constant wakeups and IPC traffic for simple linear time progression.
@@ -188,7 +188,7 @@
 - **Reason / trade-offs**: Zero IPC overhead for smooth 60fps timeline progression, native binary image streaming directly into standard HTML `<img>` elements with browser HTTP cache headers, and priority control of Spotify without requiring OAuth tokens.
 
 ## D-027 Open-Meteo & Native Windows Geolocation with Offline Cache Resilience (WP-05, Coder)
-- **Decision**: Use WinRT `Windows.Devices.Geolocation::Geolocator` via `tokio::task::spawn_blocking` extracting coordinates through `coordinate.Point()?.Position()?` with graceful error fallback to Open-Meteo Geocoding API (`searchCity`) or saved coordinates. Cache latest successful weather forecast in `localStorage` under `widgetz_weather_cache` and automatically serve cached forecast with `isOffline = true` and visual warning badge when network or API fails.
+- **Decision**: Use WinRT `Windows.Devices.Geolocation::Geolocator` via `tokio::task::spawn_blocking` extracting coordinates through `coordinate.Point()?.Position()?` with graceful error fallback to Open-Meteo Geocoding API (`searchCity`) or saved coordinates. Cache latest successful weather forecast in `localStorage` under `vvidget_weather_cache` and automatically serve cached forecast with `isOffline = true` and visual warning badge when network or API fails.
 - **Alternatives considered**:
   1. *Third-party IP geolocation API (ipinfo/ip-api)*: Rate limited, sends device IP to external ad/analytics networks, and inaccurate on VPNs.
   2. *Failing completely on network outage*: Widget disappears or shows an uninformative crash error.

@@ -2,7 +2,7 @@
 **Date**: 2026-10-25 | **Mode**: `r-plan-it` (Compact) | **Status**: DRAFT
 
 ## 1. Goal & Requirements
-- **Outcome**: Expand Widgetz from 3 to 10 modular desktop widgets (including infinite-instance Quick Settings and a laptop-exclusive Battery widget) and polish all existing widgets to match native Windows 11 Widget Board design language.
+- **Outcome**: Expand vvidget from 3 to 10 modular desktop widgets (including infinite-instance Quick Settings and a laptop-exclusive Battery widget) and polish all existing widgets to match native Windows 11 Widget Board design language.
 - **Requirements**:
   - `R1`: **Dynamic & Multi-Instance Widget Registry**: Support widget types (`resources`, `spotify`, `weather`, `speedtest`, `launcher`, `quick_settings`, `calendar`, `clock`, `bluetooth`, `battery`) plus infinite cloneable instances (`quick_settings_<id>`) in `AppConfig`, `sync_widget_windows`, `App.tsx`, `DockContainer`, Tray, and `SettingsModal`.
   - `R2`: **Native Windows 11 Design Polish for Existing 3 Widgets** (see Section 2 "Design Upgrades" below):
@@ -31,7 +31,7 @@
 ## 2. Native Windows 11 Design Upgrades (Existing 3 Widgets)
 
 ### Design Philosophy
-The Windows 11 Widget Board and native apps (Settings, Task Manager, Clock) follow these principles that Widgetz currently deviates from in small but noticeable ways:
+The Windows 11 Widget Board and native apps (Settings, Task Manager, Clock) follow these principles that vvidget currently deviates from in small but noticeable ways:
 
 1. **No colored icon backgrounds**: Native Windows uses bare monochrome or subtle accent-tinted icons directly — never colored icon circles/boxes (the current `bg-emerald-500/10` wrapper around the music icon, or the `bg-white/5` border-box around the weather icon are non-native patterns).
 2. **Segoe Fluent Icons weight**: Windows uses `Segoe Fluent Icons` font-weight and sizing consistently — Lucide icons are close but some are too thick/bold compared to native.
