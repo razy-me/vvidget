@@ -113,9 +113,9 @@ describe("ResourceWidget component", () => {
     render(<ResourceWidget />);
 
     expect(screen.getByText("CPU")).toBeDefined();
-    expect(screen.getByText("Memory")).toBeDefined();
-    expect(screen.getByText(/Storage/)).toBeDefined();
-    expect(screen.getByText("Network")).toBeDefined();
+    expect(screen.getByText("Arbeitsspeicher")).toBeDefined();
+    expect(screen.getByText(/Systemlaufwerk/)).toBeDefined();
+    expect(screen.getByText("Netzwerk")).toBeDefined();
 
     // CPU core count
     expect(screen.getByText(`${MOCK_SYSTEM_METRICS.cpu_cores} Cores`)).toBeDefined();
@@ -138,19 +138,19 @@ describe("ResourceWidget component", () => {
     render(<ResourceWidget />);
 
     // Defaults to C:
-    expect(screen.getByText("Storage (C:)")).toBeDefined();
+    expect(screen.getByText("Systemlaufwerk (C:)")).toBeDefined();
 
     // Click D: disk switcher pill
     const diskBtnD = screen.getByRole("button", { name: "D:" });
     fireEvent.click(diskBtnD);
 
     // Active disk switched to D:
-    expect(screen.getByText("Storage (D:)")).toBeDefined();
+    expect(screen.getByText("Systemlaufwerk (D:)")).toBeDefined();
 
     // Click back to C:
     const diskBtnC = screen.getByRole("button", { name: "C:" });
     fireEvent.click(diskBtnC);
-    expect(screen.getByText("Storage (C:)")).toBeDefined();
+    expect(screen.getByText("Systemlaufwerk (C:)")).toBeDefined();
   });
 
   it("renders within WidgetContainer with lock toggle in independent mode", () => {

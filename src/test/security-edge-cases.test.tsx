@@ -156,7 +156,7 @@ describe("Multi-Disk Interaction in ResourceWidget (R5)", () => {
     render(<ResourceWidget />);
 
     // Starts on C:
-    expect(screen.getByText("Storage (C:)")).toBeInTheDocument();
+    expect(screen.getByText("Systemlaufwerk (C:)")).toBeInTheDocument();
     expect(screen.getByText("Windows NVMe")).toBeInTheDocument();
     expect(screen.getByText("400.0 GB / 1000.0 GB")).toBeInTheDocument();
 
@@ -164,7 +164,7 @@ describe("Multi-Disk Interaction in ResourceWidget (R5)", () => {
     const dButton = screen.getByRole("button", { name: "D:" });
     fireEvent.click(dButton);
 
-    expect(screen.getByText("Storage (D:)")).toBeInTheDocument();
+    expect(screen.getByText("Systemlaufwerk (D:)")).toBeInTheDocument();
     expect(screen.getByText("Games SSD")).toBeInTheDocument();
     expect(screen.getByText("1500.0 GB / 2000.0 GB")).toBeInTheDocument();
 
@@ -172,7 +172,7 @@ describe("Multi-Disk Interaction in ResourceWidget (R5)", () => {
     const eButton = screen.getByRole("button", { name: "E:" });
     fireEvent.click(eButton);
 
-    expect(screen.getByText("Storage (E:)")).toBeInTheDocument();
+    expect(screen.getByText("Systemlaufwerk (E:)")).toBeInTheDocument();
     expect(screen.getByText("Backup HDD")).toBeInTheDocument();
     expect(screen.getByText("3600.0 GB / 4000.0 GB")).toBeInTheDocument();
   });
@@ -203,7 +203,7 @@ describe("Multi-Disk Interaction in ResourceWidget (R5)", () => {
     render(<ResourceWidget />);
 
     expect(screen.getByText("CPU")).toBeInTheDocument();
-    expect(screen.getByText("Memory")).toBeInTheDocument();
-    expect(screen.queryByText(/Storage/)).not.toBeInTheDocument();
+    expect(screen.getByText("Arbeitsspeicher")).toBeInTheDocument();
+    expect(screen.queryByText(/Systemlaufwerk/)).not.toBeInTheDocument();
   });
 });

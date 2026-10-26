@@ -6,7 +6,7 @@ Based on Gemini 4 Argon audit feedback: 5 Work Packages addressing system-level 
 
 ### Work Packages
 
-- [ ] **WP-01: System Design Foundations & Header Restyle**
+- [x] **WP-01: System Design Foundations & Header Restyle**
   - **Files**: `src/styles/fluent.css`, `src/components/ui/Tooltip.tsx`, `src/components/layout/WidgetContainer.tsx`, `src/components/layout/HeaderBar.tsx`, `src-tauri/src/window/win32.rs`
   - **Scope**:
     - Floating hover-only `HeaderBar` (`opacity-0 group-hover:opacity-100 transition-opacity`, overlaid absolute or zero-height relative so card content gets full vertical height).
@@ -15,7 +15,7 @@ Based on Gemini 4 Argon audit feedback: 5 Work Packages addressing system-level 
     - DWM rounded corner and backdrop styling in `win32.rs`.
   - **Acceptance**: `npm.cmd test -- layout primitives` passes.
 
-- [ ] **WP-02: Weather & Battery Localization and Polish**
+- [x] **WP-02: Weather & Battery Localization and Polish**
   - **Files**: `src/services/weather/wmoCodes.ts`, `src/widgets/weather/WeatherWidget.tsx`, `src/widgets/weather/HourlyTrend.tsx`, `src/widgets/weather/DailyForecast.tsx`, `src/types/battery.ts`, `src/widgets/battery/BatteryWidget.tsx`, `src/widgets/battery/BatterySparkline.tsx`, plus tests.
   - **Scope**:
     - Full German weather translations (e.g., "Bedeckt", "Gefühlt", "Regen", "Luftfeuchtigkeit", "Stündlicher Trend", "5-Tage-Vorhersage").

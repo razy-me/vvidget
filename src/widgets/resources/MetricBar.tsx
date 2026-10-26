@@ -30,8 +30,8 @@ export const MetricBar: FC<MetricBarProps> = ({
 
   const content = (
     <div className={cn("flex flex-col gap-1 w-full select-none", className)}>
-      <div className="flex items-center justify-between text-xs">
-        <div className="flex items-center gap-1.5 font-medium text-[var(--fluent-text-primary)]">
+      <div className="w-full flex items-center justify-between text-xs">
+        <div className="flex items-center gap-1.5 font-medium text-[var(--fluent-text-primary)] shrink-0">
           {icon && <span className="text-[var(--fluent-text-secondary)] flex items-center">{icon}</span>}
           <span>{label}</span>
         </div>
@@ -42,7 +42,7 @@ export const MetricBar: FC<MetricBarProps> = ({
           </span>
           <span
             className={cn(
-              "text-xs tabular-nums font-semibold min-w-[36px] text-right",
+              "text-xs tabular-nums font-bold min-w-[36px] text-right",
               activeVariant === "error"
                 ? "text-[var(--fluent-error)]"
                 : activeVariant === "warning"
@@ -65,7 +65,7 @@ export const MetricBar: FC<MetricBarProps> = ({
 
   if (detailTooltip) {
     return (
-      <Tooltip content={detailTooltip} position="top" delay={150}>
+      <Tooltip content={detailTooltip} position="top" delay={150} containerClassName="w-full flex">
         {content}
       </Tooltip>
     );

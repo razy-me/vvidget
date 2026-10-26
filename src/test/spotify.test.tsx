@@ -192,7 +192,7 @@ describe("SpotifyWidget Component", () => {
     render(<SpotifyWidget sessionOverride={DEFAULT_MEDIA_SESSION} />);
 
     expect(screen.getByText("Keine Wiedergabe aktiv")).toBeInTheDocument();
-    expect(screen.getByText("Idle")).toBeInTheDocument();
+    expect(screen.getByText("Inaktiv")).toBeInTheDocument();
     expect(
       screen.getByText(/Starte die Wiedergabe in Spotify oder einem Media Player/)
     ).toBeInTheDocument();
@@ -250,7 +250,7 @@ describe("SpotifyWidget Component", () => {
     expect(screen.getAllByText("Starboy").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("The Weeknd, Daft Punk")).toBeInTheDocument();
     expect(screen.getByText("Spotify")).toBeInTheDocument();
-    expect(screen.getByText("Playing")).toBeInTheDocument();
+    expect(screen.getByText("Wiedergabe")).toBeInTheDocument();
     expect(screen.getByAltText("Starboy cover")).toBeInTheDocument();
     expect(screen.getByTestId("media-controls")).toBeInTheDocument();
     expect(screen.getByTestId("track-progress")).toBeInTheDocument();

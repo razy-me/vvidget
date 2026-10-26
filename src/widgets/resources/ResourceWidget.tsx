@@ -134,7 +134,7 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
           {/* Section 2: Memory (RAM) */}
           <div className="bg-[var(--fluent-card-bg)]/40 p-2 rounded-lg">
             <MetricBar
-              label="Memory"
+              label="Arbeitsspeicher"
               valueDisplay={`${ramUsedGb} / ${ramTotalGb}`}
               percent={ramPercent}
               icon={<Layers className="w-3.5 h-3.5 text-violet-400" />}
@@ -142,9 +142,9 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
               detailTooltip={
                 metrics && (
                   <div className="text-[11px] space-y-0.5">
-                    <div>Used: {ramUsedGb}</div>
-                    <div>Free: {formatBytesGb(metrics.memory.free_bytes)}</div>
-                    <div>Total: {ramTotalGb}</div>
+                    <div>Belegt: {ramUsedGb}</div>
+                    <div>Frei: {formatBytesGb(metrics.memory.free_bytes)}</div>
+                    <div>Gesamt: {ramTotalGb}</div>
                   </div>
                 )
               }
@@ -158,13 +158,13 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
                 <div className="flex items-center gap-1.5 text-xs font-medium">
                   <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
                   <span>
-                    Storage ({activeDisk.mount_point.replace(/\\$/, "")})
+                    Systemlaufwerk ({activeDisk.mount_point.replace(/\\$/, "")})
                   </span>
                 </div>
 
-                {/* Windows 11 Segmented Pill Switcher */}
+                {/* Windows 11 Segmented Control rounded-[5px] */}
                 {metrics && metrics.disks.length > 1 && (
-                  <div className="flex bg-[var(--fluent-control-bg)] rounded-full p-0.5 gap-0.5">
+                  <div className="flex bg-[var(--fluent-control-bg)] rounded-[5px] p-0.5 gap-0.5">
                     {metrics.disks.map((d, idx) => {
                       const isActive = activeDiskIndex === idx;
                       return (
@@ -173,7 +173,7 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
                           type="button"
                           onClick={() => setUserSelectedDiskIndex(idx)}
                           className={cn(
-                            "text-[10px] px-2 py-0.5 rounded-full transition-all font-medium leading-none",
+                            "text-[10px] px-2 py-0.5 rounded-[5px] transition-all font-medium leading-none",
                             isActive
                               ? "bg-[var(--fluent-accent)] text-white shadow-sm"
                               : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-subtle-hover)]"
@@ -188,16 +188,16 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
               </div>
 
               <MetricBar
-                label={activeDisk.name !== activeDisk.mount_point ? activeDisk.name : "System Drive"}
+                label={activeDisk.name !== activeDisk.mount_point && activeDisk.name ? activeDisk.name : "Systemlaufwerk"}
                 valueDisplay={`${diskUsedGb} / ${diskTotalGb}`}
                 percent={diskPercent}
                 variant={diskVariant}
                 detailTooltip={
                   <div className="text-[11px] space-y-0.5">
                     <div>Mount: {activeDisk.mount_point}</div>
-                    <div>Used: {diskUsedGb}</div>
-                    <div>Free: {formatBytesGb(activeDisk.free_bytes)}</div>
-                    <div>Total: {diskTotalGb}</div>
+                    <div>Belegt: {diskUsedGb}</div>
+                    <div>Frei: {formatBytesGb(activeDisk.free_bytes)}</div>
+                    <div>Gesamt: {diskTotalGb}</div>
                   </div>
                 }
               />
@@ -209,7 +209,7 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
             <div className="flex items-center justify-between text-xs font-medium">
               <div className="flex items-center gap-1.5">
                 <Activity className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Network</span>
+                <span>Netzwerk</span>
               </div>
             </div>
 

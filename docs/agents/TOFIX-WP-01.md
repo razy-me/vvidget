@@ -1,38 +1,38 @@
-# TOFIX WP-01 — Review Findings
+# Code Review Report: WP-01
 
-Commit Diff: `HEAD~1..HEAD` (`924b5c2`) — **Verdict: APPROVED**
+- **Target**: WP-01 (HEAD commit)
+- **Reviewer**: Principal Code Reviewer
+- **Review Tier**: Tier 1 Change Review
+- **Status**: APPROVED
 
-## Review Scope & Focus Verification
+---
 
-1. **Backward Compatibility**:
-   - `AppConfig` in `src-tauri/src/config/model.rs` maintains `#[serde(default)]` and `Default` trait implementation.
-   - Any prior configuration missing `launcher_items`, `quick_settings_instances`, `calendar_events`, or `speedtest_history` deserializes cleanly to empty collections without deserialization errors or data corruption.
-   - TypeScript definitions in `src/types/config.ts` mark all extended fields optional (`?`), ensuring compatibility across serialization boundaries.
-   - Starter widget configurations (`resources`, `spotify`, `weather`) retain exact default positions, bounds, and behaviors.
-
-2. **Specta & Serde Compatibility**:
-   - New models (`LauncherItem`, `QuickSettingsInstance`, `CalendarNote`, `SpeedtestResult`) derive `Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type` and `#[serde(default)]`.
-   - IPC commands `duplicate_quick_settings_widget` and `remove_widget_instance` are annotated with `#[tauri::command]` and `#[specta::specta]`, and registered in Tauri's handler macro.
-
-3. **Type-Safety & Edge-Case Handling**:
-   - `resolveBaseWidgetType`: correctly identifies dynamic instances with prefix `quick_settings*` and standard IDs in `WIDGET_REGISTRY`; unknown IDs safely fall back to `"resources"`.
-   - `getWidgetMetadata`: prevents returning incorrect metadata for unknown IDs while properly resolving metadata for dynamic `quick_settings_*` instances.
-   - `duplicate_quick_settings_widget`: generates timestamped instance IDs (`quick_settings_<millis>`), clones placement with a 40px cascade offset, copies/initializes instance state, persists config atomically, emits `config-changed`, and creates the window.
-   - `remove_widget_instance`: closes window and removes widget placement & instance entries, followed by immediate save and notification.
-
-4. **Test Coverage**:
-   - Rust unit tests pass (`cargo test`: 98 passed).
-   - Vitest suite passes (`npm.cmd test`: 154 passed across 22 test files).
-   - Dedicated coverage added in `src/test/registry.test.ts` for all 10 registered widgets, `resolveBaseWidgetType`, dynamic instance metadata resolution, and `getAllWidgetMetadata`.
+## Summary of Changes
+1. **Windows DWM Native FFI (`src-tauri`)**:
+   - Added `Win32_Graphics_Dwm` feature to `windows` crate v0.58.
+   - Updated `apply_acrylic_effect` in `src-tauri/src/window/win32.rs` to safely set `DWMWA_WINDOW_CORNER_PREFERENCE` (`DWMWCP_ROUND`) and `DWMWA_SYSTEMBACKDROP_TYPE` (`DWMSBT_TRANSIENTWINDOW`) using safe error handling that gracefully falls back on older Windows builds.
+2. **Layout & Header Hover Mechanics (`src/components/layout`)**:
+   - Updated `HeaderBar.tsx` and `WidgetContainer.tsx` to support absolute floating header bar with `opacity-0 group-hover:opacity-100 group-focus-within:opacity-100` in independent mode, eliminating reserved vertical whitespace while retaining drag capabilities when dragging (`isGridDragging && "opacity-100"`).
+3. **UI Primitives & Styling**:
+   - Extended `Tooltip.tsx` with `containerClassName` to permit flexible container layouts.
+   - Adjusted Fluent acrylic surface opacity in `src/styles/fluent.css` for enhanced translucency.
+4. **Automated Testing**:
+   - Added test coverage in `src/test/layout.test.tsx` and `src/test/primitives.test.tsx`.
+   - All 233 vitest unit tests and Rust `cargo check` compile cleanly and pass.
 
 ---
 
 ## Findings
 
-| # | Sev | File:Line | Finding | Suggested fix | Status |
-|---|-----|-----------|---------|---------------|--------|
-| 1 | ENHANCEMENT | `src-tauri/src/lib.rs:165-167` | In `sync_widget_windows` docked mode branch, window destruction is hardcoded to `&["resources", "spotify", "weather"]`. If dynamic instances or other widgets are open when switching to docked mode, their independent windows are not closed. | In a future window management refactor, iterate over `config.widgets.keys()` to close all independent widget windows when transitioning to docked mode. | open (non-blocking) |
-| 2 | ENHANCEMENT | `src/pages/settings/SettingsModal.tsx:105` | `handleResetWidgetPlacement` uses `WIDGET_REGISTRY[widgetId as WidgetId]`. For dynamic instances (e.g. `quick_settings_<id>`), this will return undefined and prevent reset. | Replace with `getWidgetMetadata(widgetId)` which supports dynamic instance resolution. | open (non-blocking) |
+| ID | Severity | File | Description | Recommendation |
+|---|---|---|---|---|
+| - | - | - | Zero CRITICAL or MAJOR issues found. | None |
 
-## Conclusion
-WP-01 meets all functional and architectural requirements with zero breaking changes and clean backward compatibility. Approved.
+---
+
+## Verification
+- **Rust Backend**: `cargo check --manifest-path src-tauri/Cargo.toml` passed with 0 errors / 0 warnings.
+- **Frontend / Tests**: `npm.cmd run test` passed (29 test files, 233 tests passed).
+- **Regressions**: No regressions detected in layout, window snapping, or Windows DWM FFI.
+
+**Final Decision**: APPROVED

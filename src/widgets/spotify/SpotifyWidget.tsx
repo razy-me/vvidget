@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { FC } from "react";
 import { Music, Radio, RefreshCw, AlertCircle, Volume2, Volume1, VolumeX } from "lucide-react";
 import { Card } from "@/components/ui";
@@ -41,12 +41,14 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
   const { playPause, nextTrack, previousTrack, refresh, isLoading, error } = hookResult;
   const { volume, isMuted, setVolume, toggleMute } = useMasterVolume();
 
+  const [prevArtUrl, setPrevArtUrl] = useState(session.album_art_url);
   const [imgError, setImgError] = useState(false);
 
-  // Reset imgError when track or album art changes
-  useEffect(() => {
+  // Sync state during render when track or album art changes
+  if (prevArtUrl !== session.album_art_url) {
+    setPrevArtUrl(session.album_art_url);
     setImgError(false);
-  }, [session.album_art_url, session.track_id]);
+  }
 
   const appLabel = formatSourceApp(session.source_app);
   const hasMetadata = Boolean(session.title || session.artist);
@@ -55,169 +57,186 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
   return (
     <Card
       variant="acrylic"
-      className={`w-full p-3 text-[var(--fluent-text-primary)] transition-all select-none overflow-hidden ${className}`}
+      className={`relative w-full p-3 text-[var(--fluent-text-primary)] transition-all select-none overflow-hidden ${className}`}
       data-testid="spotify-widget"
     >
-      {/* Top Header Row */}
-      <div className="flex items-center justify-between mb-2.5">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <div className="w-5 h-5 flex items-center justify-center text-[var(--fluent-text-secondary)]">
-            {isActive && session.is_playing ? (
-              <Radio className="w-3.5 h-3.5 text-emerald-400" />
-            ) : (
-              <Music className="w-3.5 h-3.5" />
-            )}
+      {/* Dynamic Ambient Blur Background Layer */}
+      {session.album_art_url && !imgError && (
+        <div
+          className="absolute inset-0 pointer-events-none overflow-hidden z-0"
+          aria-hidden="true"
+        >
+          <img
+            src={session.album_art_url}
+            alt=""
+            className="w-full h-full object-cover scale-125 blur-[40px] opacity-15"
+          />
+        </div>
+      )}
+
+      {/* Content Layer */}
+      <div className="relative z-10">
+        {/* Top Header Row */}
+        <div className="flex items-center justify-between mb-2.5">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <div className="w-5 h-5 flex items-center justify-center text-[var(--fluent-text-secondary)]">
+              {isActive && session.is_playing ? (
+                <Radio className="w-3.5 h-3.5 text-emerald-400" />
+              ) : (
+                <Music className="w-3.5 h-3.5" />
+              )}
+            </div>
+            <span className="text-xs font-semibold tracking-wide truncate">
+              {appLabel}
+            </span>
           </div>
-          <span className="text-xs font-semibold tracking-wide truncate">
-            {appLabel}
-          </span>
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-[10px] text-[var(--fluent-text-secondary)] font-medium uppercase tracking-wider">
+              {isActive ? (session.is_playing ? "Wiedergabe" : "Pausiert") : "Inaktiv"}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              disabled={isLoading}
+              title="Medienstatus aktualisieren"
+              className="p-1 rounded-md text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-bg)] transition-colors active:scale-95 disabled:opacity-50"
+              aria-label="Medienstatus aktualisieren"
+            >
+              <RefreshCw className={`w-3 h-3 ${isLoading ? "animate-spin" : ""}`} />
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-[10px] text-[var(--fluent-text-secondary)] font-medium uppercase tracking-wider">
-            {isActive ? (session.is_playing ? "Playing" : "Paused") : "Idle"}
-          </span>
+        {/* Error notification if any */}
+        {error && (
+          <div className="mb-2 p-1.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px] flex items-center gap-1.5">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{error}</span>
+          </div>
+        )}
 
+        {/* Main Content Area */}
+        {isActive ? (
+          <div className="flex flex-col gap-2.5">
+            {/* Track Info & Artwork */}
+            <div className="flex items-center gap-3">
+              {/* Album Cover Art with rounded-xl (12px) */}
+              <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] shadow-sm group">
+                {session.album_art_url && !imgError ? (
+                  <img
+                    key={session.album_art_url}
+                    src={session.album_art_url}
+                    alt={`${session.title} cover`}
+                    onError={() => setImgError(true)}
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-emerald-950/40 to-[var(--fluent-card-bg)] text-emerald-400/80">
+                    <Music className="w-6 h-6" />
+                  </div>
+                )}
+              </div>
+
+              {/* Track Details */}
+              <div className="min-w-0 flex-1 flex flex-col justify-center">
+                <h2
+                  className="text-xs font-semibold text-[var(--fluent-text-primary)] truncate leading-tight"
+                  title={session.title}
+                >
+                  {session.title || "Unbekannter Titel"}
+                </h2>
+                <p
+                  className="text-[11px] text-[var(--fluent-text-secondary)] truncate mt-0.5"
+                  title={session.artist}
+                >
+                  {session.artist || "Unbekannter Künstler"}
+                </p>
+                {session.album && (
+                  <p
+                    className="text-[10px] text-[var(--fluent-text-secondary)]/70 truncate"
+                    title={session.album}
+                  >
+                    {session.album}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Interpolated Progress Bar */}
+            <TrackProgress
+              timeline={session.timeline}
+              isPlaying={session.is_playing}
+            />
+
+            {/* Media Playback Controls */}
+            <MediaControls
+              isPlaying={session.is_playing}
+              canPlayPause={session.can_play_pause}
+              canSkipNext={session.can_skip_next}
+              canSkipPrevious={session.can_skip_previous}
+              onPlayPause={() => void playPause()}
+              onNext={() => void nextTrack()}
+              onPrevious={() => void previousTrack()}
+              size="md"
+            />
+          </div>
+        ) : (
+          /* Polished German Locale Idle State */
+          <div className="py-4 flex flex-col items-center justify-center text-center">
+            <div className="w-12 h-12 rounded-full bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] flex items-center justify-center text-[var(--fluent-text-secondary)] mb-2.5 shadow-inner">
+              <Music className="w-5 h-5 opacity-60" />
+            </div>
+            <p className="text-xs font-medium text-[var(--fluent-text-primary)]">
+              Keine Wiedergabe aktiv
+            </p>
+            <p className="text-[11px] text-[var(--fluent-text-secondary)] mt-0.5 max-w-[200px] leading-relaxed">
+              Starte die Wiedergabe in Spotify oder einem Media Player
+            </p>
+          </div>
+        )}
+
+        {/* Footer: Master Volume Slider */}
+        <div
+          className="flex items-center gap-2 pt-2 border-t border-[var(--fluent-stroke)]/40 mt-2.5"
+          data-testid="master-volume-control"
+        >
           <button
             type="button"
-            onClick={() => void refresh()}
-            disabled={isLoading}
-            title="Refresh media status"
-            className="p-1 rounded-md text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-bg)] transition-colors active:scale-95 disabled:opacity-50"
-            aria-label="Refresh media status"
+            onClick={() => void toggleMute()}
+            title={isMuted ? "Stummschaltung aufheben" : "Stummschalten"}
+            aria-label={isMuted ? "Unmute" : "Mute"}
+            className="p-1 rounded-md text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-bg)] transition-colors active:scale-95 shrink-0"
           >
-            <RefreshCw className={`w-3 h-3 ${isLoading ? "animate-spin" : ""}`} />
+            {isMuted || volume === 0 ? (
+              <VolumeX className="w-3.5 h-3.5" />
+            ) : volume < 0.5 ? (
+              <Volume1 className="w-3.5 h-3.5" />
+            ) : (
+              <Volume2 className="w-3.5 h-3.5" />
+            )}
           </button>
-        </div>
-      </div>
 
-      {/* Error notification if any */}
-      {error && (
-        <div className="mb-2 p-1.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px] flex items-center gap-1.5">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate">{error}</span>
-        </div>
-      )}
-
-      {/* Main Content Area */}
-      {isActive ? (
-        <div className="flex flex-col gap-2.5">
-          {/* Track Info & Artwork */}
-          <div className="flex items-center gap-3">
-            {/* Album Cover Art with rounded-xl (12px) */}
-            <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] shadow-sm group">
-              {session.album_art_url && !imgError ? (
-                <img
-                  key={session.album_art_url}
-                  src={session.album_art_url}
-                  alt={`${session.title} cover`}
-                  onError={() => setImgError(true)}
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  loading="lazy"
-                />
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-emerald-950/40 to-[var(--fluent-card-bg)] text-emerald-400/80">
-                  <Music className="w-6 h-6" />
-                </div>
-              )}
-            </div>
-
-            {/* Track Details */}
-            <div className="min-w-0 flex-1 flex flex-col justify-center">
-              <h2
-                className="text-xs font-semibold text-[var(--fluent-text-primary)] truncate leading-tight"
-                title={session.title}
-              >
-                {session.title || "Unknown Track"}
-              </h2>
-              <p
-                className="text-[11px] text-[var(--fluent-text-secondary)] truncate mt-0.5"
-                title={session.artist}
-              >
-                {session.artist || "Unknown Artist"}
-              </p>
-              {session.album && (
-                <p
-                  className="text-[10px] text-[var(--fluent-text-secondary)]/70 truncate"
-                  title={session.album}
-                >
-                  {session.album}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Interpolated Progress Bar */}
-          <TrackProgress
-            timeline={session.timeline}
-            isPlaying={session.is_playing}
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={isMuted ? 0 : Math.round(volume * 100)}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              void setVolume(val / 100);
+            }}
+            aria-label="Master volume"
+            data-testid="volume-slider"
+            className="w-full h-1 bg-[var(--fluent-stroke)] accent-[var(--fluent-accent)] rounded-lg appearance-none cursor-pointer focus:outline-none"
           />
 
-          {/* Media Playback Controls */}
-          <MediaControls
-            isPlaying={session.is_playing}
-            canPlayPause={session.can_play_pause}
-            canSkipNext={session.can_skip_next}
-            canSkipPrevious={session.can_skip_previous}
-            onPlayPause={() => void playPause()}
-            onNext={() => void nextTrack()}
-            onPrevious={() => void previousTrack()}
-            size="md"
-          />
+          <span className="text-[10px] tabular-nums font-medium text-[var(--fluent-text-secondary)] min-w-[28px] text-right">
+            {isMuted ? "0%" : `${Math.round(volume * 100)}%`}
+          </span>
         </div>
-      ) : (
-        /* Polished German Locale Idle State */
-        <div className="py-4 flex flex-col items-center justify-center text-center">
-          <div className="w-12 h-12 rounded-full bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] flex items-center justify-center text-[var(--fluent-text-secondary)] mb-2.5 shadow-inner">
-            <Music className="w-5 h-5 opacity-60" />
-          </div>
-          <p className="text-xs font-medium text-[var(--fluent-text-primary)]">
-            Keine Wiedergabe aktiv
-          </p>
-          <p className="text-[11px] text-[var(--fluent-text-secondary)] mt-0.5 max-w-[200px] leading-relaxed">
-            Starte die Wiedergabe in Spotify oder einem Media Player
-          </p>
-        </div>
-      )}
-
-      {/* Footer: Master Volume Slider */}
-      <div
-        className="flex items-center gap-2 pt-2 border-t border-[var(--fluent-stroke)]/40 mt-2.5"
-        data-testid="master-volume-control"
-      >
-        <button
-          type="button"
-          onClick={() => void toggleMute()}
-          title={isMuted ? "Stummschaltung aufheben" : "Stummschalten"}
-          aria-label={isMuted ? "Unmute" : "Mute"}
-          className="p-1 rounded-md text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-bg)] transition-colors active:scale-95 shrink-0"
-        >
-          {isMuted || volume === 0 ? (
-            <VolumeX className="w-3.5 h-3.5" />
-          ) : volume < 0.5 ? (
-            <Volume1 className="w-3.5 h-3.5" />
-          ) : (
-            <Volume2 className="w-3.5 h-3.5" />
-          )}
-        </button>
-
-        <input
-          type="range"
-          min="0"
-          max="100"
-          value={isMuted ? 0 : Math.round(volume * 100)}
-          onChange={(e) => {
-            const val = Number(e.target.value);
-            void setVolume(val / 100);
-          }}
-          aria-label="Master volume"
-          data-testid="volume-slider"
-          className="w-full h-1 bg-[var(--fluent-stroke)] accent-[var(--fluent-accent)] rounded-lg appearance-none cursor-pointer focus:outline-none"
-        />
-
-        <span className="text-[10px] tabular-nums font-medium text-[var(--fluent-text-secondary)] min-w-[28px] text-right">
-          {isMuted ? "0%" : `${Math.round(volume * 100)}%`}
-        </span>
       </div>
     </Card>
   );
