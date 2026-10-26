@@ -30,10 +30,23 @@ describe("Battery utility formatting & logic", () => {
 
   it("formats drain and charge rates correctly", () => {
     expect(formatDrainRate(-0.28, false)).toBe("Verbrauch: −0.28 %/min");
+    expect(formatDrainRate(-0.284, false)).toBe("Verbrauch: −0.28 %/min");
+    expect(formatDrainRate(-0.286, false)).toBe("Verbrauch: −0.29 %/min");
     expect(formatDrainRate(0.95, true)).toBe("+0.95 %/min Laden");
     expect(formatDrainRate(0.0, false)).toBe("Verbrauch: 0.00 %/min");
     // Charging even if rate is slightly 0
     expect(formatDrainRate(0.0, true)).toBe("+0.00 %/min Laden");
+    // Positive rate without explicit isCharging flag still formats as charging
+    expect(formatDrainRate(1.154, false)).toBe("+1.15 %/min Laden");
+  });
+
+  it("handles non-zero drain rate formatting and zero-rate elimination behaviors", () => {
+    // When plugged in and at 100% full charge, rate 0.0 produces Verbrauch: 0.00 %/min
+    expect(formatDrainRate(0.0, false)).toBe("Verbrauch: 0.00 %/min");
+    // Discharging at minimum floor (-0.05 %/min)
+    expect(formatDrainRate(-0.05, false)).toBe("Verbrauch: −0.05 %/min");
+    // Active charging at minimum floor (+0.05 %/min)
+    expect(formatDrainRate(0.05, true)).toBe("+0.05 %/min Laden");
   });
 
   it("determines charging mode badges accurately", () => {
@@ -173,6 +186,74 @@ describe("BatteryWidget component", () => {
     const alert = screen.getByTestId("battery-high-drain-alert");
     expect(alert).toBeInTheDocument();
     expect(alert).toHaveTextContent("Hoher Verbrauch! Verursacher: chrome.exe");
+  });
+
+  it("renders fractional rates and exact projections accurately in widget", () => {
+    const mockFractional: BatteryStatus = {
+      ...mockLaptopDischarging,
+      charge_percent: 74,
+      drain_rate_percent_per_min: -0.284,
+      estimated_mins_to_20_percent: 114,
+      estimated_mins_to_10_percent: 135,
+      estimated_mins_to_empty: 156,
+      top_process_name: "code.exe",
+    };
+
+    render(<BatteryWidget statusOverride={mockFractional} />);
+
+    // Fractional drain rate formatted to 2 decimals
+    expect(screen.getByTestId("battery-drain-rate")).toHaveTextContent("Verbrauch: −0.28 %/min");
+
+    // Exact projections rendered
+    expect(screen.getByTestId("projection-20")).toHaveTextContent("noch ~1h 54m");
+    expect(screen.getByTestId("projection-10")).toHaveTextContent("noch ~2h 15m");
+    expect(screen.getByTestId("projection-empty")).toHaveTextContent("noch ~2h 36m");
+  });
+
+  it("updates real-time top_process_name display when high-drain banner is shown", () => {
+    const { rerender } = render(
+      <BatteryWidget
+        statusOverride={{
+          ...mockLaptopDischarging,
+          drain_rate_percent_per_min: -2.1,
+          top_process_name: "ffmpeg.exe",
+        }}
+      />
+    );
+
+    expect(screen.getByTestId("battery-high-drain-alert")).toHaveTextContent(
+      "Hoher Verbrauch! Verursacher: ffmpeg.exe"
+    );
+
+    // Update with another high-drain process
+    rerender(
+      <BatteryWidget
+        statusOverride={{
+          ...mockLaptopDischarging,
+          drain_rate_percent_per_min: -3.4,
+          top_process_name: "rustc.exe",
+        }}
+      />
+    );
+
+    expect(screen.getByTestId("battery-high-drain-alert")).toHaveTextContent(
+      "Hoher Verbrauch! Verursacher: rustc.exe"
+    );
+
+    // Fallback when top_process_name is null
+    rerender(
+      <BatteryWidget
+        statusOverride={{
+          ...mockLaptopDischarging,
+          drain_rate_percent_per_min: -1.8,
+          top_process_name: null,
+        }}
+      />
+    );
+
+    expect(screen.getByTestId("battery-high-drain-alert")).toHaveTextContent(
+      "Hoher Verbrauch! Entladerate über 1.5 %/min"
+    );
   });
 
   it("displays desktop info notice when no battery is present", () => {
