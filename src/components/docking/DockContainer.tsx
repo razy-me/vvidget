@@ -9,6 +9,8 @@ import {
   Cpu,
   Music,
   CloudSun,
+  Calendar,
+  Clock,
   Minimize2,
   Maximize2,
   PlusCircle,
@@ -20,6 +22,8 @@ import { DockItem } from "./DockItem";
 import { ResourceWidget } from "@/widgets/resources/ResourceWidget";
 import { SpotifyWidget } from "@/widgets/spotify/SpotifyWidget";
 import { WeatherWidget } from "@/widgets/weather/WeatherWidget";
+import { CalendarWidget } from "@/widgets/calendar/CalendarWidget";
+import { ClockWidget } from "@/widgets/clock/ClockWidget";
 import { useConfig } from "@/hooks/useConfig";
 import { cn } from "@/utils/cn";
 
@@ -94,6 +98,24 @@ export const DockContainer: FC<DockContainerProps> = ({
         title: "Weather Forecast",
         icon: <CloudSun className="w-3.5 h-3.5 text-amber-400" />,
         component: <WeatherWidget className="w-full" />,
+      });
+    }
+
+    if (config.widgets.calendar?.visible) {
+      list.push({
+        id: "calendar",
+        title: "Calendar & Notes",
+        icon: <Calendar className="w-3.5 h-3.5 text-sky-400" />,
+        component: <CalendarWidget className="w-full" />,
+      });
+    }
+
+    if (config.widgets.clock?.visible) {
+      list.push({
+        id: "clock",
+        title: "Clock & Timers",
+        icon: <Clock className="w-3.5 h-3.5 text-indigo-400" />,
+        component: <ClockWidget className="w-full" />,
       });
     }
 

@@ -9,13 +9,21 @@ import { SpotifyWidget } from "@/widgets/spotify/SpotifyWidget";
 import { WeatherWidget } from "@/widgets/weather/WeatherWidget";
 import { QuickSettingsWidget } from "@/widgets/quick-settings/QuickSettingsWidget";
 import { SpeedtestWidget } from "@/widgets/speedtest/SpeedtestWidget";
+import { BluetoothWidget } from "@/widgets/bluetooth/BluetoothWidget";
+import { BatteryWidget } from "@/widgets/battery/BatteryWidget";
+import { CalendarWidget } from "@/widgets/calendar/CalendarWidget";
+import { ClockWidget } from "@/widgets/clock/ClockWidget";
 import { SkeletonWidget } from "@/components/layout/SkeletonWidget";
 import {
   Cpu,
   Music,
   CloudSun,
   Gauge,
+  BatteryCharging,
   SlidersHorizontal,
+  Bluetooth,
+  Calendar as CalendarIcon,
+  Clock as ClockIcon,
   LayoutGrid,
   Layers,
   Settings,
@@ -145,6 +153,82 @@ export const AppContent: FC = () => {
     );
   }
 
+  if (widgetId === "bluetooth") {
+    return (
+      <div className="w-full h-full p-2 flex flex-col bg-transparent overflow-hidden select-none">
+        <WidgetContainer
+          id="bluetooth"
+          title="Bluetooth Devices"
+          icon={<Bluetooth className="w-4 h-4 text-blue-400" />}
+          isLocked={config.lock_positions}
+          layoutMode="independent"
+          onToggleLock={handleToggleLock}
+          onOpenSettings={handleOpenSettings}
+          className="w-full h-full"
+        >
+          <BluetoothWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+        </WidgetContainer>
+      </div>
+    );
+  }
+
+  if (widgetId === "battery") {
+    return (
+      <div className="w-full h-full p-2 flex flex-col bg-transparent overflow-hidden select-none">
+        <WidgetContainer
+          id="battery"
+          title="Battery & Power"
+          icon={<BatteryCharging className="w-4 h-4 text-emerald-400" />}
+          isLocked={config.lock_positions}
+          layoutMode="independent"
+          onToggleLock={handleToggleLock}
+          onOpenSettings={handleOpenSettings}
+          className="w-full h-full"
+        >
+          <BatteryWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+        </WidgetContainer>
+      </div>
+    );
+  }
+
+  if (widgetId === "calendar") {
+    return (
+      <div className="w-full h-full p-2 flex flex-col bg-transparent overflow-hidden select-none">
+        <WidgetContainer
+          id="calendar"
+          title="Calendar & Notes"
+          icon={<CalendarIcon className="w-4 h-4 text-sky-400" />}
+          isLocked={config.lock_positions}
+          layoutMode="independent"
+          onToggleLock={handleToggleLock}
+          onOpenSettings={handleOpenSettings}
+          className="w-full h-full"
+        >
+          <CalendarWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+        </WidgetContainer>
+      </div>
+    );
+  }
+
+  if (widgetId === "clock") {
+    return (
+      <div className="w-full h-full p-2 flex flex-col bg-transparent overflow-hidden select-none">
+        <WidgetContainer
+          id="clock"
+          title="Clock & Timers"
+          icon={<ClockIcon className="w-4 h-4 text-indigo-400" />}
+          isLocked={config.lock_positions}
+          layoutMode="independent"
+          onToggleLock={handleToggleLock}
+          onOpenSettings={handleOpenSettings}
+          className="w-full h-full"
+        >
+          <ClockWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+        </WidgetContainer>
+      </div>
+    );
+  }
+
   if (widgetId && widgetId.startsWith("quick_settings")) {
     const instanceTitle =
       config.quick_settings_instances?.[widgetId]?.title ?? "Quick Settings";
@@ -182,6 +266,10 @@ export const AppContent: FC = () => {
   const isResourcesVisible = config.widgets.resources?.visible ?? true;
   const isSpotifyVisible = config.widgets.spotify?.visible ?? true;
   const isWeatherVisible = config.widgets.weather?.visible ?? true;
+  const isBluetoothVisible = config.widgets.bluetooth?.visible ?? false;
+  const isBatteryVisible = config.widgets.battery?.visible ?? false;
+  const isCalendarVisible = config.widgets.calendar?.visible ?? false;
+  const isClockVisible = config.widgets.clock?.visible ?? false;
 
   return (
     <main className="min-h-screen p-4 flex flex-col items-center justify-start text-[var(--fluent-text-primary)] bg-transparent">
@@ -278,6 +366,66 @@ export const AppContent: FC = () => {
             className="w-full"
           >
             <WeatherWidget className="border-0 shadow-none bg-transparent p-0" />
+          </WidgetContainer>
+        )}
+
+        {isBluetoothVisible && (
+          <WidgetContainer
+            id="bluetooth"
+            title="Bluetooth Devices"
+            icon={<Bluetooth className="w-4 h-4 text-blue-400" />}
+            isLocked={config.lock_positions}
+            layoutMode="independent"
+            onToggleLock={handleToggleLock}
+            onOpenSettings={handleOpenSettings}
+            className="w-full"
+          >
+            <BluetoothWidget className="border-0 shadow-none bg-transparent p-0" />
+          </WidgetContainer>
+        )}
+
+        {isBatteryVisible && (
+          <WidgetContainer
+            id="battery"
+            title="Battery & Power"
+            icon={<BatteryCharging className="w-4 h-4 text-emerald-400" />}
+            isLocked={config.lock_positions}
+            layoutMode="independent"
+            onToggleLock={handleToggleLock}
+            onOpenSettings={handleOpenSettings}
+            className="w-full"
+          >
+            <BatteryWidget className="border-0 shadow-none bg-transparent p-0" />
+          </WidgetContainer>
+        )}
+
+        {isCalendarVisible && (
+          <WidgetContainer
+            id="calendar"
+            title="Calendar & Notes"
+            icon={<CalendarIcon className="w-4 h-4 text-sky-400" />}
+            isLocked={config.lock_positions}
+            layoutMode="independent"
+            onToggleLock={handleToggleLock}
+            onOpenSettings={handleOpenSettings}
+            className="w-full"
+          >
+            <CalendarWidget className="border-0 shadow-none bg-transparent p-0" />
+          </WidgetContainer>
+        )}
+
+        {isClockVisible && (
+          <WidgetContainer
+            id="clock"
+            title="Clock & Timers"
+            icon={<ClockIcon className="w-4 h-4 text-indigo-400" />}
+            isLocked={config.lock_positions}
+            layoutMode="independent"
+            onToggleLock={handleToggleLock}
+            onOpenSettings={handleOpenSettings}
+            className="w-full"
+          >
+            <ClockWidget className="border-0 shadow-none bg-transparent p-0" />
           </WidgetContainer>
         )}
       </div>

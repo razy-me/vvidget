@@ -1,5 +1,8 @@
 pub mod actions;
 pub mod audio;
+pub mod battery;
+pub mod bluetooth;
+pub mod calendar;
 pub mod media;
 pub mod config;
 pub mod geo;
@@ -11,6 +14,9 @@ pub mod window;
 
 use actions::{execute_quick_action, update_quick_settings_instance};
 use audio::{get_master_mute, get_master_volume, set_master_volume, toggle_master_mute};
+use battery::{get_battery_status, open_power_settings};
+use bluetooth::{get_bluetooth_devices, open_bluetooth_settings};
+use calendar::{add_calendar_note, get_calendar_events, remove_calendar_note, toggle_calendar_note};
 use config::{
     get_autostart_status, load_config, open_logs_folder, resolve_config_path, save_config,
     save_config_immediate, set_autostart, set_widgets_locked, ConfigManager,
@@ -466,6 +472,14 @@ pub fn run() {
             remove_launcher_item,
             execute_quick_action,
             update_quick_settings_instance,
+            get_calendar_events,
+            add_calendar_note,
+            remove_calendar_note,
+            toggle_calendar_note,
+            get_battery_status,
+            open_power_settings,
+            get_bluetooth_devices,
+            open_bluetooth_settings,
         ])
         .setup(move |app| {
             start_metrics_worker(
@@ -662,6 +676,7 @@ mod tests {
             let _ = serde_json::from_str::<geo::GeoLocation>(bad);
             let _ = serde_json::from_str::<speedtest::SpeedtestProgress>(bad);
             let _ = serde_json::from_str::<config::SpeedtestResult>(bad);
+            let _ = serde_json::from_str::<battery::BatteryStatus>(bad);
             let _ = serde_json::from_str::<window::Rect>(bad);
             let _ = serde_json::from_str::<window::DesktopGridMetrics>(bad);
         }

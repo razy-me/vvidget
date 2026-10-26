@@ -37,9 +37,12 @@ features = [
     "Win32_System_Com",
     "Win32_Media_Audio",
     "Win32_Media_Audio_Endpoints",
+    "Win32_System_Power",
     "Media_Control",
     "Storage_Streams",
     "Devices_Geolocation",
+    "Devices_Enumeration",
+    "Devices_Bluetooth",
     "Foundation_Collections",
 ]
 
