@@ -241,7 +241,7 @@ export const DockContainer: FC<DockContainerProps> = ({
         padded={false}
         className={cn(
           "w-full flex flex-col overflow-hidden",
-          "border border-[var(--fluent-stroke)] backdrop-blur-2xl shadow-2xl",
+          "border border-[var(--fluent-stroke)] shadow-2xl",
           "rounded-2xl"
         )}
       >

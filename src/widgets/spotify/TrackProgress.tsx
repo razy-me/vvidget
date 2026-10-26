@@ -34,26 +34,19 @@ export const TrackProgress: FC<TrackProgressProps> = ({
       return;
     }
 
-    let animationFrameId: number;
-
-    const tick = () => {
+    const updatePosition = () => {
       const now = Date.now();
       const elapsed =
         last_updated_system_time_ms > 0 ? Math.max(0, now - last_updated_system_time_ms) : 0;
       const interpolated = Math.min(position_ms + elapsed, duration_ms);
       setCurrentMs(interpolated);
-
-      if (interpolated < duration_ms && isPlaying) {
-        animationFrameId = requestAnimationFrame(tick);
-      }
     };
 
-    animationFrameId = requestAnimationFrame(tick);
+    updatePosition();
+    const timer = setInterval(updatePosition, 250);
 
     return () => {
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
+      clearInterval(timer);
     };
   }, [position_ms, duration_ms, last_updated_system_time_ms, isPlaying]);
 
@@ -99,7 +92,7 @@ export const TrackProgress: FC<TrackProgressProps> = ({
       >
         <div className="w-full h-1 group-hover:h-1.5 bg-[var(--fluent-stroke)] rounded-full overflow-hidden relative cursor-pointer transition-all duration-150">
           <div
-            className="h-full bg-[var(--fluent-accent)] transition-all duration-100 ease-linear rounded-full group-hover:brightness-110"
+            className="h-full bg-[var(--fluent-accent)] transition-all duration-300 ease-linear rounded-full group-hover:brightness-110"
             style={{ width: `${percent}%` }}
           />
         </div>

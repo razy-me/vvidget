@@ -54,7 +54,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
-    }, 250);
+    }, 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -430,7 +430,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
                     className="font-mono text-4xl sm:text-5xl font-extrabold tracking-tight text-[var(--fluent-text-primary)] tabular-nums drop-shadow-sm"
                   >
                     <span>{digitalTime.hours}</span>
-                    <span className="text-[var(--fluent-accent)] animate-pulse">:</span>
+                    <span className="text-[var(--fluent-accent)]">:</span>
                     <span>{digitalTime.minutes}</span>
                     <span className="text-xl sm:text-2xl font-semibold text-[var(--fluent-text-secondary)] ml-1">
                       :{digitalTime.seconds}

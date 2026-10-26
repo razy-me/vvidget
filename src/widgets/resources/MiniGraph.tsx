@@ -98,7 +98,6 @@ export const MiniGraph: FC<MiniGraphProps> = ({
             cy={coords[coords.length - 1].y}
             r="2.5"
             fill={strokeColors}
-            className="animate-pulse"
           />
         )}
       </svg>

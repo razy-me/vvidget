@@ -49,7 +49,6 @@ export const WidgetContainer: FC<WidgetContainerProps> = ({
           isDragging
             ? "border-[var(--fluent-accent)]/60 shadow-[0_20px_40px_rgba(0,0,0,0.5)] ring-1 ring-[var(--fluent-accent)]/40"
             : "border border-[var(--fluent-stroke)] shadow-2xl",
-          "backdrop-blur-xl",
           isDocked ? "rounded-lg" : "rounded-2xl"
         )}
       >

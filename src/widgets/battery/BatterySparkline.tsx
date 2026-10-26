@@ -87,7 +87,6 @@ export const BatterySparkline: FC<BatterySparklineProps> = ({
             cy={lastPoint.y}
             r="3"
             fill={strokeColor}
-            className="animate-pulse"
           />
         )}
       </svg>

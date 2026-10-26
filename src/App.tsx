@@ -290,7 +290,14 @@ export const AppContent: FC = () => {
     );
   }
 
-  // 4. Main Window (Independent Preview / Multi-Widget Canvas)
+  // In Tauri runtime when in independent multi-window mode, the main window is hidden via Win32 SW_HIDE.
+  // Rendering the entire 10-widget grid inside the hidden window creates duplicate listeners,
+  // timers, and GPU compositing load. Return null to keep the hidden main window at 0% CPU/GPU.
+  if (typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__)) {
+    return null;
+  }
+
+  // 4. Main Window (Independent Preview / Multi-Widget Canvas for Web/Test environment)
   const isResourcesVisible = config.widgets.resources?.visible ?? true;
   const isSpotifyVisible = config.widgets.spotify?.visible ?? true;
   const isWeatherVisible = config.widgets.weather?.visible ?? true;

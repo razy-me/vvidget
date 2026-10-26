@@ -52,11 +52,9 @@
   --fluent-control-active: rgba(0, 0, 0, 0.08);
 }
 
-/* Acrylic backdrop filter class for web preview / fallback */
+/* Acrylic style class for desktop widget containers */
 .fluent-acrylic {
   background-color: var(--fluent-acrylic-bg);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
 .fluent-border {

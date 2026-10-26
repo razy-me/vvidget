@@ -63,7 +63,7 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
         <div className="flex items-center gap-1.5 min-w-0">
           <div className="w-5 h-5 flex items-center justify-center text-[var(--fluent-text-secondary)]">
             {isActive && session.is_playing ? (
-              <Radio className="w-3.5 h-3.5 animate-pulse" />
+              <Radio className="w-3.5 h-3.5 text-emerald-400" />
             ) : (
               <Music className="w-3.5 h-3.5" />
             )}
