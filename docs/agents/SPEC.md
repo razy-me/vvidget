@@ -1,21 +1,29 @@
-# SPEC: High-Precision ACPI/WinRT Battery Telemetry & Live Rate Engine
+# SPEC: Native Windows 11 UI/UX Overhaul (Gemini 4 Argon Audit)
 
-## Prompt
-Wie bekommen wir die Daten, die im Akku Widget aktuell angezeigt werden noch genauer? Nicht dass wir mehr verschiedene Daten auf dem Widget anzeigen, sondern die Daten die schon angezeigt werden, noch genauer ermitteln.
-Bspw. wird teilweise ein Verbrauch von 0%/min angezeigt, was ja faktisch unmöglich ist.
+## Verbatim Request
+ Umsetzung des ehrlichen Feedbacks von Gemini 4 Argon:
+1. Redundante Header-Zeilen abbauen (Outer Header nur bei Hover einblenden)
+2. Sprach-Konsistenz (100% Deutsch-Lokalisierung)
+3. Typografie & Text-Kollisionen beheben (flex-width / justify-between in MetricBar & Clock Tabs)
+4. Nativere Buttons (WinUI 3 Segmented Controls statt Pills)
+5. Echter DWM Acrylic/Mica & Translucency
+6. Weather & Battery Polish (Open-Meteo dezenter, Akkustatus & Verlaufsplatzhalter)
+7. Bluetooth Clipping-Fix, Akkustand & Schnellaktion (Trennen/Verbinden)
+8. Media Controls Album-Cover & dynamischer Blur-Hintergrund
+9. Speedtest (Clipping & Klick-Aktion), Launcher (Suchzeilen-Plus & echte Icons), Calendar & Clock Polish
 
-## Core Requirements
-- **R1 (Hardware mWh & mW Telemetry)**: Query native Windows battery report via `Windows.Devices.Power.Battery::AggregateBattery().GetReport()` in `src-tauri` on Windows, reading `ChargeRateInMilliwatts`, `RemainingCapacityInMilliwattHours`, and `FullChargeCapacityInMilliwattHours`. Fall back seamlessly to `GetSystemPowerStatus` if WinRT fails or hardware does not provide mWh.
-- **R2 (Instantaneous Rate with EMA Smoothing)**: Derive instant drain/charge rate directly from hardware power draw ($\frac{\text{ChargeRateInMilliwatts}}{\text{FullChargeCapacityInMilliwattHours}} \times \frac{100}{60}$ %/min), filtered with an Exponential Moving Average (EMA, $\alpha = 0.35$).
-- **R3 (Zero-Rate Elimination)**: Disallow physically impossible `0.00 %/min` while on battery or active charging:
-  - When discharging without hardware mW rate, fall back to fractional percentage regression and minimum floor ($\le -0.05$ %/min or derived from `BatteryLifeTime`).
-  - When charging < 100%, ensure positive charging rate ($\ge +0.05$ %/min).
-  - Only show `0.00 %/min` (or `Full ✓`) when plugged in and battery is fully charged (100%).
-- **R4 (Exact Projections Calculation)**: Calculate `estimated_mins_to_10_percent`, `estimated_mins_to_20_percent`, and `estimated_mins_to_empty` using exact mWh capacities and smoothed discharge rate rather than integer truncated percentages.
-- **R5 (Sparkline Pacing)**: Gate `capacity_history` updates to append only when the displayed percent changes or $\ge 60$ seconds have passed, allowing the 20-sample sparkline to reflect a 20-minute trend instead of a flat 50-second line.
-- **R6 (Top Process Integration)**: In `get_battery_status`, resolve `top_process_name` from `SharedMetricsState` (`sysinfo`) so the high drain alert banner immediately highlights the actual power-hungry process.
+## Numbered Requirements
+- `R1`: Outer HeaderBar fades in smoothly on widget hover or while dragging (`opacity-0 group-hover:opacity-100 group-focus-within:opacity-100`), without consuming vertical layout space. Remove redundant inner headers.
+- `R2`: 100% German UI localization across Weather, Battery, Resources, Spotify, Calendar, and HeaderBar.
+- `R3`: Tooltip wrapper and MetricBar width fixed so labels are left-aligned and values right-aligned with no text collisions (`Memory13.4 GB`). Fix Clock tab text/icon collision.
+- `R4`: Replace round pills with WinUI 3 segmented controls (`rounded-[5px]`, crisp selection pill).
+- `R5`: Desktop translucency: lower `--fluent-acrylic-bg` opacity to 0.56, apply DWM corner & backdrop attributes.
+- `R6`: Weather watermark opacity 0.35. Battery sparkline placeholder `"Sammle Daten..."` when `<= 1` sample, translated badges.
+- `R7`: Bluetooth clipping fix (2 cards fit cleanly), PnP battery property lookup, inline `Trennen / Verbinden` hover action.
+- `R8`: GSMTC album art data URI serving & dynamic blurred cover backdrop in Spotify widget.
+- `R9`: Speedtest sub-card clipping fix + gauge play action. Launcher compact header + real Steam/App icons. Calendar inline accent `+` button. Clock icon-only inactive tabs & remove redundant bottom timezone footer.
 
 ## Non-Functional Requirements
-- Maintain exact existing `BatteryStatus` JSON / TypeScript contract — zero breaking schema changes.
-- Sub-millisecond execution without blocking Tauri main thread.
-- Zero CPU/GPU idle overhead.
+- Zero regression on existing test suites (vitest + cargo test).
+- Zero GPU idle load regressions (no infinite keyframe animations).
+- Safe fallbacks when hardware/WinRT APIs return empty.

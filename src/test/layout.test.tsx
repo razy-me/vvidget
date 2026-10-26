@@ -126,4 +126,17 @@ describe("WidgetContainer Component", () => {
     expect(wrapper).toHaveAttribute("data-dragging", "false");
     expect(header).toHaveClass("cursor-grab");
   });
+
+  it("applies floating hover-only styling in independent mode", () => {
+    const { container } = render(
+      <WidgetContainer id="hover-widget" title="Hover Widget" layoutMode="independent">
+        <span>Content</span>
+      </WidgetContainer>
+    );
+    const wrapper = container.firstChild as HTMLElement;
+    expect(wrapper).toHaveClass("group", "relative");
+
+    const header = container.querySelector("header");
+    expect(header).toHaveClass("absolute", "opacity-0", "group-hover:opacity-100");
+  });
 });

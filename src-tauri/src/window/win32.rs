@@ -17,6 +17,16 @@ use windows::Win32::Graphics::Gdi::{
     RedrawWindow, RDW_INVALIDATE, RDW_ERASE, RDW_ALLCHILDREN, RDW_UPDATENOW,
 };
 #[cfg(windows)]
+use windows::Win32::Graphics::Dwm::{
+    DwmSetWindowAttribute,
+    DWMWA_WINDOW_CORNER_PREFERENCE,
+    DWMWA_SYSTEMBACKDROP_TYPE,
+    DWM_WINDOW_CORNER_PREFERENCE,
+    DWM_SYSTEMBACKDROP_TYPE,
+    DWMWCP_ROUND,
+    DWMSBT_TRANSIENTWINDOW,
+};
+#[cfg(windows)]
 use windows::Win32::UI::Shell::{SetWindowSubclass, DefSubclassProc, RemoveWindowSubclass};
 
 use serde::{Deserialize, Serialize};
@@ -321,14 +331,34 @@ pub unsafe fn apply_tool_window_styles(_raw_hwnd: *mut core::ffi::c_void, _no_ac
     Ok(())
 }
 
-/// Applies native window transparency and composition.
-/// On Windows 11 with transparent: true, WebView2 uses DirectComposition per-pixel alpha transparency.
-/// Calling window_vibrancy::apply_acrylic applies an HWND-level AccentPolicy that fills the ENTIRE
-/// rectangular window with an opaque flat grey tint when inactive (WS_EX_NOACTIVATE), ruining
-/// transparent rounded corners and creating an ugly square border around the widget cards.
-/// By keeping the HWND purely transparent, WebView2 composites the rounded CSS Fluent cards directly onto the desktop
-/// with smooth transparent anti-aliased corners and no rectangular borders!
-pub fn apply_acrylic_effect<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>, _dark_mode: bool) -> Result<(), String> {
+/// Applies safe DWM window attributes (rounded corners DWMWA_WINDOW_CORNER_PREFERENCE = 2,
+/// and DWMWA_SYSTEMBACKDROP_TYPE = 3 for acrylic) on Windows 11 without failing on older builds.
+pub fn apply_acrylic_effect<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>, _dark_mode: bool) -> Result<(), String> {
+    #[cfg(windows)]
+    if let Ok(raw_hwnd) = window.hwnd() {
+        unsafe {
+            let hwnd = HWND(raw_hwnd.0);
+
+            // DWMWA_WINDOW_CORNER_PREFERENCE (33) -> DWMWCP_ROUND (2)
+            let corner_preference: DWM_WINDOW_CORNER_PREFERENCE = DWMWCP_ROUND;
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                &corner_preference as *const _ as *const core::ffi::c_void,
+                std::mem::size_of::<DWM_WINDOW_CORNER_PREFERENCE>() as u32,
+            );
+
+            // DWMWA_SYSTEMBACKDROP_TYPE (38) -> DWMSBT_TRANSIENTWINDOW (3) for acrylic backdrop
+            let backdrop_type: DWM_SYSTEMBACKDROP_TYPE = DWMSBT_TRANSIENTWINDOW;
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_SYSTEMBACKDROP_TYPE,
+                &backdrop_type as *const _ as *const core::ffi::c_void,
+                std::mem::size_of::<DWM_SYSTEMBACKDROP_TYPE>() as u32,
+            );
+        }
+    }
+    let _ = window;
     Ok(())
 }
 

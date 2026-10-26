@@ -4,7 +4,7 @@
   --fluent-font-family: "Segoe UI Variable Text", "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
   
   /* Fluent Acrylic Surface Tokens - Dark Theme (Default) */
-  --fluent-acrylic-bg: rgba(30, 30, 30, 0.72);
+  --fluent-acrylic-bg: rgba(28, 28, 30, 0.58);
   --fluent-card-bg: rgba(255, 255, 255, 0.04);
   --fluent-card-hover: rgba(255, 255, 255, 0.08);
   --fluent-card-active: rgba(255, 255, 255, 0.06);
@@ -33,7 +33,7 @@
 }
 
 .theme-light {
-  --fluent-acrylic-bg: rgba(243, 243, 243, 0.85);
+  --fluent-acrylic-bg: rgba(243, 243, 243, 0.72);
   --fluent-card-bg: rgba(255, 255, 255, 0.7);
   --fluent-card-hover: rgba(255, 255, 255, 0.9);
   --fluent-card-active: rgba(255, 255, 255, 0.8);

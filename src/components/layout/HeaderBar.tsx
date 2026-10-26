@@ -63,6 +63,11 @@ export const HeaderBar: FC<HeaderBarProps> = ({
             ? "cursor-grabbing"
             : "cursor-grab active:cursor-grabbing"
           : "cursor-default",
+        !isDocked && [
+          "absolute top-0 left-0 right-0 z-20 backdrop-blur-md bg-[var(--fluent-acrylic-bg)]/80 rounded-t-2xl",
+          "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150",
+          isGridDragging && "opacity-100"
+        ],
         className
       )}
       aria-label={`${title} widget header`}

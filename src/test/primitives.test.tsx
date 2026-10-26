@@ -137,4 +137,17 @@ describe("Tooltip Primitive", () => {
 
     vi.useRealTimers();
   });
+
+  it("supports containerClassName to allow full-width flex expansion", () => {
+    const { container } = render(
+      <Tooltip content="Full width" containerClassName="w-full flex justify-between">
+        <div className="w-full flex justify-between">
+          <span>Label</span>
+          <span>Value</span>
+        </div>
+      </Tooltip>
+    );
+    const wrapper = container.firstChild as HTMLElement;
+    expect(wrapper).toHaveClass("w-full", "flex", "justify-between");
+  });
 });

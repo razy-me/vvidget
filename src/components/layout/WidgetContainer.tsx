@@ -35,7 +35,7 @@ export const WidgetContainer: FC<WidgetContainerProps> = ({
         minHeight: minHeight ? `${minHeight}px` : undefined,
       }}
       className={cn(
-        "relative flex flex-col transition-all duration-200 select-none",
+        "group relative flex flex-col transition-all duration-200 select-none",
         isDocked ? "w-full rounded-lg" : "w-full h-full rounded-2xl",
         isDragging && "scale-[1.01]",
         className
@@ -45,7 +45,7 @@ export const WidgetContainer: FC<WidgetContainerProps> = ({
         variant="acrylic"
         padded={false}
         className={cn(
-          "w-full h-full flex flex-col overflow-hidden transition-all duration-150",
+          "w-full h-full flex flex-col relative overflow-hidden transition-all duration-150",
           isDragging
             ? "border-[var(--fluent-accent)]/60 shadow-[0_20px_40px_rgba(0,0,0,0.5)] ring-1 ring-[var(--fluent-accent)]/40"
             : "border border-[var(--fluent-stroke)] shadow-2xl",
