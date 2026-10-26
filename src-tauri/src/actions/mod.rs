@@ -47,6 +47,10 @@ fn validate_custom_target(target: &str) -> Result<(), String> {
     if target.len() > 2048 {
         return Err("Target exceeds maximum allowed length (2048 chars)".to_string());
     }
+    // Prohibit remote SMB / UNC network paths to prevent NetNTLM credential leaks
+    if target.starts_with(r"\\") || target.starts_with("//") {
+        return Err("UNC network paths are prohibited".to_string());
+    }
     // Prohibit shell command chaining, pipe, and redirection attacks
     if target.contains('&') || target.contains('|') || target.contains(';') || target.contains('`') {
         return Err("Target contains prohibited shell metacharacters".to_string());
@@ -69,16 +73,7 @@ fn is_uri_target(target: &str) -> bool {
 pub fn execute_resolved_action(resolved: &ResolvedAction) -> Result<(), String> {
     match resolved {
         ResolvedAction::Uri(uri) => launch_shell_execute(uri),
-        ResolvedAction::Executable(exe) => {
-            if exe == "taskmgr.exe" {
-                std::process::Command::new("taskmgr.exe")
-                    .spawn()
-                    .map_err(|e| format!("Failed to launch taskmgr: {}", e))?;
-                Ok(())
-            } else {
-                launch_shell_execute(exe)
-            }
-        }
+        ResolvedAction::Executable(exe) => launch_shell_execute(exe),
     }
 }
 
@@ -263,5 +258,23 @@ mod tests {
     fn test_resolve_unknown_action() {
         let err = resolve_action_target("non_existent_action", None).unwrap_err();
         assert!(err.contains("Unknown action identifier"));
+    }
+    #[test]
+    fn test_resolve_custom_action_prohibits_unc_paths() {
+        let unc_targets = [
+            r"\\attacker.com\share\file.exe",
+            r"\\10.0.0.1\c$\leak",
+            "//evil.com/share",
+            "//localhost/share",
+        ];
+        for target in unc_targets {
+            let res = resolve_action_target("custom", Some(target));
+            assert!(
+                res.is_err(),
+                "UNC target '{}' should have been prohibited",
+                target
+            );
+            assert!(res.unwrap_err().contains("UNC network paths are prohibited"));
+        }
     }
 }

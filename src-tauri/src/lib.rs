@@ -113,18 +113,7 @@ pub mod integration {
                 },
             );
 
-            let wm_event = win_mgr.inner().clone();
-            let widget_id_event = widget_id.clone();
-            let window_clone = window.clone();
-            let (known_w, known_h) = (placement.logical_width, placement.logical_height);
-            window.on_window_event(move |event| {
-                if let tauri::WindowEvent::Moved(pos) = event {
-                    let scale = window_clone.scale_factor().unwrap_or(1.0);
-                    let logical_x = (pos.x as f64) / scale;
-                    let logical_y = (pos.y as f64) / scale;
-                    wm_event.update_window_position(&widget_id_event, logical_x, logical_y, known_w, known_h);
-                }
-            });
+
         }
 
         Ok(())
@@ -190,6 +179,21 @@ pub mod integration {
                 #[cfg(windows)]
                 if let Ok(hwnd) = main.hwnd() {
                     crate::window::win32::set_window_allow_hide(hwnd.0 as isize, false);
+                }
+                if let Some(win_mgr) = app.try_state::<WindowManager>() {
+                    let _ = win_mgr.setup_widget_window(
+                        &main,
+                        WindowSetupOptions {
+                            id: "main".to_string(),
+                            is_widget: true,
+                            no_activate: true,
+                            dark_mode: config.theme != "light",
+                            target_x: Some(40.0),
+                            target_y: Some(40.0),
+                            width: 360.0,
+                            height: 640.0,
+                        },
+                    );
                 }
                 let _ = main.show();
             }
@@ -380,8 +384,6 @@ pub mod integration {
             cm.save_immediate(config.clone()).await.map_err(|e| e.to_string())?;
             use tauri::Emitter;
             let _ = app.emit("config-changed", &config);
-
-            open_widget_window(app.clone(), new_id.clone()).await?;
 
             Ok(new_id)
         } else {

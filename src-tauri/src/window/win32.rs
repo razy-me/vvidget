@@ -13,8 +13,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 #[cfg(windows)]
 use windows::Win32::Graphics::Gdi::{
     GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
-    GetDC, ReleaseDC, GetDeviceCaps, LOGPIXELSX,
-    RedrawWindow, RDW_INVALIDATE, RDW_ERASE, RDW_ALLCHILDREN, RDW_UPDATENOW,
+    RedrawWindow, RDW_INVALIDATE, RDW_ALLCHILDREN,
 };
 #[cfg(windows)]
 use windows::Win32::Graphics::Dwm::{
@@ -314,7 +313,7 @@ pub unsafe fn invalidate_screen_rect(x: i32, y: i32, width: i32, height: i32) {
         HWND(core::ptr::null_mut()),
         Some(&rect),
         None,
-        RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW,
+        RDW_INVALIDATE | RDW_ALLCHILDREN,
     );
 }
 
@@ -365,37 +364,7 @@ pub fn get_desktop_grid_metrics() -> DesktopGridMetrics {
 
 #[cfg(windows)]
 fn query_desktop_grid_metrics() -> DesktopGridMetrics {
-    unsafe {
-        let (scale, physical_x, physical_y) = {
-            let hdc = GetDC(HWND(core::ptr::null_mut()));
-            let dpi = if hdc.0 != core::ptr::null_mut() {
-                let d = GetDeviceCaps(hdc, LOGPIXELSX);
-                let _ = ReleaseDC(HWND(core::ptr::null_mut()), hdc);
-                d
-            } else {
-                96
-            };
-            let s = if dpi > 0 { dpi as f64 / 96.0 } else { 1.0 };
-            let px = (160.0 * s).round() as i32;
-            let py = (120.0 * s).round() as i32;
-            (s, px, py)
-        };
-
-        // Standard 12x9 desktop widget grid pitch in logical pixels is strictly 160.0 x 120.0,
-        // perfectly dividing a 1920x1080 display into 12 columns x 9 rows.
-        let logical_x = 160.0;
-        let logical_y = 120.0;
-
-        DesktopGridMetrics {
-            cell_width: logical_x,
-            cell_height: logical_y,
-            logical_x,
-            logical_y,
-            physical_x,
-            physical_y,
-            scale_factor: scale,
-        }
-    }
+    DesktopGridMetrics::default()
 }
 
 #[cfg(not(windows))]
@@ -488,15 +457,8 @@ unsafe extern "system" fn widget_subclass_proc(
             }
             DefSubclassProc(hwnd, umsg, wparam, lparam)
         }
-        // Detect programmatic hide commands (ShowWindow(SW_HIDE))
-        WM_SHOWWINDOW => {
-            if wparam.0 == 0 && lparam.0 == 0 {
-                set_window_allow_hide(hwnd.0 as isize, true);
-            } else if wparam.0 != 0 {
-                set_window_allow_hide(hwnd.0 as isize, false);
-            }
-            DefSubclassProc(hwnd, umsg, wparam, lparam)
-        }
+        // Programmatic hides are explicitly scoped in hide_window(); do not let OS ShowWindow(SW_HIDE) disarm Win+D filter
+        WM_SHOWWINDOW => DefSubclassProc(hwnd, umsg, wparam, lparam),
         // Suppress standard minimize commands
         WM_SYSCOMMAND => {
             let cmd = (wparam.0 as u32) & 0xFFF0;
@@ -708,5 +670,14 @@ mod tests {
 
         dispatch_exit_size_move(1234, Rect::new(10, 20, 110, 120));
         assert_eq!(CALL_COUNT.load(Ordering::SeqCst), 1);
+    }
+    #[test]
+    fn test_desktop_grid_metrics_dimensions() {
+        let metrics = get_desktop_grid_metrics();
+        assert_eq!(metrics.cell_width, 160.0);
+        assert_eq!(metrics.cell_height, 120.0);
+        assert_eq!(metrics.physical_x, 160);
+        assert_eq!(metrics.physical_y, 120);
+        assert_eq!(metrics.scale_factor, 1.0);
     }
 }
