@@ -2,10 +2,10 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { WidgetToggleList } from "@/pages/settings/WidgetToggleList";
 import { SettingsModal } from "@/pages/settings/SettingsModal";
-import { DEFAULT_CONFIG } from "@/types/config";
+import { DEFAULT_CONFIG, type AppConfig } from "@/types/config";
 
 describe("WidgetToggleList component", () => {
-  it("renders all registered widgets", () => {
+  it("renders all registered widgets with category badges", () => {
     const handleToggle = vi.fn();
     const handleReset = vi.fn();
 
@@ -20,6 +20,18 @@ describe("WidgetToggleList component", () => {
     expect(screen.getByText("System Resources")).toBeInTheDocument();
     expect(screen.getByText("Media Controls")).toBeInTheDocument();
     expect(screen.getByText("Weather Forecast")).toBeInTheDocument();
+    expect(screen.getByText("Internet Speedtest")).toBeInTheDocument();
+    expect(screen.getByText("Game & App Launcher")).toBeInTheDocument();
+    expect(screen.getByText("Quick Settings")).toBeInTheDocument();
+    expect(screen.getByText("Calendar & Notes")).toBeInTheDocument();
+    expect(screen.getByText("Clock & Timers")).toBeInTheDocument();
+    expect(screen.getByText("Bluetooth Devices")).toBeInTheDocument();
+    expect(screen.getByText("Battery & Power")).toBeInTheDocument();
+
+    // Verify category badges
+    expect(screen.getAllByText("system").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("utility").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("media").length).toBeGreaterThan(0);
   });
 
   it("calls onToggleVisibility when checkbox is clicked", () => {
@@ -38,6 +50,123 @@ describe("WidgetToggleList component", () => {
     fireEvent.click(toggle);
 
     expect(handleToggle).toHaveBeenCalledWith("resources", false);
+  });
+
+  it("allows toggling all 10 widgets", () => {
+    const handleToggle = vi.fn();
+    const handleReset = vi.fn();
+
+    render(
+      <WidgetToggleList
+        config={DEFAULT_CONFIG}
+        onToggleVisibility={handleToggle}
+        onResetWidgetPlacement={handleReset}
+      />,
+    );
+
+    const widgetIds = [
+      { id: "resources", label: "Toggle visibility of System Resources" },
+      { id: "spotify", label: "Toggle visibility of Media Controls" },
+      { id: "weather", label: "Toggle visibility of Weather Forecast" },
+      { id: "speedtest", label: "Toggle visibility of Internet Speedtest" },
+      { id: "launcher", label: "Toggle visibility of Game & App Launcher" },
+      { id: "quick_settings", label: "Toggle visibility of Quick Settings" },
+      { id: "calendar", label: "Toggle visibility of Calendar & Notes" },
+      { id: "clock", label: "Toggle visibility of Clock & Timers" },
+      { id: "bluetooth", label: "Toggle visibility of Bluetooth Devices" },
+      { id: "battery", label: "Toggle visibility of Battery & Power" },
+    ];
+
+    widgetIds.forEach(({ id, label }) => {
+      const toggle = screen.getByLabelText(label);
+      fireEvent.click(toggle);
+      expect(handleToggle).toHaveBeenCalledWith(id, expect.any(Boolean));
+    });
+  });
+
+  it("calls clone button on quick_settings to duplicate widget", () => {
+    const handleToggle = vi.fn();
+    const handleReset = vi.fn();
+    const handleDuplicate = vi.fn();
+
+    render(
+      <WidgetToggleList
+        config={DEFAULT_CONFIG}
+        onToggleVisibility={handleToggle}
+        onResetWidgetPlacement={handleReset}
+        onDuplicateQuickSettings={handleDuplicate}
+      />,
+    );
+
+    const cloneBtn = screen.getByTestId("clone-quick-settings-btn");
+    expect(cloneBtn).toBeInTheDocument();
+    fireEvent.click(cloneBtn);
+
+    expect(handleDuplicate).toHaveBeenCalledWith("quick_settings");
+  });
+
+  it("lists multiple quick_settings instances with delete/remove button", () => {
+    const handleToggle = vi.fn();
+    const handleReset = vi.fn();
+    const handleRemove = vi.fn();
+
+    const configWithMultipleInstances: AppConfig = {
+      ...DEFAULT_CONFIG,
+      widgets: {
+        ...DEFAULT_CONFIG.widgets,
+        quick_settings: {
+          id: "quick_settings",
+          visible: true,
+          logical_x: 120,
+          logical_y: 128,
+          logical_width: 360,
+          logical_height: 256,
+          scale_factor: 1,
+          monitor_id: null,
+        },
+        quick_settings_second: {
+          id: "quick_settings_second",
+          visible: true,
+          logical_x: 160,
+          logical_y: 168,
+          logical_width: 360,
+          logical_height: 256,
+          scale_factor: 1,
+          monitor_id: null,
+        },
+      },
+      quick_settings_instances: {
+        quick_settings: {
+          id: "quick_settings",
+          title: "Primary Quick Settings",
+          pinned_actions: ["sound", "bluetooth"],
+        },
+        quick_settings_second: {
+          id: "quick_settings_second",
+          title: "Second Quick Settings",
+          pinned_actions: ["display", "taskmanager"],
+        },
+      },
+    };
+
+    render(
+      <WidgetToggleList
+        config={configWithMultipleInstances}
+        onToggleVisibility={handleToggle}
+        onResetWidgetPlacement={handleReset}
+        onRemoveWidgetInstance={handleRemove}
+      />,
+    );
+
+    expect(screen.getByTestId("quick-settings-instances-list")).toBeInTheDocument();
+    expect(screen.getByText("Primary Quick Settings")).toBeInTheDocument();
+    expect(screen.getByText("Second Quick Settings")).toBeInTheDocument();
+
+    const removeBtn = screen.getByTestId("remove-instance-quick_settings_second");
+    expect(removeBtn).toBeInTheDocument();
+    fireEvent.click(removeBtn);
+
+    expect(handleRemove).toHaveBeenCalledWith("quick_settings_second");
   });
 
   it("calls onResetWidgetPlacement when reset button is clicked", () => {

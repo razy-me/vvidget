@@ -52,6 +52,40 @@ vi.mock("@/widgets/weather/WeatherWidget", () => ({
   WeatherWidget: () => <div data-testid="weather-widget-view">Weather Content</div>,
 }));
 
+vi.mock("@/widgets/speedtest/SpeedtestWidget", () => ({
+  SpeedtestWidget: () => <div data-testid="speedtest-widget-view">Speedtest Content</div>,
+}));
+
+vi.mock("@/widgets/launcher/GameLauncherWidget", () => ({
+  GameLauncherWidget: () => <div data-testid="launcher-widget-view">Launcher Content</div>,
+}));
+
+vi.mock("@/widgets/quick-settings/QuickSettingsWidget", () => ({
+  QuickSettingsWidget: ({ instanceId }: { instanceId: string }) => (
+    <div data-testid="quick-settings-widget-view">Quick Settings: {instanceId}</div>
+  ),
+}));
+
+vi.mock("@/widgets/bluetooth/BluetoothWidget", () => ({
+  BluetoothWidget: () => <div data-testid="bluetooth-widget-view">Bluetooth Content</div>,
+}));
+
+vi.mock("@/widgets/battery/BatteryWidget", () => ({
+  BatteryWidget: () => <div data-testid="battery-widget-view">Battery Content</div>,
+}));
+
+vi.mock("@/widgets/calendar/CalendarWidget", () => ({
+  CalendarWidget: () => <div data-testid="calendar-widget-view">Calendar Content</div>,
+}));
+
+vi.mock("@/widgets/clock/ClockWidget", () => ({
+  ClockWidget: () => <div data-testid="clock-widget-view">Clock Content</div>,
+}));
+
+vi.mock("@/components/layout/SkeletonWidget", () => ({
+  SkeletonWidget: () => <div data-testid="skeleton-widget-view">Skeleton Content</div>,
+}));
+
 describe("App & AppContent Routing", () => {
   const originalLocation = window.location;
 
@@ -109,6 +143,84 @@ describe("App & AppContent Routing", () => {
 
     expect(screen.getByText("Weather Forecast")).toBeInTheDocument();
     expect(screen.getByTestId("weather-widget-view")).toBeInTheDocument();
+  });
+
+  it("routes to dedicated Speedtest widget window when ?widget=speedtest", () => {
+    window.location.search = "?widget=speedtest";
+    render(<AppContent />);
+
+    expect(screen.getByText("Internet Speedtest")).toBeInTheDocument();
+    expect(screen.getByTestId("speedtest-widget-view")).toBeInTheDocument();
+  });
+
+  it("routes to dedicated Game Launcher widget window when ?widget=launcher", () => {
+    window.location.search = "?widget=launcher";
+    render(<AppContent />);
+
+    expect(screen.getByText("Game & App Launcher")).toBeInTheDocument();
+    expect(screen.getByTestId("launcher-widget-view")).toBeInTheDocument();
+  });
+
+  it("routes to dedicated Quick Settings widget window when ?widget=quick_settings", () => {
+    window.location.search = "?widget=quick_settings";
+    render(<AppContent />);
+
+    expect(screen.getByText("Quick Settings")).toBeInTheDocument();
+    expect(screen.getByTestId("quick-settings-widget-view")).toBeInTheDocument();
+  });
+
+  it("routes to dynamic Quick Settings instance when ?widget=quick_settings_custom", () => {
+    window.location.search = "?widget=quick_settings_custom";
+    mockConfig.quick_settings_instances = {
+      quick_settings_custom: {
+        id: "quick_settings_custom",
+        title: "Work Tools",
+        pinned_actions: ["sound", "display"],
+      },
+    };
+    render(<AppContent />);
+
+    expect(screen.getByText("Work Tools")).toBeInTheDocument();
+    expect(screen.getByTestId("quick-settings-widget-view")).toBeInTheDocument();
+  });
+
+  it("routes to dedicated Calendar widget window when ?widget=calendar", () => {
+    window.location.search = "?widget=calendar";
+    render(<AppContent />);
+
+    expect(screen.getByText("Calendar & Notes")).toBeInTheDocument();
+    expect(screen.getByTestId("calendar-widget-view")).toBeInTheDocument();
+  });
+
+  it("routes to dedicated Clock widget window when ?widget=clock", () => {
+    window.location.search = "?widget=clock";
+    render(<AppContent />);
+
+    expect(screen.getByText("Clock & Timers")).toBeInTheDocument();
+    expect(screen.getByTestId("clock-widget-view")).toBeInTheDocument();
+  });
+
+  it("routes to dedicated Bluetooth widget window when ?widget=bluetooth", () => {
+    window.location.search = "?widget=bluetooth";
+    render(<AppContent />);
+
+    expect(screen.getByText("Bluetooth Devices")).toBeInTheDocument();
+    expect(screen.getByTestId("bluetooth-widget-view")).toBeInTheDocument();
+  });
+
+  it("routes to dedicated Battery widget window when ?widget=battery", () => {
+    window.location.search = "?widget=battery";
+    render(<AppContent />);
+
+    expect(screen.getByText("Battery & Power")).toBeInTheDocument();
+    expect(screen.getByTestId("battery-widget-view")).toBeInTheDocument();
+  });
+
+  it("routes to skeleton window view when ?view=skeleton", () => {
+    window.location.search = "?view=skeleton";
+    render(<AppContent />);
+
+    expect(screen.getByTestId("skeleton-widget-view")).toBeInTheDocument();
   });
 
   it("renders DockContainer when layout_mode is 'docked'", () => {

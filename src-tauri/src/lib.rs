@@ -57,15 +57,31 @@ pub mod integration {
             .widgets
             .get(&widget_id)
             .cloned()
-            .unwrap_or(crate::config::WidgetPlacement {
-                id: widget_id.clone(),
-                visible: true,
-                logical_x: 80.0,
-                logical_y: 80.0,
-                logical_width: 340.0,
-                logical_height: 420.0,
-                scale_factor: 1.0,
-                monitor_id: None,
+            .unwrap_or_else(|| {
+                let (w, h) = match widget_id.as_str() {
+                    "resources" => (360.0, 384.0),
+                    "spotify" => (360.0, 256.0),
+                    "weather" => (360.0, 512.0),
+                    "speedtest" => (360.0, 256.0),
+                    "launcher" => (360.0, 384.0),
+                    "quick_settings" => (360.0, 256.0),
+                    "calendar" => (360.0, 384.0),
+                    "clock" => (360.0, 384.0),
+                    "bluetooth" => (360.0, 256.0),
+                    "battery" => (360.0, 384.0),
+                    id if id.starts_with("quick_settings") => (360.0, 256.0),
+                    _ => (340.0, 420.0),
+                };
+                crate::config::WidgetPlacement {
+                    id: widget_id.clone(),
+                    visible: true,
+                    logical_x: 80.0,
+                    logical_y: 80.0,
+                    logical_width: w,
+                    logical_height: h,
+                    scale_factor: 1.0,
+                    monitor_id: None,
+                }
             });
 
         let window = tauri::WebviewWindowBuilder::new(
@@ -178,8 +194,15 @@ pub mod integration {
                 let _ = main.show();
             }
             // Destroy independent widget windows to conserve working set RAM (<90 MB budget)
-            for id in &["resources", "spotify", "weather"] {
-                let _ = close_widget_window(app.clone(), id.to_string()).await;
+            let mut all_ids: std::collections::HashSet<String> = config.widgets.keys().cloned().collect();
+            for base in &[
+                "resources", "spotify", "weather", "speedtest", "launcher",
+                "quick_settings", "calendar", "clock", "bluetooth", "battery",
+            ] {
+                all_ids.insert(base.to_string());
+            }
+            for id in all_ids {
+                let _ = close_widget_window(app.clone(), id).await;
             }
         } else {
             // Independent multi-window mode: hide main window to avoid duplicate rendering and RAM waste

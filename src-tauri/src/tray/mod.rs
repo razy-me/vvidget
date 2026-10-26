@@ -110,9 +110,100 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
             .unwrap_or(true),
         None::<&str>,
     )?;
+    let toggle_speedtest = CheckMenuItem::with_id(
+        app,
+        "toggle_speedtest",
+        "Internet Speedtest",
+        true,
+        initial_config
+            .widgets
+            .get("speedtest")
+            .map(|w| w.visible)
+            .unwrap_or(false),
+        None::<&str>,
+    )?;
+    let toggle_launcher = CheckMenuItem::with_id(
+        app,
+        "toggle_launcher",
+        "Game Launcher",
+        true,
+        initial_config
+            .widgets
+            .get("launcher")
+            .map(|w| w.visible)
+            .unwrap_or(false),
+        None::<&str>,
+    )?;
+    let toggle_quick_settings = CheckMenuItem::with_id(
+        app,
+        "toggle_quick_settings",
+        "Quick Settings",
+        true,
+        initial_config
+            .widgets
+            .get("quick_settings")
+            .map(|w| w.visible)
+            .unwrap_or(false),
+        None::<&str>,
+    )?;
+    let toggle_calendar = CheckMenuItem::with_id(
+        app,
+        "toggle_calendar",
+        "Kalender",
+        true,
+        initial_config
+            .widgets
+            .get("calendar")
+            .map(|w| w.visible)
+            .unwrap_or(false),
+        None::<&str>,
+    )?;
+    let toggle_clock = CheckMenuItem::with_id(
+        app,
+        "toggle_clock",
+        "Uhr & Timer",
+        true,
+        initial_config
+            .widgets
+            .get("clock")
+            .map(|w| w.visible)
+            .unwrap_or(false),
+        None::<&str>,
+    )?;
+    let toggle_bluetooth = CheckMenuItem::with_id(
+        app,
+        "toggle_bluetooth",
+        "Bluetooth",
+        true,
+        initial_config
+            .widgets
+            .get("bluetooth")
+            .map(|w| w.visible)
+            .unwrap_or(false),
+        None::<&str>,
+    )?;
+    let toggle_battery = CheckMenuItem::with_id(
+        app,
+        "toggle_battery",
+        "Laptop Batterie",
+        true,
+        initial_config
+            .widgets
+            .get("battery")
+            .map(|w| w.visible)
+            .unwrap_or(false),
+        None::<&str>,
+    )?;
     widgets_menu.append(&toggle_resources)?;
     widgets_menu.append(&toggle_spotify)?;
     widgets_menu.append(&toggle_weather)?;
+    widgets_menu.append(&toggle_speedtest)?;
+    widgets_menu.append(&toggle_launcher)?;
+    widgets_menu.append(&toggle_quick_settings)?;
+    widgets_menu.append(&toggle_calendar)?;
+    widgets_menu.append(&toggle_clock)?;
+    widgets_menu.append(&toggle_bluetooth)?;
+    widgets_menu.append(&toggle_battery)?;
     menu.append(&widgets_menu)?;
 
     // Layout mode submenu with CheckMenuItems to reflect active layout
@@ -165,19 +256,58 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
                         }
                     });
                 }
-                "toggle_resources" | "toggle_spotify" | "toggle_weather" => {
+                "toggle_resources"
+                | "toggle_spotify"
+                | "toggle_weather"
+                | "toggle_speedtest"
+                | "toggle_launcher"
+                | "toggle_quick_settings"
+                | "toggle_calendar"
+                | "toggle_clock"
+                | "toggle_bluetooth"
+                | "toggle_battery" => {
                     let widget_key = match id {
                         "toggle_resources" => "resources",
                         "toggle_spotify" => "spotify",
                         "toggle_weather" => "weather",
+                        "toggle_speedtest" => "speedtest",
+                        "toggle_launcher" => "launcher",
+                        "toggle_quick_settings" => "quick_settings",
+                        "toggle_calendar" => "calendar",
+                        "toggle_clock" => "clock",
+                        "toggle_bluetooth" => "bluetooth",
+                        "toggle_battery" => "battery",
                         _ => "",
                     };
                     let handle = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
                         if let Ok(mut config) = load_config(handle.clone()).await {
-                            if let Some(w) = config.widgets.get_mut(widget_key) {
-                                w.visible = !w.visible;
-                            }
+                            let (w, h) = match widget_key {
+                                "resources" => (360.0, 384.0),
+                                "spotify" => (360.0, 256.0),
+                                "weather" => (360.0, 512.0),
+                                "speedtest" => (360.0, 256.0),
+                                "launcher" => (360.0, 384.0),
+                                "quick_settings" => (360.0, 256.0),
+                                "calendar" => (360.0, 384.0),
+                                "clock" => (360.0, 384.0),
+                                "bluetooth" => (360.0, 256.0),
+                                "battery" => (360.0, 384.0),
+                                _ => (360.0, 256.0),
+                            };
+                            let entry = config.widgets.entry(widget_key.to_string()).or_insert_with(|| {
+                                crate::config::WidgetPlacement {
+                                    id: widget_key.to_string(),
+                                    visible: false,
+                                    logical_x: 120.0,
+                                    logical_y: 128.0,
+                                    logical_width: w,
+                                    logical_height: h,
+                                    scale_factor: 1.0,
+                                    monitor_id: None,
+                                }
+                            });
+                            entry.visible = !entry.visible;
                             let _ = save_config_immediate(handle, config).await;
                         }
                     });

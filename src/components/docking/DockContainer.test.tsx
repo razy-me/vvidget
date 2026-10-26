@@ -50,6 +50,29 @@ vi.mock("@/widgets/spotify/SpotifyWidget", () => ({
 vi.mock("@/widgets/weather/WeatherWidget", () => ({
   WeatherWidget: () => <div data-testid="mock-weather-widget">Weather</div>,
 }));
+vi.mock("@/widgets/speedtest/SpeedtestWidget", () => ({
+  SpeedtestWidget: () => <div data-testid="mock-speedtest-widget">Speedtest</div>,
+}));
+vi.mock("@/widgets/launcher/GameLauncherWidget", () => ({
+  GameLauncherWidget: () => <div data-testid="mock-launcher-widget">Launcher</div>,
+}));
+vi.mock("@/widgets/quick-settings/QuickSettingsWidget", () => ({
+  QuickSettingsWidget: ({ instanceId }: { instanceId: string }) => (
+    <div data-testid={`mock-quick-settings-widget-${instanceId}`}>Quick Settings {instanceId}</div>
+  ),
+}));
+vi.mock("@/widgets/calendar/CalendarWidget", () => ({
+  CalendarWidget: () => <div data-testid="mock-calendar-widget">Calendar</div>,
+}));
+vi.mock("@/widgets/clock/ClockWidget", () => ({
+  ClockWidget: () => <div data-testid="mock-clock-widget">Clock</div>,
+}));
+vi.mock("@/widgets/bluetooth/BluetoothWidget", () => ({
+  BluetoothWidget: () => <div data-testid="mock-bluetooth-widget">Bluetooth</div>,
+}));
+vi.mock("@/widgets/battery/BatteryWidget", () => ({
+  BatteryWidget: () => <div data-testid="mock-battery-widget">Battery</div>,
+}));
 
 describe("DockContainer Component", () => {
   beforeEach(() => {
@@ -70,6 +93,48 @@ describe("DockContainer Component", () => {
     expect(screen.getByTestId("mock-resource-widget")).toBeInTheDocument();
     expect(screen.getByTestId("mock-spotify-widget")).toBeInTheDocument();
     expect(screen.getByTestId("mock-weather-widget")).toBeInTheDocument();
+  });
+
+  it("docks all 10 widgets plus dynamic instances when visible", () => {
+    mockConfig = {
+      ...DEFAULT_CONFIG,
+      widgets: {
+        resources: { ...DEFAULT_CONFIG.widgets.resources, visible: true },
+        spotify: { ...DEFAULT_CONFIG.widgets.spotify, visible: true },
+        weather: { ...DEFAULT_CONFIG.widgets.weather, visible: true },
+        speedtest: { id: "speedtest", visible: true, logical_x: 0, logical_y: 0, logical_width: 360, logical_height: 256, scale_factor: 1, monitor_id: null },
+        launcher: { id: "launcher", visible: true, logical_x: 0, logical_y: 0, logical_width: 360, logical_height: 384, scale_factor: 1, monitor_id: null },
+        quick_settings: { id: "quick_settings", visible: true, logical_x: 0, logical_y: 0, logical_width: 360, logical_height: 256, scale_factor: 1, monitor_id: null },
+        quick_settings_extra: { id: "quick_settings_extra", visible: true, logical_x: 0, logical_y: 0, logical_width: 360, logical_height: 256, scale_factor: 1, monitor_id: null },
+        calendar: { id: "calendar", visible: true, logical_x: 0, logical_y: 0, logical_width: 360, logical_height: 384, scale_factor: 1, monitor_id: null },
+        clock: { id: "clock", visible: true, logical_x: 0, logical_y: 0, logical_width: 360, logical_height: 384, scale_factor: 1, monitor_id: null },
+        bluetooth: { id: "bluetooth", visible: true, logical_x: 0, logical_y: 0, logical_width: 360, logical_height: 256, scale_factor: 1, monitor_id: null },
+        battery: { id: "battery", visible: true, logical_x: 0, logical_y: 0, logical_width: 360, logical_height: 384, scale_factor: 1, monitor_id: null },
+      },
+      quick_settings_instances: {
+        quick_settings: { id: "quick_settings", title: "Main Quick Settings", pinned_actions: [] },
+        quick_settings_extra: { id: "quick_settings_extra", title: "Extra Tools", pinned_actions: [] },
+      },
+    };
+
+    render(
+      <ThemeProvider>
+        <DockContainer />
+      </ThemeProvider>
+    );
+
+    expect(screen.getByText("11 Active")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-resource-widget")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-spotify-widget")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-weather-widget")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-speedtest-widget")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-launcher-widget")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-quick-settings-widget-quick_settings")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-quick-settings-widget-quick_settings_extra")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-calendar-widget")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-clock-widget")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-bluetooth-widget")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-battery-widget")).toBeInTheDocument();
   });
 
   it("toggles lock positions when lock button is clicked", () => {

@@ -9,6 +9,7 @@ import { SpotifyWidget } from "@/widgets/spotify/SpotifyWidget";
 import { WeatherWidget } from "@/widgets/weather/WeatherWidget";
 import { QuickSettingsWidget } from "@/widgets/quick-settings/QuickSettingsWidget";
 import { SpeedtestWidget } from "@/widgets/speedtest/SpeedtestWidget";
+import { GameLauncherWidget } from "@/widgets/launcher/GameLauncherWidget";
 import { BluetoothWidget } from "@/widgets/bluetooth/BluetoothWidget";
 import { BatteryWidget } from "@/widgets/battery/BatteryWidget";
 import { CalendarWidget } from "@/widgets/calendar/CalendarWidget";
@@ -19,6 +20,7 @@ import {
   Music,
   CloudSun,
   Gauge,
+  Gamepad2,
   BatteryCharging,
   SlidersHorizontal,
   Bluetooth,
@@ -153,6 +155,25 @@ export const AppContent: FC = () => {
     );
   }
 
+  if (widgetId === "launcher") {
+    return (
+      <div className="w-full h-full p-2 flex flex-col bg-transparent overflow-hidden select-none">
+        <WidgetContainer
+          id="launcher"
+          title="Game & App Launcher"
+          icon={<Gamepad2 className="w-4 h-4 text-purple-400" />}
+          isLocked={config.lock_positions}
+          layoutMode="independent"
+          onToggleLock={handleToggleLock}
+          onOpenSettings={handleOpenSettings}
+          className="w-full h-full"
+        >
+          <GameLauncherWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+        </WidgetContainer>
+      </div>
+    );
+  }
+
   if (widgetId === "bluetooth") {
     return (
       <div className="w-full h-full p-2 flex flex-col bg-transparent overflow-hidden select-none">
@@ -266,10 +287,20 @@ export const AppContent: FC = () => {
   const isResourcesVisible = config.widgets.resources?.visible ?? true;
   const isSpotifyVisible = config.widgets.spotify?.visible ?? true;
   const isWeatherVisible = config.widgets.weather?.visible ?? true;
+  const isSpeedtestVisible = config.widgets.speedtest?.visible ?? false;
+  const isLauncherVisible = config.widgets.launcher?.visible ?? false;
+  const isQuickSettingsVisible = config.widgets.quick_settings?.visible ?? false;
   const isBluetoothVisible = config.widgets.bluetooth?.visible ?? false;
   const isBatteryVisible = config.widgets.battery?.visible ?? false;
   const isCalendarVisible = config.widgets.calendar?.visible ?? false;
   const isClockVisible = config.widgets.clock?.visible ?? false;
+
+  const dynamicQuickSettings = useMemo(() => {
+    if (!config.widgets) return [];
+    return Object.entries(config.widgets).filter(
+      ([id, placement]) => id.startsWith("quick_settings_") && placement.visible
+    );
+  }, [config.widgets]);
 
   return (
     <main className="min-h-screen p-4 flex flex-col items-center justify-start text-[var(--fluent-text-primary)] bg-transparent">
@@ -368,6 +399,76 @@ export const AppContent: FC = () => {
             <WeatherWidget className="border-0 shadow-none bg-transparent p-0" />
           </WidgetContainer>
         )}
+
+        {isSpeedtestVisible && (
+          <WidgetContainer
+            id="speedtest"
+            title="Internet Speedtest"
+            icon={<Gauge className="w-4 h-4 text-sky-400" />}
+            isLocked={config.lock_positions}
+            layoutMode="independent"
+            onToggleLock={handleToggleLock}
+            onOpenSettings={handleOpenSettings}
+            className="w-full"
+          >
+            <SpeedtestWidget className="border-0 shadow-none bg-transparent p-0" />
+          </WidgetContainer>
+        )}
+
+        {isLauncherVisible && (
+          <WidgetContainer
+            id="launcher"
+            title="Game & App Launcher"
+            icon={<Gamepad2 className="w-4 h-4 text-purple-400" />}
+            isLocked={config.lock_positions}
+            layoutMode="independent"
+            onToggleLock={handleToggleLock}
+            onOpenSettings={handleOpenSettings}
+            className="w-full"
+          >
+            <GameLauncherWidget className="border-0 shadow-none bg-transparent p-0" />
+          </WidgetContainer>
+        )}
+
+        {isQuickSettingsVisible && (
+          <WidgetContainer
+            id="quick_settings"
+            title={config.quick_settings_instances?.quick_settings?.title ?? "Quick Settings"}
+            icon={<SlidersHorizontal className="w-4 h-4 text-sky-400" />}
+            isLocked={config.lock_positions}
+            layoutMode="independent"
+            onToggleLock={handleToggleLock}
+            onOpenSettings={handleOpenSettings}
+            className="w-full"
+          >
+            <QuickSettingsWidget
+              instanceId="quick_settings"
+              className="border-0 shadow-none bg-transparent p-0"
+            />
+          </WidgetContainer>
+        )}
+
+        {dynamicQuickSettings.map(([id]) => (
+          <WidgetContainer
+            key={id}
+            id={id}
+            title={
+              config.quick_settings_instances?.[id]?.title ??
+              `Quick Settings (${id.replace("quick_settings_", "")})`
+            }
+            icon={<SlidersHorizontal className="w-4 h-4 text-sky-400" />}
+            isLocked={config.lock_positions}
+            layoutMode="independent"
+            onToggleLock={handleToggleLock}
+            onOpenSettings={handleOpenSettings}
+            className="w-full"
+          >
+            <QuickSettingsWidget
+              instanceId={id}
+              className="border-0 shadow-none bg-transparent p-0"
+            />
+          </WidgetContainer>
+        ))}
 
         {isBluetoothVisible && (
           <WidgetContainer

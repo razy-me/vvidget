@@ -9,8 +9,13 @@ import {
   Cpu,
   Music,
   CloudSun,
+  Gauge,
+  Gamepad2,
+  SlidersHorizontal,
   Calendar,
   Clock,
+  Bluetooth,
+  BatteryCharging,
   Minimize2,
   Maximize2,
   PlusCircle,
@@ -22,8 +27,13 @@ import { DockItem } from "./DockItem";
 import { ResourceWidget } from "@/widgets/resources/ResourceWidget";
 import { SpotifyWidget } from "@/widgets/spotify/SpotifyWidget";
 import { WeatherWidget } from "@/widgets/weather/WeatherWidget";
+import { SpeedtestWidget } from "@/widgets/speedtest/SpeedtestWidget";
+import { GameLauncherWidget } from "@/widgets/launcher/GameLauncherWidget";
+import { QuickSettingsWidget } from "@/widgets/quick-settings/QuickSettingsWidget";
 import { CalendarWidget } from "@/widgets/calendar/CalendarWidget";
 import { ClockWidget } from "@/widgets/clock/ClockWidget";
+import { BluetoothWidget } from "@/widgets/bluetooth/BluetoothWidget";
+import { BatteryWidget } from "@/widgets/battery/BatteryWidget";
 import { useConfig } from "@/hooks/useConfig";
 import { cn } from "@/utils/cn";
 
@@ -101,12 +111,68 @@ export const DockContainer: FC<DockContainerProps> = ({
       });
     }
 
+    if (config.widgets.speedtest?.visible) {
+      list.push({
+        id: "speedtest",
+        title: "Internet Speedtest",
+        icon: <Gauge className="w-3.5 h-3.5 text-sky-400" />,
+        component: <SpeedtestWidget className="w-full border-0 shadow-none bg-transparent p-0" />,
+      });
+    }
+
+    if (config.widgets.launcher?.visible) {
+      list.push({
+        id: "launcher",
+        title: "Game Launcher",
+        icon: <Gamepad2 className="w-3.5 h-3.5 text-purple-400" />,
+        component: <GameLauncherWidget className="w-full border-0 shadow-none bg-transparent p-0" />,
+      });
+    }
+
+    // Quick Settings base instance
+    if (config.widgets.quick_settings?.visible) {
+      const title = config.quick_settings_instances?.quick_settings?.title ?? "Quick Settings";
+      list.push({
+        id: "quick_settings",
+        title,
+        icon: <SlidersHorizontal className="w-3.5 h-3.5 text-sky-400" />,
+        component: (
+          <QuickSettingsWidget
+            instanceId="quick_settings"
+            className="w-full border-0 shadow-none bg-transparent p-0"
+          />
+        ),
+      });
+    }
+
+    // Dynamic Quick Settings instances
+    if (config.widgets) {
+      Object.entries(config.widgets).forEach(([id, placement]) => {
+        if (id.startsWith("quick_settings_") && placement.visible) {
+          const title =
+            config.quick_settings_instances?.[id]?.title ??
+            `Quick Settings (${id.replace("quick_settings_", "")})`;
+          list.push({
+            id,
+            title,
+            icon: <SlidersHorizontal className="w-3.5 h-3.5 text-sky-400" />,
+            component: (
+              <QuickSettingsWidget
+                instanceId={id}
+                className="w-full border-0 shadow-none bg-transparent p-0"
+              />
+            ),
+          });
+        }
+      });
+    }
+
     if (config.widgets.calendar?.visible) {
       list.push({
         id: "calendar",
         title: "Calendar & Notes",
         icon: <Calendar className="w-3.5 h-3.5 text-sky-400" />,
-        component: <CalendarWidget className="w-full" />,
+        component: <CalendarWidget className="w-full border-0 shadow-none bg-transparent p-0" />,
       });
     }
 
@@ -115,12 +181,30 @@ export const DockContainer: FC<DockContainerProps> = ({
         id: "clock",
         title: "Clock & Timers",
         icon: <Clock className="w-3.5 h-3.5 text-indigo-400" />,
-        component: <ClockWidget className="w-full" />,
+        component: <ClockWidget className="w-full border-0 shadow-none bg-transparent p-0" />,
+      });
+    }
+
+    if (config.widgets.bluetooth?.visible) {
+      list.push({
+        id: "bluetooth",
+        title: "Bluetooth Devices",
+        icon: <Bluetooth className="w-3.5 h-3.5 text-blue-400" />,
+        component: <BluetoothWidget className="w-full border-0 shadow-none bg-transparent p-0" />,
+      });
+    }
+
+    if (config.widgets.battery?.visible) {
+      list.push({
+        id: "battery",
+        title: "Battery & Power",
+        icon: <BatteryCharging className="w-3.5 h-3.5 text-emerald-400" />,
+        component: <BatteryWidget className="w-full border-0 shadow-none bg-transparent p-0" />,
       });
     }
 
     return list;
-  }, [config.widgets, isLocked, handleOpenSettings]);
+  }, [config.widgets, config.quick_settings_instances]);
 
   const handleHideWidget = useCallback(
     (widgetId: string) => {

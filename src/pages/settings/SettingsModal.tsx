@@ -3,7 +3,7 @@ import { Badge, Card } from "@/components/ui";
 import { useConfig } from "@/hooks/useConfig";
 import { WidgetToggleList } from "@/pages/settings/WidgetToggleList";
 import { DEFAULT_CONFIG } from "@/types/config";
-import { WIDGET_REGISTRY, type WidgetId } from "@/widgets/registry";
+import { getWidgetMetadata } from "@/widgets/registry";
 import {
   AppWindow,
   CloudSun,
@@ -102,7 +102,7 @@ export const SettingsModal: FC = () => {
 
   const handleResetWidgetPlacement = useCallback(
     (widgetId: string) => {
-      const meta = WIDGET_REGISTRY[widgetId as WidgetId];
+      const meta = getWidgetMetadata(widgetId);
       if (!meta) return;
 
       void updateConfig((prev) => {
@@ -114,8 +114,8 @@ export const SettingsModal: FC = () => {
             [widgetId]: {
               id: widgetId,
               visible: existing ? existing.visible : true,
-              logical_x: 40,
-              logical_y: widgetId === "resources" ? 40 : widgetId === "spotify" ? 240 : 400,
+              logical_x: 120,
+              logical_y: 128,
               logical_width: meta.defaultWidth,
               logical_height: meta.defaultHeight,
               scale_factor: 1,
@@ -450,6 +450,7 @@ export const SettingsModal: FC = () => {
                     onToggleVisibility={(widgetId, visible) => {
                       void updateConfig((prev) => {
                         const existing = prev.widgets[widgetId];
+                        const meta = getWidgetMetadata(widgetId);
                         return {
                           ...prev,
                           widgets: {
@@ -457,10 +458,10 @@ export const SettingsModal: FC = () => {
                             [widgetId]: {
                               id: widgetId,
                               visible,
-                              logical_x: existing ? existing.logical_x : 40,
-                              logical_y: existing ? existing.logical_y : 40,
-                              logical_width: existing ? existing.logical_width : 320,
-                              logical_height: existing ? existing.logical_height : 180,
+                              logical_x: existing ? existing.logical_x : 120,
+                              logical_y: existing ? existing.logical_y : 128,
+                              logical_width: existing ? existing.logical_width : (meta?.defaultWidth ?? 360),
+                              logical_height: existing ? existing.logical_height : (meta?.defaultHeight ?? 256),
                               scale_factor: existing ? existing.scale_factor : 1,
                               monitor_id: existing ? existing.monitor_id : null,
                             },
@@ -470,6 +471,24 @@ export const SettingsModal: FC = () => {
                       showFeedback();
                     }}
                     onResetWidgetPlacement={handleResetWidgetPlacement}
+                    onDuplicateQuickSettings={async (sourceId) => {
+                      try {
+                        const { invoke } = await import("@tauri-apps/api/core");
+                        await invoke("duplicate_quick_settings_widget", { sourceId });
+                        showFeedback();
+                      } catch (err) {
+                        console.error("Duplicate quick settings failed:", err);
+                      }
+                    }}
+                    onRemoveWidgetInstance={async (widgetId) => {
+                      try {
+                        const { invoke } = await import("@tauri-apps/api/core");
+                        await invoke("remove_widget_instance", { widgetId });
+                        showFeedback();
+                      } catch (err) {
+                        console.error("Remove widget instance failed:", err);
+                      }
+                    }}
                   />
                 </div>
               )}
