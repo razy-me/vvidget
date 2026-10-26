@@ -67,6 +67,13 @@ export const AppContent: FC = () => {
     await setWidgetsLocked(!config.lock_positions);
   }, [config.lock_positions, setWidgetsLocked]);
 
+  const dynamicQuickSettings = useMemo(() => {
+    if (!config.widgets) return [];
+    return Object.entries(config.widgets).filter(
+      ([id, placement]) => id.startsWith("quick_settings_") && placement.visible
+    );
+  }, [config.widgets]);
+
   // 1. Settings Window View
   if (isSettingsView) {
     return <SettingsModal />;
@@ -294,13 +301,6 @@ export const AppContent: FC = () => {
   const isBatteryVisible = config.widgets.battery?.visible ?? false;
   const isCalendarVisible = config.widgets.calendar?.visible ?? false;
   const isClockVisible = config.widgets.clock?.visible ?? false;
-
-  const dynamicQuickSettings = useMemo(() => {
-    if (!config.widgets) return [];
-    return Object.entries(config.widgets).filter(
-      ([id, placement]) => id.startsWith("quick_settings_") && placement.visible
-    );
-  }, [config.widgets]);
 
   return (
     <main className="min-h-screen p-4 flex flex-col items-center justify-start text-[var(--fluent-text-primary)] bg-transparent">
