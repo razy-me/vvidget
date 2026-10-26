@@ -49,8 +49,8 @@ export const HourlyTrend: FC<HourlyTrendProps> = ({ items }) => {
   return (
     <div className="w-full">
       <div className="text-[11px] font-semibold text-[var(--fluent-text-secondary)] uppercase tracking-wider mb-1.5 flex items-center justify-between">
-        <span>Hourly Trend</span>
-        <span className="text-[10px] lowercase text-[var(--fluent-text-secondary)]/80">Next 12h</span>
+        <span>Stündlicher Trend</span>
+        <span className="text-[10px] text-[var(--fluent-text-secondary)]/80">Nächste 12h</span>
       </div>
       <div
         className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none select-none"

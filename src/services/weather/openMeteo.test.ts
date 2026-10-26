@@ -56,7 +56,7 @@ describe("openMeteo service", () => {
     expect(parsed.current.feelsLikeC).toBe(15);
     expect(parsed.current.humidity).toBe(65);
     expect(parsed.current.windSpeedKmh).toBe(13);
-    expect(parsed.current.condition.label).toBe("Partly cloudy");
+    expect(parsed.current.condition.label).toBe("Teilweise bewölkt");
     expect(parsed.current.condition.iconName).toBe("CloudSun");
 
     // Forecast daily
@@ -67,7 +67,7 @@ describe("openMeteo service", () => {
       maxTempC: 18,
       condition: {
         code: 2,
-        label: "Partly cloudy",
+        label: "Teilweise bewölkt",
         iconName: "CloudSun",
       },
     });

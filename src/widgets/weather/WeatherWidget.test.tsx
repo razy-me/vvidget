@@ -21,7 +21,7 @@ describe("WeatherWidget Component", () => {
       sunset: "18:22",
       condition: {
         code: 61,
-        label: "Slight rain",
+        label: "Leichter Regen",
         iconName: "CloudRain",
       },
     },
@@ -29,12 +29,12 @@ describe("WeatherWidget Component", () => {
       {
         time: "15:00",
         tempC: 14,
-        condition: { code: 61, label: "Slight rain", iconName: "CloudRain" },
+        condition: { code: 61, label: "Leichter Regen", iconName: "CloudRain" },
       },
       {
         time: "16:00",
         tempC: 13,
-        condition: { code: 3, label: "Overcast", iconName: "Cloud" },
+        condition: { code: 3, label: "Bedeckt", iconName: "Cloud" },
       },
     ],
     forecastDaily: [
@@ -42,13 +42,13 @@ describe("WeatherWidget Component", () => {
         date: "2026-10-25",
         minTempC: 8,
         maxTempC: 15,
-        condition: { code: 61, label: "Slight rain", iconName: "CloudRain" },
+        condition: { code: 61, label: "Leichter Regen", iconName: "CloudRain" },
       },
       {
         date: "2026-10-26",
         minTempC: 7,
         maxTempC: 13,
-        condition: { code: 2, label: "Partly cloudy", iconName: "CloudSun" },
+        condition: { code: 2, label: "Teilweise bewölkt", iconName: "CloudSun" },
       },
     ],
     isOffline: false,
@@ -72,8 +72,11 @@ describe("WeatherWidget Component", () => {
 
     expect(screen.getByTestId("weather-location")).toHaveTextContent("Hamburg, Germany");
     expect(screen.getByTestId("weather-current-temp")).toHaveTextContent("14°");
-    expect(screen.getByTestId("weather-condition-label")).toHaveTextContent("Slight rain");
+    expect(screen.getByTestId("weather-condition-label")).toHaveTextContent("Leichter Regen");
+    expect(screen.getByText("• Gefühlt 12°")).toBeInTheDocument();
+    expect(screen.getByText("Luftfeuchtigkeit")).toBeInTheDocument();
     expect(screen.getByText("82%")).toBeInTheDocument();
+    expect(screen.getByText("Wind")).toBeInTheDocument();
     expect(screen.getByText("24 km/h")).toBeInTheDocument();
     expect(screen.getByTestId("weather-rain-prob")).toHaveTextContent("65%");
     expect(screen.getByTestId("weather-uv-index")).toHaveTextContent("4");
@@ -93,6 +96,7 @@ describe("WeatherWidget Component", () => {
 
     render(<WeatherWidget />);
     expect(screen.getByTestId("weather-offline-badge")).toBeInTheDocument();
+    expect(screen.getByTestId("weather-offline-badge")).toHaveTextContent("Offline");
   });
 
   it("switches between hourly and 5-day forecast tabs", () => {
@@ -108,15 +112,20 @@ describe("WeatherWidget Component", () => {
 
     // Default tab is hourly
     expect(screen.getByTestId("hourly-trend-container")).toBeInTheDocument();
+    expect(screen.getByText("Stündlicher Trend")).toBeInTheDocument();
+    expect(screen.getByText("Nächste 12h")).toBeInTheDocument();
     expect(screen.getByText("15:00")).toBeInTheDocument();
 
     // Click daily tab
     const dailyBtn = screen.getByTestId("tab-daily-btn");
+    expect(dailyBtn).toHaveTextContent("5 Tage");
     fireEvent.click(dailyBtn);
 
     expect(screen.getByTestId("daily-forecast-container")).toBeInTheDocument();
-    expect(screen.getByText("Today")).toBeInTheDocument();
-    expect(screen.getByText("Mon")).toBeInTheDocument();
+    expect(screen.getByText("5-Tage-Vorhersage")).toBeInTheDocument();
+    expect(screen.getByText("Max / Min")).toBeInTheDocument();
+    expect(screen.getByText("Heute")).toBeInTheDocument();
+    expect(screen.getByText("Mo")).toBeInTheDocument();
     expect(screen.getByText("15°")).toBeInTheDocument();
   });
 
@@ -161,6 +170,8 @@ describe("WeatherWidget Component", () => {
 
     render(<WeatherWidget />);
     expect(screen.getByTestId("weather-widget-error")).toBeInTheDocument();
+    expect(screen.getByText("Wetter nicht verfügbar")).toBeInTheDocument();
+    expect(screen.getByText("Erneut verbinden")).toBeInTheDocument();
     expect(screen.getByText("Network unreachable")).toBeInTheDocument();
   });
 });

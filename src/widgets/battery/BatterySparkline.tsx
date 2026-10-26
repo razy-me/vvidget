@@ -17,8 +17,25 @@ export const BatterySparkline: FC<BatterySparklineProps> = ({
 }) => {
   const gradientId = useId();
 
-  // If data is empty, default to [100, 100]
-  const points = data.length > 0 ? data : [100, 100];
+  // If insufficient data points (<= 1), render a subtle placeholder message with soft gradient
+  if (!data || data.length <= 1) {
+    return (
+      <div
+        className={cn(
+          "w-full rounded-lg bg-gradient-to-r from-sky-500/5 via-sky-400/10 to-transparent border border-sky-400/10 flex items-center justify-center select-none text-[10px] text-[var(--fluent-text-secondary)] font-medium px-2",
+          className
+        )}
+        style={{ height: `${height}px` }}
+        role="img"
+        aria-label="Akkukapazitätsverlauf Platzhalter"
+        data-testid="battery-sparkline-placeholder"
+      >
+        <span>Sammle Daten...</span>
+      </div>
+    );
+  }
+
+  const points = data;
   const count = points.length;
 
   const min = 0;

@@ -50,24 +50,24 @@ describe("Battery utility formatting & logic", () => {
   });
 
   it("determines charging mode badges accurately", () => {
-    // 100% and plugged in => Full ✓
+    // 100% and plugged in => Voll geladen ✓
     const fullBadge = getChargingBadgeInfo(100, false, true);
-    expect(fullBadge.label).toBe("Full ✓");
+    expect(fullBadge.label).toBe("Voll geladen ✓");
     expect(fullBadge.variant).toBe("success");
 
-    // Charging => Charging ⚡
+    // Charging => Wird geladen ⚡
     const chargingBadge = getChargingBadgeInfo(60, true, true);
-    expect(chargingBadge.label).toBe("Charging ⚡");
+    expect(chargingBadge.label).toBe("Wird geladen ⚡");
     expect(chargingBadge.variant).toBe("accent");
 
-    // Discharging on battery => Discharging 🔋
+    // Discharging on battery => Wird entladen 🔋
     const dischargingBadge = getChargingBadgeInfo(82, false, false);
-    expect(dischargingBadge.label).toBe("Discharging 🔋");
+    expect(dischargingBadge.label).toBe("Wird entladen 🔋");
     expect(dischargingBadge.variant).toBe("warning");
 
-    // 100% on battery (unplugged) => Discharging 🔋
+    // 100% on battery (unplugged) => Wird entladen 🔋
     const fullUnplugged = getChargingBadgeInfo(100, false, false);
-    expect(fullUnplugged.label).toBe("Discharging 🔋");
+    expect(fullUnplugged.label).toBe("Wird entladen 🔋");
   });
 
   it("evaluates high drain warning threshold", () => {
@@ -90,9 +90,14 @@ describe("BatterySparkline component", () => {
     expect(svg).toBeInTheDocument();
   });
 
-  it("handles empty data gracefully with fallback", () => {
-    const { container } = render(<BatterySparkline data={[]} height={32} />);
-    expect(container.querySelector("svg")).toBeInTheDocument();
+  it("handles empty or single data gracefully with subtle placeholder", () => {
+    const { rerender } = render(<BatterySparkline data={[]} height={32} />);
+    expect(screen.getByTestId("battery-sparkline-placeholder")).toBeInTheDocument();
+    expect(screen.getByText("Sammle Daten...")).toBeInTheDocument();
+
+    rerender(<BatterySparkline data={[85]} height={32} />);
+    expect(screen.getByTestId("battery-sparkline-placeholder")).toBeInTheDocument();
+    expect(screen.getByText("Sammle Daten...")).toBeInTheDocument();
   });
 });
 
@@ -117,7 +122,7 @@ describe("BatteryWidget component", () => {
     expect(screen.getByTestId("battery-percentage")).toHaveTextContent("82%");
 
     // Charging badge
-    expect(screen.getByTestId("battery-charging-badge")).toHaveTextContent("Discharging 🔋");
+    expect(screen.getByTestId("battery-charging-badge")).toHaveTextContent("Wird entladen 🔋");
 
     // Live drain rate
     expect(screen.getByTestId("battery-drain-rate")).toHaveTextContent("Verbrauch: −0.28 %/min");
@@ -147,7 +152,7 @@ describe("BatteryWidget component", () => {
     render(<BatteryWidget statusOverride={mockCharging} />);
 
     expect(screen.getByTestId("battery-percentage")).toHaveTextContent("54%");
-    expect(screen.getByTestId("battery-charging-badge")).toHaveTextContent("Charging ⚡");
+    expect(screen.getByTestId("battery-charging-badge")).toHaveTextContent("Wird geladen ⚡");
     expect(screen.getByTestId("battery-drain-rate")).toHaveTextContent("+0.95 %/min Laden");
     expect(screen.getByTestId("battery-drain-rate")).toHaveTextContent("Netzbetrieb");
 
@@ -156,7 +161,7 @@ describe("BatteryWidget component", () => {
     expect(screen.getByTestId("projection-empty")).toHaveTextContent("Netzbetrieb");
   });
 
-  it("renders Full ✓ badge when battery is at 100% and plugged in", () => {
+  it("renders Voll geladen ✓ badge when battery is at 100% and plugged in", () => {
     const mockFull: BatteryStatus = {
       ...mockLaptopDischarging,
       charge_percent: 100,
@@ -171,7 +176,7 @@ describe("BatteryWidget component", () => {
     render(<BatteryWidget statusOverride={mockFull} />);
 
     expect(screen.getByTestId("battery-percentage")).toHaveTextContent("100%");
-    expect(screen.getByTestId("battery-charging-badge")).toHaveTextContent("Full ✓");
+    expect(screen.getByTestId("battery-charging-badge")).toHaveTextContent("Voll geladen ✓");
   });
 
   it("displays high drain rate alert banner with top process name when rate < -1.5 %/min", () => {

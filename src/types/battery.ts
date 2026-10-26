@@ -86,20 +86,20 @@ export function getChargingBadgeInfo(
 ): ChargingBadgeInfo {
   if (chargePercent >= 100 && isPluggedIn) {
     return {
-      label: "Full ✓",
+      label: "Voll geladen ✓",
       type: "full",
       variant: "success",
     };
   }
   if (isCharging) {
     return {
-      label: "Charging ⚡",
+      label: "Wird geladen ⚡",
       type: "charging",
       variant: "accent",
     };
   }
   return {
-    label: "Discharging 🔋",
+    label: "Wird entladen 🔋",
     type: "discharging",
     variant: "warning",
   };

@@ -77,10 +77,10 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
         <div className="flex items-center justify-between text-rose-400">
           <div className="flex items-center gap-1.5 text-xs font-semibold">
             <AlertCircle className="w-4 h-4" />
-            <span>Weather Unavailable</span>
+            <span>Wetter nicht verfügbar</span>
           </div>
           <Badge variant="error" size="sm">
-            Error
+            Fehler
           </Badge>
         </div>
         <p className="text-xs text-[var(--fluent-text-secondary)]">{error}</p>
@@ -90,7 +90,7 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
           className="w-full py-1.5 px-3 rounded-lg bg-[var(--fluent-control-bg)] border border-[var(--fluent-stroke)] hover:bg-[var(--fluent-control-active)] text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
-          <span>Retry Connection</span>
+          <span>Erneut verbinden</span>
         </button>
       </Card>
     );
@@ -174,7 +174,7 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
               {current.condition.label}
             </span>
             <span className="text-[11px] text-[var(--fluent-text-secondary)]">
-              • Feels like {current.feelsLikeC}°
+              • Gefühlt {current.feelsLikeC}°
             </span>
           </div>
           {(sunrise || sunset) && (
@@ -199,7 +199,7 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
         <div className="flex items-center gap-2 p-2 rounded-lg bg-[var(--fluent-card-bg)]/40">
           <Droplets className="w-3.5 h-3.5 text-sky-400 shrink-0" />
           <div className="flex flex-col min-w-0">
-            <span className="text-[10px] text-[var(--fluent-text-secondary)]">Humidity</span>
+            <span className="text-[10px] text-[var(--fluent-text-secondary)]">Luftfeuchtigkeit</span>
             <span className="font-semibold text-[11px]">{current.humidity}%</span>
           </div>
         </div>
@@ -238,35 +238,35 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
         </div>
       </div>
 
-      {/* Forecast Sub-view Mode Switcher: Windows 11 Segmented Pill */}
+      {/* Forecast Sub-view Mode Switcher: Windows 11 Segmented Control */}
       <div className="flex items-center justify-between pt-1 border-t border-[var(--fluent-stroke)]">
-        <div className="bg-[var(--fluent-control-bg)] rounded-full p-0.5 flex gap-0.5">
+        <div className="bg-[var(--fluent-control-bg)] border border-[var(--fluent-stroke)]/40 rounded-[6px] p-0.5 flex gap-0.5">
           <button
             type="button"
             onClick={() => setActiveTab("hourly")}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-[5px] text-[11px] font-medium transition-colors ${
               activeTab === "hourly"
                 ? "bg-[var(--fluent-accent)] text-white shadow-xs"
-                : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)]"
+                : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-control-active)]/50"
             }`}
             data-testid="tab-hourly-btn"
           >
             <Clock className="w-3 h-3" />
-            <span>Hourly</span>
+            <span>Stündlich</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab("daily")}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-[5px] text-[11px] font-medium transition-colors ${
               activeTab === "daily"
                 ? "bg-[var(--fluent-accent)] text-white shadow-xs"
-                : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)]"
+                : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-control-active)]/50"
             }`}
             data-testid="tab-daily-btn"
           >
             <Calendar className="w-3 h-3" />
-            <span>5 Days</span>
+            <span>5 Tage</span>
           </button>
         </div>
       </div>
@@ -280,7 +280,7 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
 
       {/* Attribution Watermark */}
       <div className="flex justify-end pt-0.5">
-        <span className="text-[9px] text-[var(--fluent-text-secondary)]/60 select-none">
+        <span className="text-[9px] text-[var(--fluent-text-secondary)] opacity-35 select-none">
           Open-Meteo
         </span>
       </div>

@@ -6,12 +6,14 @@ interface DailyForecastProps {
   items: DailyForecastItem[];
 }
 
+const GERMAN_DAY_NAMES = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+
 function formatDayName(dateString: string, index: number): string {
-  if (index === 0) return "Today";
+  if (index === 0) return "Heute";
   try {
     const date = new Date(dateString);
     if (!isNaN(date.getTime())) {
-      return date.toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+      return GERMAN_DAY_NAMES[date.getUTCDay()] ?? dateString;
     }
   } catch {
     // Fallback if parsing fails
@@ -27,8 +29,8 @@ export const DailyForecast: FC<DailyForecastProps> = ({ items }) => {
   return (
     <div className="w-full space-y-1.5" data-testid="daily-forecast-container">
       <div className="text-[11px] font-semibold text-[var(--fluent-text-secondary)] uppercase tracking-wider mb-1 flex items-center justify-between">
-        <span>5-Day Forecast</span>
-        <span className="text-[10px] text-[var(--fluent-text-secondary)]/80">High / Low</span>
+        <span>5-Tage-Vorhersage</span>
+        <span className="text-[10px] text-[var(--fluent-text-secondary)]/80">Max / Min</span>
       </div>
       <div className="space-y-1 select-none">
         {items.map((item, idx) => (

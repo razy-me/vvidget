@@ -74,7 +74,7 @@ describe("Security & Input Sanitization (R8)", () => {
     const parsed = parseWeatherResponse(extremeRaw, "Antarctica");
     expect(parsed.current.temperatureC).toBe(-58);
     expect(parsed.current.feelsLikeC).toBe(-68);
-    expect(parsed.current.condition.label).toBe("Partly cloudy");
+    expect(parsed.current.condition.label).toBe("Teilweise bewölkt");
   });
 });
 
