@@ -26,12 +26,20 @@ mod win {
         GlobalSystemMediaTransportControlsSessionPlaybackStatus,
     };
     use windows::Storage::Streams::DataReader;
+    use std::sync::OnceLock;
 
-    fn get_session_manager() -> Result<GlobalSystemMediaTransportControlsSessionManager, String> {
-        GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+    static SESSION_MGR: OnceLock<GlobalSystemMediaTransportControlsSessionManager> = OnceLock::new();
+
+    pub(crate) fn get_session_manager() -> Result<GlobalSystemMediaTransportControlsSessionManager, String> {
+        if let Some(mgr) = SESSION_MGR.get() {
+            return Ok(mgr.clone());
+        }
+        let mgr = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
             .map_err(|e| format!("Failed to request GSMTC session manager: {}", e))?
             .get()
-            .map_err(|e| format!("Failed to await GSMTC session manager: {}", e))
+            .map_err(|e| format!("Failed to await GSMTC session manager: {}", e))?;
+        let _ = SESSION_MGR.set(mgr.clone());
+        Ok(SESSION_MGR.get().cloned().unwrap_or(mgr))
     }
 
     /// Selects the best session: Spotify first, then current session, then first available session
@@ -178,10 +186,8 @@ mod win {
 
         // Thumbnail extraction: check in-memory cache first to prevent redundant COM I/O & allocations
         let mut album_art_url = None;
-        if let Some(art) = get_cached_album_art(&track_id) {
-            use base64::{engine::general_purpose::STANDARD, Engine as _};
-            let b64 = STANDARD.encode(&art.bytes);
-            album_art_url = Some(format!("data:{};base64,{}", art.mime_type, b64));
+        if get_cached_album_art(&track_id).is_some() {
+            album_art_url = Some(format!("vvidget://album-art?t={}", track_id));
         } else if let Ok(thumb_ref) = media_props.Thumbnail() {
             if let Ok(stream_op) = thumb_ref.OpenReadAsync() {
                 if let Ok(stream) = stream_op.get() {
@@ -196,9 +202,7 @@ mod win {
                                             .ContentType()
                                             .map(|s| s.to_string())
                                             .unwrap_or_else(|_| "image/jpeg".to_string());
-                                        use base64::{engine::general_purpose::STANDARD, Engine as _};
-                                        let b64 = STANDARD.encode(&bytes);
-                                        album_art_url = Some(format!("data:{};base64,{}", mime_type, b64));
+                                        album_art_url = Some(format!("vvidget://album-art?t={}", track_id));
                                         set_cached_album_art(&track_id, bytes, mime_type);
                                     }
                                 }
@@ -418,6 +422,32 @@ mod tests {
             assert_eq!(win::clean_app_id("firefox.exe"), "Firefox");
             assert_eq!(win::clean_app_id("vlc.exe"), "VLC");
             assert_eq!(win::clean_app_id("foobar2000.exe"), "foobar2000");
+        }
+    }
+
+    #[test]
+    fn test_album_art_url_uses_custom_protocol_not_base64() {
+        let track_id = "test_track_12345";
+        set_cached_album_art(track_id, vec![1, 2, 3, 4], "image/jpeg".to_string());
+        assert!(get_cached_album_art(track_id).is_some());
+
+        // Format expected by frontend protocol handler
+        let url = format!("vvidget://album-art?t={}", track_id);
+        assert!(!url.starts_with("data:image/"));
+        assert!(url.starts_with("vvidget://album-art?t="));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_session_manager_singleton_caching() {
+        let _com_guard = crate::geo::winrt::ComGuard::new();
+        let mgr1 = win::get_session_manager();
+        if let Ok(m1) = mgr1 {
+            let mgr2 = win::get_session_manager();
+            assert!(mgr2.is_ok());
+            let m2 = mgr2.unwrap();
+            // Both should be valid WinRT COM references to the cached SessionManager
+            assert_eq!(m1, m2);
         }
     }
 }

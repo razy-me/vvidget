@@ -441,7 +441,7 @@ pub fn validate_launch_target(target: &str) -> Result<(), String> {
     }
 
     // Disallow shell operators and chaining characters in paths
-    let dangerous_path_chars = ['&', '|', ';', '>', '<', '"', '\'', '`', '$', '%'];
+    let dangerous_path_chars = ['|', ';', '>', '<', '"', '`'];
     for dc in dangerous_path_chars {
         if trimmed.contains(dc) {
             return Err(format!(
@@ -486,13 +486,17 @@ pub fn validate_launch_target(target: &str) -> Result<(), String> {
 #[tauri::command]
 #[specta::specta]
 pub async fn scan_installed_games() -> Result<Vec<LauncherItem>, String> {
-    let mut games = scan_steam_games();
-    let mut epic_games = scan_epic_games();
-    games.append(&mut epic_games);
+    tokio::task::spawn_blocking(|| {
+        let mut games = scan_steam_games();
+        let mut epic_games = scan_epic_games();
+        games.append(&mut epic_games);
 
-    // Sort alphabetically by name
-    games.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-    Ok(games)
+        // Sort alphabetically by name
+        games.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        games
+    })
+    .await
+    .map_err(|e| format!("Game scan task join failed: {}", e))
 }
 
 /// Tauri command: launches an allowlisted URI or verified local executable via ShellExecuteW.
@@ -514,13 +518,29 @@ pub async fn launch_app_or_uri(target: String) -> Result<(), String> {
             .chain(std::iter::once(0))
             .collect();
 
+        let path = std::path::Path::new(&target);
+        let parent_dir = if path.is_file() {
+            path.parent().map(|p| {
+                std::ffi::OsStr::new(p)
+                    .encode_wide()
+                    .chain(std::iter::once(0))
+                    .collect::<Vec<u16>>()
+            })
+        } else {
+            None
+        };
+        let wide_dir_ptr = match &parent_dir {
+            Some(d) => PCWSTR(d.as_ptr()),
+            None => PCWSTR::null(),
+        };
+
         unsafe {
             let res = ShellExecuteW(
                 HWND(core::ptr::null_mut()),
                 w!("open"),
                 PCWSTR(wide_target.as_ptr()),
                 PCWSTR::null(),
-                PCWSTR::null(),
+                wide_dir_ptr,
                 SW_SHOWNORMAL,
             );
             let code = res.0 as usize;
@@ -785,5 +805,35 @@ mod tests {
                 assert!(validate_launch_target("C:\\Windows\\System32\\notepad.exe").is_ok());
             }
         }
+    }
+
+    #[test]
+    fn test_validate_launch_target_paths_with_ampersand_and_apostrophe() {
+        let temp_dir = std::env::temp_dir().join("vvidget_launch_test");
+        let dir_with_amp = temp_dir.join("Rockstar Games & Media");
+        let _ = std::fs::create_dir_all(&dir_with_amp);
+        let test_exe = dir_with_amp.join("game.exe");
+        let _ = std::fs::write(&test_exe, b"MZ");
+
+        let target_str = test_exe.to_string_lossy().to_string();
+        let res = validate_launch_target(&target_str);
+        assert!(res.is_ok(), "Expected valid target with '&', got: {:?}", res);
+
+        let dir_with_quote = temp_dir.join("O'Connor");
+        let _ = std::fs::create_dir_all(&dir_with_quote);
+        let test_exe2 = dir_with_quote.join("app.exe");
+        let _ = std::fs::write(&test_exe2, b"MZ");
+
+        let target_str2 = test_exe2.to_string_lossy().to_string();
+        let res2 = validate_launch_target(&target_str2);
+        assert!(res2.is_ok(), "Expected valid target with ''', got: {:?}", res2);
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_scan_installed_games_async() {
+        let res = scan_installed_games().await;
+        assert!(res.is_ok(), "scan_installed_games should return Ok: {:?}", res);
     }
 }

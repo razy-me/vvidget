@@ -101,6 +101,278 @@ mod windows_impl {
     use windows::Devices::Bluetooth::*;
     use windows::Devices::Enumeration::*;
     use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
+    use core::ffi::c_void;
+    use core::ptr::null_mut;
+    use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+    use windows::core::{HRESULT, HSTRING, GUID, IInspectable, IUnknown};
+    use windows::Foundation::Collections::{IIterable, IIterable_Vtbl, IIterator, IIterator_Vtbl};
+
+    const S_OK: HRESULT = HRESULT(0);
+    const E_NOINTERFACE: HRESULT = HRESULT(-2147467262);
+    const E_BOUNDS: HRESULT = HRESULT(-2147483637);
+
+    #[repr(C)]
+    struct CustomIterator {
+        vtable: &'static IIterator_Vtbl<HSTRING>,
+        ref_count: AtomicU32,
+        items: Vec<HSTRING>,
+        index: AtomicUsize,
+    }
+
+    static ITERATOR_VTBL: IIterator_Vtbl<HSTRING> = IIterator_Vtbl {
+        base__: windows::core::IInspectable_Vtbl {
+            base: windows::core::IUnknown_Vtbl {
+                QueryInterface: iterator_query_interface,
+                AddRef: iterator_add_ref,
+                Release: iterator_release,
+            },
+            GetIids: iterator_get_iids,
+            GetRuntimeClassName: iterator_get_runtime_class_name,
+            GetTrustLevel: iterator_get_trust_level,
+        },
+        Current: iterator_current,
+        HasCurrent: iterator_has_current,
+        MoveNext: iterator_move_next,
+        GetMany: iterator_get_many,
+        T: core::marker::PhantomData,
+    };
+
+    unsafe extern "system" fn iterator_query_interface(
+        this: *mut c_void,
+        iid: *const GUID,
+        interface: *mut *mut c_void,
+    ) -> HRESULT {
+        if interface.is_null() || iid.is_null() {
+            return E_NOINTERFACE;
+        }
+        let guid = *iid;
+        if guid == IUnknown::IID || guid == IInspectable::IID || guid == <IIterator<HSTRING> as Interface>::IID {
+            *interface = this;
+            iterator_add_ref(this);
+            S_OK
+        } else {
+            *interface = null_mut();
+            E_NOINTERFACE
+        }
+    }
+
+    unsafe extern "system" fn iterator_add_ref(this: *mut c_void) -> u32 {
+        let obj = &*(this as *mut CustomIterator);
+        obj.ref_count.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    unsafe extern "system" fn iterator_release(this: *mut c_void) -> u32 {
+        let obj = &*(this as *mut CustomIterator);
+        let count = obj.ref_count.fetch_sub(1, Ordering::SeqCst) - 1;
+        if count == 0 {
+            drop(Box::from_raw(this as *mut CustomIterator));
+        }
+        count
+    }
+
+    unsafe extern "system" fn iterator_get_iids(
+        _this: *mut c_void,
+        count: *mut u32,
+        values: *mut *mut GUID,
+    ) -> HRESULT {
+        if !count.is_null() {
+            *count = 0;
+        }
+        if !values.is_null() {
+            *values = null_mut();
+        }
+        S_OK
+    }
+
+    unsafe extern "system" fn iterator_get_runtime_class_name(
+        _this: *mut c_void,
+        value: *mut *mut c_void,
+    ) -> HRESULT {
+        if !value.is_null() {
+            *value = null_mut();
+        }
+        S_OK
+    }
+
+    unsafe extern "system" fn iterator_get_trust_level(
+        _this: *mut c_void,
+        value: *mut i32,
+    ) -> HRESULT {
+        if !value.is_null() {
+            *value = 0;
+        }
+        S_OK
+    }
+
+    unsafe extern "system" fn iterator_current(
+        this: *mut c_void,
+        result: *mut core::mem::MaybeUninit<HSTRING>,
+    ) -> HRESULT {
+        let obj = &*(this as *mut CustomIterator);
+        let idx = obj.index.load(Ordering::SeqCst);
+        if idx < obj.items.len() {
+            let hstring = obj.items[idx].clone();
+            result.write(core::mem::MaybeUninit::new(hstring));
+            S_OK
+        } else {
+            E_BOUNDS
+        }
+    }
+
+    unsafe extern "system" fn iterator_has_current(
+        this: *mut c_void,
+        result: *mut bool,
+    ) -> HRESULT {
+        let obj = &*(this as *mut CustomIterator);
+        if !result.is_null() {
+            *result = obj.index.load(Ordering::SeqCst) < obj.items.len();
+        }
+        S_OK
+    }
+
+    unsafe extern "system" fn iterator_move_next(
+        this: *mut c_void,
+        result: *mut bool,
+    ) -> HRESULT {
+        let obj = &*(this as *mut CustomIterator);
+        let idx = obj.index.load(Ordering::SeqCst);
+        if idx < obj.items.len() {
+            let next = idx + 1;
+            obj.index.store(next, Ordering::SeqCst);
+            if !result.is_null() {
+                *result = next < obj.items.len();
+            }
+        } else if !result.is_null() {
+            *result = false;
+        }
+        S_OK
+    }
+
+    unsafe extern "system" fn iterator_get_many(
+        _this: *mut c_void,
+        _capacity: u32,
+        _items: *mut core::mem::MaybeUninit<HSTRING>,
+        result: *mut u32,
+    ) -> HRESULT {
+        if !result.is_null() {
+            *result = 0;
+        }
+        S_OK
+    }
+
+    #[repr(C)]
+    struct CustomIterable {
+        vtable: &'static IIterable_Vtbl<HSTRING>,
+        ref_count: AtomicU32,
+        items: Vec<HSTRING>,
+    }
+
+    static ITERABLE_VTBL: IIterable_Vtbl<HSTRING> = IIterable_Vtbl {
+        base__: windows::core::IInspectable_Vtbl {
+            base: windows::core::IUnknown_Vtbl {
+                QueryInterface: iterable_query_interface,
+                AddRef: iterable_add_ref,
+                Release: iterable_release,
+            },
+            GetIids: iterable_get_iids,
+            GetRuntimeClassName: iterable_get_runtime_class_name,
+            GetTrustLevel: iterable_get_trust_level,
+        },
+        First: iterable_first,
+        T: core::marker::PhantomData,
+    };
+
+    unsafe extern "system" fn iterable_query_interface(
+        this: *mut c_void,
+        iid: *const GUID,
+        interface: *mut *mut c_void,
+    ) -> HRESULT {
+        if interface.is_null() || iid.is_null() {
+            return E_NOINTERFACE;
+        }
+        let guid = *iid;
+        if guid == IUnknown::IID || guid == IInspectable::IID || guid == <IIterable<HSTRING> as Interface>::IID {
+            *interface = this;
+            iterable_add_ref(this);
+            S_OK
+        } else {
+            *interface = null_mut();
+            E_NOINTERFACE
+        }
+    }
+
+    unsafe extern "system" fn iterable_add_ref(this: *mut c_void) -> u32 {
+        let obj = &*(this as *mut CustomIterable);
+        obj.ref_count.fetch_add(1, Ordering::SeqCst) + 1
+    }
+
+    unsafe extern "system" fn iterable_release(this: *mut c_void) -> u32 {
+        let obj = &*(this as *mut CustomIterable);
+        let count = obj.ref_count.fetch_sub(1, Ordering::SeqCst) - 1;
+        if count == 0 {
+            drop(Box::from_raw(this as *mut CustomIterable));
+        }
+        count
+    }
+
+    unsafe extern "system" fn iterable_get_iids(
+        _this: *mut c_void,
+        count: *mut u32,
+        values: *mut *mut GUID,
+    ) -> HRESULT {
+        if !count.is_null() {
+            *count = 0;
+        }
+        if !values.is_null() {
+            *values = null_mut();
+        }
+        S_OK
+    }
+
+    unsafe extern "system" fn iterable_get_runtime_class_name(
+        _this: *mut c_void,
+        value: *mut *mut c_void,
+    ) -> HRESULT {
+        if !value.is_null() {
+            *value = null_mut();
+        }
+        S_OK
+    }
+
+    unsafe extern "system" fn iterable_get_trust_level(
+        _this: *mut c_void,
+        value: *mut i32,
+    ) -> HRESULT {
+        if !value.is_null() {
+            *value = 0;
+        }
+        S_OK
+    }
+
+    unsafe extern "system" fn iterable_first(
+        this: *mut c_void,
+        result: *mut *mut c_void,
+    ) -> HRESULT {
+        let obj = &*(this as *mut CustomIterable);
+        let iterator = Box::new(CustomIterator {
+            vtable: &ITERATOR_VTBL,
+            ref_count: AtomicU32::new(1),
+            items: obj.items.clone(),
+            index: AtomicUsize::new(0),
+        });
+        *result = Box::into_raw(iterator) as *mut c_void;
+        S_OK
+    }
+
+    pub(crate) fn create_hstring_iterable(items: Vec<HSTRING>) -> IIterable<HSTRING> {
+        let iterable = Box::new(CustomIterable {
+            vtable: &ITERABLE_VTBL,
+            ref_count: AtomicU32::new(1),
+            items,
+        });
+        let raw = Box::into_raw(iterable) as *mut c_void;
+        unsafe { core::mem::transmute(raw) }
+    }
 
     struct ComGuard {
         initialized: bool,
@@ -132,7 +404,14 @@ mod windows_impl {
             Ok(s) => s,
             Err(_) => return Ok(vec![]),
         };
-        let devices = match DeviceInformation::FindAllAsyncAqsFilter(&aqs) {
+        let additional_props = vec![
+            HSTRING::from("System.Devices.Aep.IsConnected"),
+            HSTRING::from("System.Devices.Aep.BatteryLevel"),
+            HSTRING::from("System.Devices.Aep.Bluetooth.BatteryLevel"),
+            HSTRING::from("System.Devices.Aep.Bluetooth.Cod.Major"),
+        ];
+        let iterable = create_hstring_iterable(additional_props);
+        let devices = match DeviceInformation::FindAllAsyncAqsFilterAndAdditionalProperties(&aqs, &iterable) {
             Ok(op) => match op.get() {
                 Ok(list) => list,
                 Err(_) => return Ok(vec![]),
@@ -151,34 +430,36 @@ mod windows_impl {
                     Ok(p) => p.IsPaired().unwrap_or(false),
                     Err(_) => false,
                 };
-                log::info!("Device {} pairing_info ok: {}, is_paired: {}", name, pairing_info.is_ok(), is_paired);
-                
-                // Try to resolve BluetoothDevice to get connection status and CoD
-                let (connected, dev_type) = if let Ok(bt_op) = BluetoothDevice::FromIdAsync(&dev.Id().unwrap_or_default()) {
-                    if let Ok(bt_dev) = bt_op.get() {
-                        let is_conn = bt_dev.ConnectionStatus().map(|s| s == BluetoothConnectionStatus::Connected).unwrap_or(false);
-                        let dtype = if let Ok(cod) = bt_dev.ClassOfDevice() {
-                            match cod.MajorClass() {
-                                Ok(BluetoothMajorClass::AudioVideo) => "audio",
-                                Ok(BluetoothMajorClass::Peripheral) => "input",
-                                Ok(BluetoothMajorClass::Phone) => "phone",
-                                _ => "other",
-                            }
-                        } else {
-                            "other"
-                        };
-                        (is_conn, dtype.to_string())
-                    } else {
-                        (false, "other".to_string())
-                    }
-                } else {
-                    (false, "other".to_string())
-                };
-
+                let mut connected = false;
+                let mut dev_type = "other".to_string();
                 let mut battery_level: Option<u8> = None;
+
                 if let Ok(props) = dev.Properties() {
+                    // Check System.Devices.Aep.IsConnected
+                    if let Ok(val) = props.Lookup(&HSTRING::from("System.Devices.Aep.IsConnected")) {
+                        if let Ok(pv) = val.cast::<windows::Foundation::IPropertyValue>() {
+                            if let Ok(b) = pv.GetBoolean() {
+                                connected = b;
+                            }
+                        }
+                    }
+
+                    // Check System.Devices.Aep.Bluetooth.Cod.Major
+                    if let Ok(val) = props.Lookup(&HSTRING::from("System.Devices.Aep.Bluetooth.Cod.Major")) {
+                        if let Ok(pv) = val.cast::<windows::Foundation::IPropertyValue>() {
+                            let major_opt = pv.GetUInt32().ok().or_else(|| pv.GetInt32().ok().map(|v| v as u32));
+                            if let Some(major) = major_opt {
+                                dev_type = match major {
+                                    4 => "audio".to_string(),
+                                    5 => "input".to_string(),
+                                    2 => "phone".to_string(),
+                                    _ => "other".to_string(),
+                                };
+                            }
+                        }
+                    }
+
                     // Check for battery property: System.Devices.Aep.BatteryLevel or Bluetooth.Device.BatteryLevel
-                    use windows::core::HSTRING;
                     let battery_keys = [
                         HSTRING::from("System.Devices.Aep.BatteryLevel"),
                         HSTRING::from("System.Devices.Aep.Bluetooth.BatteryLevel"),
@@ -200,6 +481,23 @@ mod windows_impl {
                     }
                 }
 
+                // If device is actively connected and type is still unresolved, inspect ClassOfDevice
+                // (only for actively connected devices so disconnected devices never block)
+                if connected && dev_type == "other" {
+                    if let Ok(bt_op) = BluetoothDevice::FromIdAsync(&dev.Id().unwrap_or_default()) {
+                        if let Ok(bt_dev) = bt_op.get() {
+                            if let Ok(cod) = bt_dev.ClassOfDevice() {
+                                dev_type = match cod.MajorClass() {
+                                    Ok(BluetoothMajorClass::AudioVideo) => "audio".to_string(),
+                                    Ok(BluetoothMajorClass::Peripheral) => "input".to_string(),
+                                    Ok(BluetoothMajorClass::Phone) => "phone".to_string(),
+                                    _ => "other".to_string(),
+                                };
+                            }
+                        }
+                    }
+                }
+
                 result.push(BluetoothDeviceInfo {
                     id,
                     name,
@@ -214,26 +512,13 @@ mod windows_impl {
         Ok(result)
     }
 
-    pub fn toggle_device(device_id: &str, connect: bool) -> Result<bool, String> {
+    pub fn toggle_device(_device_id: &str, connect: bool) -> Result<bool, String> {
         let _guard = ComGuard::new();
-        use windows::core::HSTRING;
-        let h_id = HSTRING::from(device_id);
-        
-        // Try WinRT BluetoothDevice first if accessible
-        if let Ok(bt_op) = BluetoothDevice::FromIdAsync(&h_id) {
-            if let Ok(bt_dev) = bt_op.get() {
-                // If closing/disconnecting, Close() can be called via IClosable
-                if !connect {
-                    if let Ok(closable) = bt_dev.cast::<windows::Foundation::IClosable>() {
-                        let _ = closable.Close();
-                    }
-                    return Ok(false);
-                }
-            }
+        if !connect {
+            // WinRT BluetoothDevice does not support disconnecting paired devices via IClosable.
+            return Err("Bluetooth device disconnection is not supported directly via WinRT; please use Windows Settings".to_string());
         }
-
         // WinRT does not provide a direct public ConnectAsync on BluetoothDevice without pairing or RFCOMM/GATT channel initiation.
-        // Return Ok(connect) as the state transition outcome.
         Ok(connect)
     }
 }
@@ -273,7 +558,37 @@ mod tests {
     fn test_toggle_bluetooth_device_fallback() {
         let res_connect = toggle_device_internal("sample-device-id".to_string(), true);
         assert!(res_connect.is_ok());
+
         let res_disconnect = toggle_device_internal("sample-device-id".to_string(), false);
-        assert!(res_disconnect.is_ok());
+        #[cfg(target_os = "windows")]
+        {
+            assert!(res_disconnect.is_err());
+            let err = res_disconnect.unwrap_err();
+            assert!(err.contains("disconnection is not supported directly via WinRT"));
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            assert!(res_disconnect.is_ok());
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_custom_hstring_iterable_construction() {
+        use windows::core::HSTRING;
+        let props = vec![
+            HSTRING::from("System.Devices.Aep.IsConnected"),
+            HSTRING::from("System.Devices.Aep.BatteryLevel"),
+        ];
+        let iter = windows_impl::create_hstring_iterable(props);
+        let iterator = iter.First().expect("First iterator");
+        assert!(iterator.HasCurrent().unwrap_or(false));
+        let curr = iterator.Current().expect("Current item");
+        assert_eq!(curr.to_string(), "System.Devices.Aep.IsConnected");
+        assert!(iterator.MoveNext().unwrap_or(false));
+        let second = iterator.Current().expect("Second item");
+        assert_eq!(second.to_string(), "System.Devices.Aep.BatteryLevel");
+        assert!(!iterator.MoveNext().unwrap_or(true));
+        assert!(!iterator.HasCurrent().unwrap_or(true));
     }
 }

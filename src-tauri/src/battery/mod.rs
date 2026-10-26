@@ -310,7 +310,7 @@ pub fn calculate_projections(
     telemetry: &RawBatteryTelemetry,
     drain_rate_percent_per_min: f32,
 ) -> (Option<u32>, Option<u32>, Option<u32>) {
-    if telemetry.is_charging {
+    if telemetry.is_charging || telemetry.is_plugged_in {
         return (None, None, None);
     }
 
@@ -924,5 +924,28 @@ mod tests {
         let rate = calculate_rate_from_samples(&samples);
         // Rises 1.0% in 1 minute => +1.00 %/min
         assert_eq!(rate, 1.00);
+    }
+
+    #[test]
+    fn test_projections_suppressed_when_plugged_in_not_charging() {
+        // Laptop resting at 80% with battery charge limiter or idle on AC
+        let telemetry = RawBatteryTelemetry {
+            has_battery: true,
+            charge_percent_exact: 80.0,
+            charge_percent: 80,
+            is_charging: false,
+            is_plugged_in: true,
+            charge_rate_mw: None,
+            remaining_mwh: Some(40000),
+            full_charge_mwh: Some(50000),
+            hardware_mins_to_empty: Some(240),
+        };
+
+        let projections = calculate_projections(&telemetry, -0.3);
+        assert_eq!(
+            projections,
+            (None, None, None),
+            "Projections must be suppressed when connected to AC power"
+        );
     }
 }

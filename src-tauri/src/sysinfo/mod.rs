@@ -25,8 +25,12 @@ pub async fn get_system_metrics<R: Runtime>(app: AppHandle<R>) -> Result<SystemM
     }
 
     // Fallback if worker state not yet initialized or unpopulated
-    let mut collector = MetricsCollector::new();
-    Ok(collector.collect_metrics(true))
+    tokio::task::spawn_blocking(|| {
+        let mut collector = MetricsCollector::new();
+        collector.collect_metrics(true)
+    })
+    .await
+    .map_err(|e| format!("Metrics fallback collection failed: {}", e))
 }
 
 /// Spawns background worker thread periodically polling CPU, RAM, and Disk metrics.
@@ -152,5 +156,17 @@ mod tests {
         for t in threads {
             t.join().unwrap();
         }
+    }
+
+    #[tokio::test]
+    async fn test_metrics_fallback_spawn_blocking() {
+        let res = tokio::task::spawn_blocking(|| {
+            let mut collector = MetricsCollector::new();
+            collector.collect_metrics(true)
+        })
+        .await;
+        assert!(res.is_ok());
+        let metrics = res.unwrap();
+        assert!(metrics.timestamp_ms > 0);
     }
 }

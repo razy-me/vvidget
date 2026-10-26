@@ -4,7 +4,7 @@ Base Commit: `597d12488d6c8deccbeb626ef23b984f723f49b0`
 
 | FIXED | REJECTED | STALE | INVALID | DEFERRED |
 |---|---|---|---|---|
-| 14 | 0 | 0 | 0 | 0 |
+| 23 | 0 | 0 | 0 | 0 |
 
 ## Clusters
 | Cluster | Findings | Files | Order | Parallel group |
@@ -33,15 +33,15 @@ Base Commit: `597d12488d6c8deccbeb626ef23b984f723f49b0`
 | M2-04 | MAJOR | `src-tauri/src/config/storage.rs:215` | VALID | C2 | FIXED | Scoped grid migration to version < 2; preserved multi-monitor negative coords | f6a4f75 | `test_version_2_custom_dimensions_and_negative_coords_preserved` |
 | M2-05 | MAJOR | `src-tauri/src/speedtest/mod.rs:231` | VALID | C2 | FIXED | Added atomic SpeedtestGuard rejecting concurrent benchmark executions | f6a4f75 | `test_speedtest_concurrency_guard` |
 | M2-06 | MAJOR | `src-tauri/src/geo/winrt.rs:45` | VALID | C2 | FIXED | Wrapped blocking WinRT geolocation in 10s tokio timeout preventing worker thread hang | f6a4f75 | `test_geolocation_timeout_wrapper` |
-| M3-02 | MAJOR | `src-tauri/src/battery/mod.rs:160` | VALID | C3 | OPEN | | | |
-| M3-03 | CRITICAL | `src-tauri/src/bluetooth/mod.rs:135` | VALID | C3 | OPEN | | | |
-| M3-04 | MAJOR | `src-tauri/src/bluetooth/mod.rs:226` | VALID | C3 | OPEN | | | |
-| M3-05 | MAJOR | `src-tauri/src/media/gsmtc.rs:180` | VALID | C3 | OPEN | | | |
-| M3-06 | MAJOR | `src-tauri/src/media/gsmtc.rs:310` | VALID | C3 | OPEN | | | |
-| M3-07 | MAJOR | `src-tauri/src/launcher/mod.rs:518` | VALID | C3 | OPEN | | | |
-| M3-08 | MAJOR | `src-tauri/src/launcher/mod.rs:460` | VALID | C3 | OPEN | | | |
-| X1-04 | MAJOR | `src-tauri/src/launcher/mod.rs:488` | VALID | C3 | OPEN | | | |
-| X1-05 | MAJOR | `src-tauri/src/sysinfo/mod.rs:28` | VALID | C3 | OPEN | | | |
+| M3-02 | MAJOR | `src-tauri/src/battery/mod.rs:313` | VALID | C3 | FIXED | Suppressed depletion projections when plugged in (AC power) even if not charging | 423cd64 | `test_projections_suppressed_when_plugged_in_not_charging` |
+| M3-03 | CRITICAL | `src-tauri/src/bluetooth/mod.rs:135` | VALID | C3 | FIXED | Implemented custom IIterable/IIterator for additional properties; decoupled status from blocking FromIdAsync | 423cd64 | `test_custom_hstring_iterable_construction` |
+| M3-04 | MAJOR | `src-tauri/src/bluetooth/mod.rs:226` | VALID | C3 | FIXED | Rejected fake IClosable disconnection with informative error instructing use of Settings | 423cd64 | `test_toggle_bluetooth_device_fallback` |
+| M3-05 | MAJOR | `src-tauri/src/media/gsmtc.rs:180` | VALID | C3 | FIXED | Replaced base64 data URL string churn in 500ms polling loop with vvidget://album-art protocol URL | 423cd64 | `test_album_art_url_uses_custom_protocol_not_base64` |
+| M3-06 | MAJOR | `src-tauri/src/media/gsmtc.rs:30` | VALID | C3 | FIXED | Cached GSMTC SessionManager in OnceLock singleton avoiding repeated COM activation | 423cd64 | `test_session_manager_singleton_caching` |
+| M3-07 | MAJOR | `src-tauri/src/launcher/mod.rs:518` | VALID | C3 | FIXED | Passed target parent directory to ShellExecuteW lpDirectory preventing relative file path crashes | 423cd64 | `test_validate_launch_target_paths_with_ampersand_and_apostrophe` |
+| M3-08 | MAJOR | `src-tauri/src/launcher/mod.rs:444` | VALID | C3 | FIXED | Allowed &, ', $, % in filesystem paths while preserving shell operator filtering | 423cd64 | `test_validate_launch_target_paths_with_ampersand_and_apostrophe` |
+| X1-04 | MAJOR | `src-tauri/src/launcher/mod.rs:488` | VALID | C3 | FIXED | Offloaded synchronous Steam/Epic game disk & registry scanning to spawn_blocking | 423cd64 | `test_scan_installed_games_async` |
+| X1-05 | MAJOR | `src-tauri/src/sysinfo/mod.rs:28` | VALID | C3 | FIXED | Offloaded uninitialized fallback 200ms sleep MetricsCollector::new to spawn_blocking | 423cd64 | `test_metrics_fallback_spawn_blocking` |
 | M4-02 | MAJOR | `src/utils/gridCollision.ts:48` | VALID | C4 | OPEN | | | |
 | M4-03 | MAJOR | `src/components/layout/HeaderBar.tsx:45` | VALID | C4 | OPEN | | | |
 | M4-04 | MAJOR | `src/components/docking/DockItem.tsx:55` | VALID | C4 | OPEN | | | |

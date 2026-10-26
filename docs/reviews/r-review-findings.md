@@ -12,7 +12,7 @@
 1. [CRITICAL] [FIXED] M1-01 Win+D / Show Desktop Protection Broken by `WM_SHOWWINDOW` Self-Defeat -- `src-tauri/src/window/win32.rs:492`
 2. [CRITICAL] [FIXED] M1-02 Synchronous Desktop-Wide Erase and Redraw Stalls DWM and Causes Global Screen Flash -- `src-tauri/src/window/win32.rs:306`
 3. [CRITICAL] [FIXED] M2-01 Destructive Non-Atomic Fallback in `save_config_atomic` Deletes Both Target and Temp File on Transient Lock -- `src-tauri/src/config/storage.rs:86`
-4. [CRITICAL] [OPEN] M3-03 Bluetooth Device Enumeration Sequentially Blocks on Remote Device Resolution & Fails Battery Loading -- `src-tauri/src/bluetooth/mod.rs:135`
+4. [CRITICAL] [FIXED] M3-03 Bluetooth Device Enumeration Sequentially Blocks on Remote Device Resolution & Fails Battery Loading -- `src-tauri/src/bluetooth/mod.rs:135`
 
 ### Systemic Patterns
 - **Blocking I/O on Async Runtime Worker Threads**: Multiple async Tauri commands (`scan_installed_games`, `get_system_metrics`, `execute_quick_action`, WinRT geolocation) call synchronous Win32 APIs, disk I/O, or thread sleep directly on Tokio reactor threads without `tokio::task::spawn_blocking`.
@@ -111,8 +111,8 @@
      }
 ```
 
-### [CRITICAL] [OPEN] M3-03 Bluetooth device enumeration sequentially blocks on remote device resolution and fails to load battery levels
-- **Status**: OPEN
+### [CRITICAL] [FIXED] M3-03 Bluetooth device enumeration sequentially blocks on remote device resolution and fails to load battery levels
+- **Status**: FIXED
 - **Where**: `src-tauri/src/bluetooth/mod.rs:135-201`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -409,8 +409,8 @@
  }
 ```
 
-### [MAJOR] [OPEN] M3-02 Battery projection calculates time to empty while plugged into AC power
-- **Status**: OPEN
+### [MAJOR] [FIXED] M3-02 Battery projection calculates time to empty while plugged into AC power
+- **Status**: FIXED
 - **Where**: `src-tauri/src/battery/mod.rs:313`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -428,8 +428,8 @@
          return (None, None, None);
 ```
 
-### [MAJOR] [OPEN] M3-04 Bluetooth device disconnection fakes state using `IClosable::Close`
-- **Status**: OPEN
+### [MAJOR] [FIXED] M3-04 Bluetooth device disconnection fakes state using `IClosable::Close`
+- **Status**: FIXED
 - **Where**: `src-tauri/src/bluetooth/mod.rs:226-238`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -451,8 +451,8 @@
                  }
 ```
 
-### [MAJOR] [OPEN] M3-05 GSMTC polling creates high memory churn by re-encoding thumbnails to base64 on every 500ms cycle
-- **Status**: OPEN
+### [MAJOR] [FIXED] M3-05 GSMTC polling creates high memory churn by re-encoding thumbnails to base64 on every 500ms cycle
+- **Status**: FIXED
 - **Where**: `src-tauri/src/media/gsmtc.rs:180-205`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -481,8 +481,8 @@
                                          set_cached_album_art(&track_id, bytes, mime_type);
 ```
 
-### [MAJOR] [OPEN] M3-06 GSMTC background monitor repeatedly requests new SessionManager COM instances instead of subscribing to events
-- **Status**: OPEN
+### [MAJOR] [FIXED] M3-06 GSMTC background monitor repeatedly requests new SessionManager COM instances instead of subscribing to events
+- **Status**: FIXED
 - **Where**: `src-tauri/src/media/gsmtc.rs:30-35,247`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -509,8 +509,8 @@
      }
 ```
 
-### [MAJOR] [OPEN] M3-07 `launch_app_or_uri` spawns processes with null `lpDirectory`, causing relative file access crashes
-- **Status**: OPEN
+### [MAJOR] [FIXED] M3-07 `launch_app_or_uri` spawns processes with null `lpDirectory`, causing relative file access crashes
+- **Status**: FIXED
 - **Where**: `src-tauri/src/launcher/mod.rs:518-526`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -544,8 +544,8 @@
                  windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL,
 ```
 
-### [MAJOR] [OPEN] M3-08 `validate_launch_target` falsely blocks valid Windows paths containing `'&'` or `'\''`
-- **Status**: OPEN
+### [MAJOR] [FIXED] M3-08 `validate_launch_target` falsely blocks valid Windows paths containing `'&'` or `'\''`
+- **Status**: FIXED
 - **Where**: `src-tauri/src/launcher/mod.rs:444-453`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -1063,8 +1063,8 @@
    }, [config.calendar_events, options?.initialEvents]);
 ```
 
-### [MAJOR] [OPEN] X1-04 Synchronous filesystem and registry game scanning executed on Tokio async worker thread
-- **Status**: OPEN
+### [MAJOR] [FIXED] X1-04 Synchronous filesystem and registry game scanning executed on Tokio async worker thread
+- **Status**: FIXED
 - **Where**: `src-tauri/src/launcher/mod.rs:488-496`
 - **Source**: `r-review` (Cross-Cutting X1) (2026-10-26)
 - **Confidence**: HIGH
@@ -1098,8 +1098,8 @@
  }
 ```
 
-### [MAJOR] [OPEN] X1-05 Synchronous 200ms thread sleep on Tokio worker thread during uninitialized sysinfo fallback
-- **Status**: OPEN
+### [MAJOR] [FIXED] X1-05 Synchronous 200ms thread sleep on Tokio worker thread during uninitialized sysinfo fallback
+- **Status**: FIXED
 - **Where**: `src-tauri/src/sysinfo/mod.rs:28-29`, `src-tauri/src/sysinfo/collector.rs:29`
 - **Source**: `r-review` (Cross-Cutting X1) (2026-10-26)
 - **Confidence**: HIGH
