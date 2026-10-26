@@ -53,12 +53,29 @@ describe("HeaderBar Component", () => {
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
 
-  it("regression M4-03: applies pointer-events-none when hidden in independent mode to avoid occluding content", () => {
+  it("regression fix: HeaderBar is in-flow (relative, flex-shrink-0) and never uses absolute overlay to prevent occluding widget buttons", () => {
     const { container } = render(
       <HeaderBar title="Spotify" isLocked={false} layoutMode="independent" widgetId="spotify" />
     );
     const header = container.querySelector("header");
-    expect(header).toHaveClass("opacity-0", "pointer-events-none", "group-hover:pointer-events-auto", "group-focus-within:pointer-events-auto");
+    expect(header).toHaveClass("relative", "w-full", "flex-shrink-0");
+    expect(header).not.toHaveClass("absolute");
+  });
+
+  it("regression fix: interactive buttons in WidgetContainer children are not occluded by HeaderBar", () => {
+    const handleRefresh = vi.fn();
+    render(
+      <WidgetContainer id="test-weather" title="Weather Forecast" layoutMode="independent">
+        <button data-testid="test-refresh-btn" onClick={handleRefresh}>
+          Neuladen
+        </button>
+      </WidgetContainer>
+    );
+
+    const refreshBtn = screen.getByTestId("test-refresh-btn");
+    expect(refreshBtn).toBeInTheDocument();
+    fireEvent.click(refreshBtn);
+    expect(handleRefresh).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -137,7 +154,7 @@ describe("WidgetContainer Component", () => {
     expect(header).toHaveClass("cursor-grab");
   });
 
-  it("applies floating hover-only styling in independent mode", () => {
+  it("renders HeaderBar in-flow without absolute overlay to prevent content occlusion", () => {
     const { container } = render(
       <WidgetContainer id="hover-widget" title="Hover Widget" layoutMode="independent">
         <span>Content</span>
@@ -147,7 +164,8 @@ describe("WidgetContainer Component", () => {
     expect(wrapper).toHaveClass("group", "relative");
 
     const header = container.querySelector("header");
-    expect(header).toHaveClass("absolute", "opacity-0", "group-hover:opacity-100");
+    expect(header).toHaveClass("relative", "w-full", "flex-shrink-0");
+    expect(header).not.toHaveClass("absolute");
   });
 });
 

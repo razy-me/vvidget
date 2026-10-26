@@ -68,7 +68,7 @@ export const WidgetContainer: FC<WidgetContainerProps> = ({
 
         <div
           className={cn(
-            "flex-1 p-3 flex flex-col overflow-auto text-[var(--fluent-text-primary)]",
+            "flex-1 p-3 flex flex-col overflow-auto text-[var(--fluent-text-primary)] min-h-0",
             contentClassName
           )}
         >

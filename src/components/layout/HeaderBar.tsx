@@ -53,21 +53,17 @@ export const HeaderBar: FC<HeaderBarProps> = ({
     <header
       {...dragHandlers}
       className={cn(
-        "flex items-center justify-between px-3 py-2 select-none border-b",
+        "relative w-full flex-shrink-0 flex items-center justify-between px-3 py-1.5 select-none border-b",
         isGridDragging
           ? "border-b-[var(--fluent-accent)]/50 bg-[var(--fluent-card-subtle)] shadow-inner"
-          : "border-b-[var(--fluent-stroke)]",
+          : "border-b-[var(--fluent-stroke)]/40 bg-[var(--fluent-card-bg)]/30 backdrop-blur-sm",
         "transition-all duration-150 touch-none",
         !isLocked
           ? isGridDragging
             ? "cursor-grabbing"
             : "cursor-grab active:cursor-grabbing"
           : "cursor-default",
-        !isDocked && [
-          "absolute top-0 left-0 right-0 z-20 backdrop-blur-md bg-[var(--fluent-acrylic-bg)]/80 rounded-t-2xl",
-          "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-150",
-          isGridDragging && "opacity-100 pointer-events-auto"
-        ],
+        !isDocked ? "rounded-t-2xl" : "rounded-t-lg",
         className
       )}
       aria-label={`${title} widget header`}
