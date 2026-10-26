@@ -84,17 +84,11 @@ pub fn save_config_atomic(target_path: &Path, config: &AppConfig) -> Result<(), 
     // 2. Atomically rename temporary file over target file
     // On Windows NTFS, standard fs::rename replaces existing files atomically if destination exists.
     if let Err(err) = fs::rename(&tmp_path, target_path) {
-        // Fallback for Windows in case of transient sharing violation: try remove + rename
-        if target_path.exists() {
-            let _ = fs::remove_file(target_path);
-        }
-        if let Err(rename_err) = fs::rename(&tmp_path, target_path) {
-            let _ = fs::remove_file(&tmp_path);
-            return Err(format!(
-                "Failed to rename temp file {:?} to {:?}: initial err: {}, final err: {}",
-                tmp_path, target_path, err, rename_err
-            ));
-        }
+        let _ = fs::remove_file(&tmp_path);
+        return Err(format!(
+            "Failed to atomically replace config {:?} with {:?}: {}",
+            target_path, tmp_path, err
+        ));
     }
 
     Ok(())
@@ -106,7 +100,8 @@ pub fn save_config_atomic(target_path: &Path, config: &AppConfig) -> Result<(), 
 /// and restores default configuration safely without crashing.
 pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
     if !target_path.exists() {
-        let default_config = AppConfig::default();
+        let mut default_config = AppConfig::default();
+        default_config.version = 2;
         if let Err(e) = save_config_atomic(target_path, &default_config) {
             log::warn!("Could not write default config to {:?}: {}", target_path, e);
         }
@@ -116,79 +111,82 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
     match fs::read_to_string(target_path) {
         Ok(content) => match serde_json::from_str::<AppConfig>(&content) {
             Ok(mut parsed) => {
-                // Self-healing migration: upgrade to 12x9 desktop grid dimensions (160x120)
                 let mut upgraded = false;
-                for (id, placement) in parsed.widgets.iter_mut() {
-                    let (target_w, target_h) = match id.as_str() {
-                        "resources" => (320.0, 360.0),
-                        "spotify" => (320.0, 240.0),
-                        "weather" => (320.0, 480.0),
-                        "speedtest" => (320.0, 240.0),
-                        "launcher" => (320.0, 360.0),
-                        "quick_settings" => (320.0, 240.0),
-                        "calendar" => (320.0, 360.0),
-                        "clock" => (320.0, 360.0),
-                        "bluetooth" => (320.0, 240.0),
-                        "battery" => (320.0, 360.0),
-                        _ => (320.0, 240.0),
-                    };
-                    if (placement.logical_width - target_w).abs() > 0.1 || (placement.logical_height - target_h).abs() > 0.1 {
-                        placement.logical_width = target_w;
-                        placement.logical_height = target_h;
-                        upgraded = true;
+                if parsed.version < 2 {
+                    // One-time self-healing migration: upgrade schema v1 to 12x9 grid
+                    for (id, placement) in parsed.widgets.iter_mut() {
+                        let (target_w, target_h) = match id.as_str() {
+                            "resources" => (320.0, 360.0),
+                            "spotify" => (320.0, 240.0),
+                            "weather" => (320.0, 480.0),
+                            "speedtest" => (320.0, 240.0),
+                            "launcher" => (320.0, 360.0),
+                            "quick_settings" => (320.0, 240.0),
+                            "calendar" => (320.0, 360.0),
+                            "clock" => (320.0, 360.0),
+                            "bluetooth" => (320.0, 240.0),
+                            "battery" => (320.0, 360.0),
+                            _ => (320.0, 240.0),
+                        };
+                        if (placement.logical_width - target_w).abs() > 0.1 || (placement.logical_height - target_h).abs() > 0.1 {
+                            placement.logical_width = target_w;
+                            placement.logical_height = target_h;
+                        }
+
+                        // Quantize any off-grid coordinates to exact multiples of the 12x9 desktop grid (160x120)
+                        let snapped_x = (placement.logical_x / 160.0).round() * 160.0;
+                        let snapped_y = (placement.logical_y / 120.0).round() * 120.0;
+                        if (placement.logical_x - snapped_x).abs() > 0.1 || (placement.logical_y - snapped_y).abs() > 0.1 {
+                            placement.logical_x = snapped_x;
+                            placement.logical_y = snapped_y;
+                        }
                     }
 
-                    // Quantize any off-grid coordinates to exact multiples of the 12x9 desktop grid (160x120)
-                    let snapped_x = (placement.logical_x / 160.0).round() * 160.0;
-                    let snapped_y = (placement.logical_y / 120.0).round() * 120.0;
-                    if (placement.logical_x - snapped_x).abs() > 0.1 || (placement.logical_y - snapped_y).abs() > 0.1 {
-                        placement.logical_x = snapped_x;
-                        placement.logical_y = snapped_y;
-                        upgraded = true;
-                    }
-                }
+                    // Self-healing collision resolution: ensure no visible widgets overlap on startup
+                    let mut keys: Vec<String> = parsed.widgets.keys().cloned().collect();
+                    keys.sort();
+                    let mut occupied: Vec<(String, Option<String>, f64, f64, f64, f64)> = Vec::new();
+                    for id in keys {
+                        let placement = match parsed.widgets.get_mut(&id) {
+                            Some(p) => p,
+                            None => continue,
+                        };
+                        if !placement.visible {
+                            continue;
+                        }
+                        let monitor = placement.monitor_id.clone();
+                        let mut x = placement.logical_x;
+                        let mut y = placement.logical_y;
+                        let w = placement.logical_width;
+                        let h = placement.logical_height;
 
-                // Self-healing collision resolution: ensure no visible widgets overlap on startup
-                let mut keys: Vec<String> = parsed.widgets.keys().cloned().collect();
-                keys.sort();
-                let mut occupied: Vec<(String, f64, f64, f64, f64)> = Vec::new();
-                for id in keys {
-                    let placement = match parsed.widgets.get_mut(&id) {
-                        Some(p) => p,
-                        None => continue,
-                    };
-                    if !placement.visible {
-                        continue;
-                    }
-                    let mut x = placement.logical_x;
-                    let mut y = placement.logical_y;
-                    let w = placement.logical_width;
-                    let h = placement.logical_height;
+                        let overlaps = occupied.iter().any(|(_, m, ox, oy, ow, oh)| {
+                            m == &monitor && x < ox + ow - 2.0 && x + w > ox + 2.0 && y < oy + oh - 2.0 && y + h > oy + 2.0
+                        });
 
-                    let overlaps = occupied.iter().any(|(_, ox, oy, ow, oh)| {
-                        x < ox + ow - 2.0 && x + w > ox + 2.0 && y < oy + oh - 2.0 && y + h > oy + 2.0
-                    });
-
-                    if overlaps {
-                        let mut found = false;
-                        for r in 1i32..=15i32 {
-                            for dx in -r..=r {
-                                for dy in -r..=r {
-                                    if dx.abs() != r && dy.abs() != r {
-                                        continue;
+                        if overlaps {
+                            let mut found = false;
+                            for r in 1i32..=15i32 {
+                                for dx in -r..=r {
+                                    for dy in -r..=r {
+                                        if dx.abs() != r && dy.abs() != r {
+                                            continue;
+                                        }
+                                        let cand_x = x + dx as f64 * 160.0;
+                                        let cand_y = y + dy as f64 * 120.0;
+                                        let cand_overlaps = occupied.iter().any(|(_, m, ox, oy, ow, oh)| {
+                                            m == &monitor && cand_x < ox + ow - 2.0 && cand_x + w > ox + 2.0 && cand_y < oy + oh - 2.0 && cand_y + h > oy + 2.0
+                                        });
+                                        if !cand_overlaps {
+                                            placement.logical_x = cand_x;
+                                            placement.logical_y = cand_y;
+                                            x = cand_x;
+                                            y = cand_y;
+                                            found = true;
+                                            break;
+                                        }
                                     }
-                                    let cand_x = (x + dx as f64 * 160.0).max(0.0);
-                                    let cand_y = (y + dy as f64 * 120.0).max(0.0);
-                                    let cand_overlaps = occupied.iter().any(|(_, ox, oy, ow, oh)| {
-                                        cand_x < ox + ow - 2.0 && cand_x + w > ox + 2.0 && cand_y < oy + oh - 2.0 && cand_y + h > oy + 2.0
-                                    });
-                                    if !cand_overlaps {
-                                        placement.logical_x = cand_x;
-                                        placement.logical_y = cand_y;
-                                        x = cand_x;
-                                        y = cand_y;
-                                        upgraded = true;
-                                        found = true;
+                                    if found {
                                         break;
                                     }
                                 }
@@ -196,12 +194,12 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
                                     break;
                                 }
                             }
-                            if found {
-                                break;
-                            }
                         }
+                        occupied.push((id.clone(), monitor, x, y, w, h));
                     }
-                    occupied.push((id.clone(), x, y, w, h));
+
+                    parsed.version = 2;
+                    upgraded = true;
                 }
 
                 if upgraded {
@@ -219,10 +217,12 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
         },
         Err(read_err) => {
             log::error!(
-                "Failed to read config file at {:?}: {}. Backing up and restoring defaults.",
+                "IO error reading config file at {:?}: {}. Using defaults in-memory.",
                 target_path, read_err
             );
-            backup_corrupted_and_reset(target_path)
+            let mut default_config = AppConfig::default();
+            default_config.version = 2;
+            (default_config, false)
         }
     }
 }
@@ -251,7 +251,8 @@ fn backup_corrupted_and_reset(target_path: &Path) -> (AppConfig, bool) {
         );
     }
 
-    let default_config = AppConfig::default();
+    let mut default_config = AppConfig::default();
+    default_config.version = 2;
     if let Err(e) = save_config_atomic(target_path, &default_config) {
         log::error!(
             "Failed to write fresh default config to {:?}: {}",
@@ -328,6 +329,21 @@ impl ConfigManager {
     /// Returns a clone of the current in-memory AppConfig.
     pub async fn get_config(&self) -> AppConfig {
         self.current_config.read().await.clone()
+    }
+
+    /// Atomically mutates the current in-memory configuration within a write lock
+    /// and immediately persists the snapshot to disk, preventing lost-update races.
+    pub async fn update_config<F, R>(&self, f: F) -> Result<R, String>
+    where
+        F: FnOnce(&mut AppConfig) -> Result<R, String>,
+    {
+        let (result, snapshot) = {
+            let mut lock = self.current_config.write().await;
+            let res = f(&mut *lock)?;
+            (res, lock.clone())
+        };
+        self.save_immediate(snapshot).await?;
+        Ok(result)
     }
 
     /// Queues an updated configuration with 500ms debounce (ideal for window dragging).
@@ -414,7 +430,7 @@ mod tests {
         let (loaded, recovered) = load_or_recover_config(&path);
         assert!(!recovered);
         assert!(path.exists());
-        assert_eq!(loaded.version, 1);
+        assert_eq!(loaded.version, 2);
         assert_eq!(loaded.widgets.len(), 3);
 
         let _ = fs::remove_dir_all(&dir);
@@ -430,7 +446,7 @@ mod tests {
 
         let (loaded, recovered) = load_or_recover_config(&path);
         assert!(recovered, "Expected recovery flag to be true");
-        assert_eq!(loaded.version, 1);
+        assert_eq!(loaded.version, 2);
         assert!(path.exists());
 
         // Verify that a backup file .corrupt.<timestamp> exists in the folder
@@ -448,7 +464,7 @@ mod tests {
         // Subsequent load should read the valid restored default file cleanly
         let (second_load, second_recovered) = load_or_recover_config(&path);
         assert!(!second_recovered);
-        assert_eq!(second_load.version, 1);
+        assert_eq!(second_load.version, 2);
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -470,7 +486,7 @@ mod tests {
 
         // Wait for debounce period (500ms + buffer) with polling
         let mut disk_updated = false;
-        for _ in 0..30 {
+        for _ in 0..60 {
             tokio::time::sleep(Duration::from_millis(50)).await;
             let (disk_config, _) = load_or_recover_config(&path);
             if !disk_config.snap_to_edges {
@@ -549,7 +565,7 @@ mod tests {
 
         let (loaded, recovered) = load_or_recover_config(&bare_path);
         assert!(!recovered);
-        assert_eq!(loaded.version, 1);
+        assert_eq!(loaded.version, 2);
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -565,7 +581,7 @@ mod tests {
 
         let (loaded, recovered) = load_or_recover_config(&path);
         assert!(recovered, "Expected 0-byte file to be treated as corrupt and recovered");
-        assert_eq!(loaded.version, 1);
+        assert_eq!(loaded.version, 2);
         assert!(path.exists());
 
         // Check corrupt backup file was generated
@@ -592,7 +608,7 @@ mod tests {
 
         let (loaded, recovered) = load_or_recover_config(&path);
         assert!(recovered, "Expected type mismatch JSON to be recovered");
-        assert_eq!(loaded.version, 1);
+        assert_eq!(loaded.version, 2);
 
         let _ = fs::remove_dir_all(&dir);
     }
@@ -731,6 +747,148 @@ mod tests {
         let weather = &loaded.widgets["weather"];
         assert_eq!(weather.logical_width, 320.0);
         assert_eq!(weather.logical_height, 480.0);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_save_config_atomic_preserves_target_file_on_atomic_failure() {
+        let dir = create_test_dir();
+        let path = dir.join("config.json");
+
+        // Write initial valid config
+        let mut initial_config = AppConfig::default();
+        initial_config.version = 2;
+        initial_config.theme = "persist-me".to_string();
+        save_config_atomic(&path, &initial_config).unwrap();
+        assert!(path.exists());
+
+        // Now make path a directory so fs::rename over it fails
+        let bogus_dir = dir.join("dir_target");
+        fs::create_dir_all(&bogus_dir).unwrap();
+        let bogus_file = bogus_dir.join("subfile.txt");
+        fs::write(&bogus_file, b"content").unwrap();
+
+        // Attempt save where target_path cannot be replaced cleanly
+        let res = save_config_atomic(&bogus_dir, &initial_config);
+        assert!(res.is_err());
+        // Verify original target directory/file was not deleted by failed atomic save
+        assert!(bogus_dir.exists());
+        assert!(bogus_file.exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn test_config_manager_update_config_atomicity() {
+        let dir = create_test_dir();
+        let path = dir.join("atomic_update.json");
+
+        let manager = ConfigManager::new(path.clone());
+        let iterations = 10;
+        let mut handles = Vec::new();
+
+        for i in 0..iterations {
+            let m = manager.clone();
+            handles.push(tokio::spawn(async move {
+                m.update_config(move |cfg| {
+                    let note = crate::config::CalendarNote {
+                        id: format!("note_{}", i),
+                        text: format!("Text {}", i),
+                        completed: Some(false),
+                    };
+                    cfg.calendar_events
+                        .entry("2026-10-26".to_string())
+                        .or_default()
+                        .push(note);
+                    Ok(())
+                })
+                .await
+            }));
+        }
+
+        for h in handles {
+            h.await.unwrap().unwrap();
+        }
+
+        let final_cfg = manager.get_config().await;
+        let notes = final_cfg.calendar_events.get("2026-10-26").unwrap();
+        assert_eq!(notes.len(), iterations);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_io_read_error_does_not_reset_target_file() {
+        let dir = create_test_dir();
+        // Pointing load_or_recover_config to a directory triggers read_to_string IO error (EISDIR)
+        let dir_target = dir.join("directory_as_config");
+        fs::create_dir_all(&dir_target).unwrap();
+
+        let (loaded, recovered) = load_or_recover_config(&dir_target);
+        assert!(!recovered, "IO read error must NOT trigger corrupt reset");
+        assert_eq!(loaded.version, 2);
+        // Ensure directory wasn't renamed or deleted
+        assert!(dir_target.exists());
+
+        let entries: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+            .collect();
+        assert!(
+            !entries.iter().any(|name| name.contains(".corrupt.")),
+            "Corrupt backup file must not be created on IO read errors"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_version_2_custom_dimensions_and_negative_coords_preserved() {
+        let dir = create_test_dir();
+        let path = dir.join("v2_config.json");
+
+        // Config v2 with custom resized dimensions and negative coordinates on secondary monitor
+        let custom_json = r#"{
+            "version": 2,
+            "theme": "dark",
+            "widgets": {
+                "resources": {
+                    "id": "resources",
+                    "visible": true,
+                    "logical_x": -1920.0,
+                    "logical_y": -400.0,
+                    "logical_width": 450.0,
+                    "logical_height": 550.0,
+                    "scale_factor": 1.0,
+                    "monitor_id": "DISPLAY2"
+                },
+                "spotify": {
+                    "id": "spotify",
+                    "visible": true,
+                    "logical_x": 0.0,
+                    "logical_y": 0.0,
+                    "logical_width": 320.0,
+                    "logical_height": 240.0,
+                    "scale_factor": 1.0,
+                    "monitor_id": "DISPLAY1"
+                }
+            }
+        }"#;
+        fs::write(&path, custom_json.as_bytes()).unwrap();
+
+        let (loaded, recovered) = load_or_recover_config(&path);
+        assert!(!recovered);
+        assert_eq!(loaded.version, 2);
+
+        let res = &loaded.widgets["resources"];
+        // Must preserve user's custom dimensions (not reset to 320x360)
+        assert_eq!(res.logical_width, 450.0);
+        assert_eq!(res.logical_height, 550.0);
+        // Must preserve negative multi-monitor coordinates (not clamped to 0.0)
+        assert_eq!(res.logical_x, -1920.0);
+        assert_eq!(res.logical_y, -400.0);
+        assert_eq!(res.monitor_id, Some("DISPLAY2".to_string()));
 
         let _ = fs::remove_dir_all(&dir);
     }

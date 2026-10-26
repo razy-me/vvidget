@@ -12,9 +12,13 @@ pub struct GeoLocation {
 #[tauri::command]
 #[specta::specta]
 pub async fn get_windows_location() -> Result<(f64, f64), String> {
-    tokio::task::spawn_blocking(winrt::get_geoposition_coords)
-        .await
-        .map_err(|e| format!("Geolocation task failed to join: {e}"))?
+    tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        tokio::task::spawn_blocking(winrt::get_geoposition_coords),
+    )
+    .await
+    .map_err(|_| "Geolocation request timed out after 10s".to_string())?
+    .map_err(|e| format!("Geolocation task failed to join: {e}"))?
 }
 
 #[cfg(test)]
@@ -52,5 +56,19 @@ mod tests {
         let invalid = r#"{"latitude": "north", "longitude": 10.0}"#;
         let res: Result<GeoLocation, _> = serde_json::from_str(invalid);
         assert!(res.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_geolocation_timeout_wrapper() {
+        let timeout_res = tokio::time::timeout(
+            std::time::Duration::from_millis(50),
+            tokio::task::spawn_blocking(|| {
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                (0.0f64, 0.0f64)
+            }),
+        )
+        .await;
+
+        assert!(timeout_res.is_err(), "Blocked geolocation call must be cleanly aborted by timeout");
     }
 }

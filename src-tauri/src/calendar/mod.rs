@@ -85,15 +85,15 @@ pub async fn add_calendar_note<R: tauri::Runtime>(
     note: CalendarNote,
 ) -> Result<(), String> {
     if let Some(cm) = app.try_state::<ConfigManager>() {
-        let mut config = cm.get_config().await;
-        add_note_to_map(&mut config.calendar_events, &date, note)?;
-
-        cm.save_immediate(config.clone())
-            .await
-            .map_err(|e| e.to_string())?;
+        let snapshot = cm
+            .update_config(|config| {
+                add_note_to_map(&mut config.calendar_events, &date, note)?;
+                Ok(config.clone())
+            })
+            .await?;
 
         use tauri::Emitter;
-        let _ = app.emit("config-changed", &config);
+        let _ = app.emit("config-changed", &snapshot);
         Ok(())
     } else {
         Err("ConfigManager not available".to_string())
@@ -109,15 +109,15 @@ pub async fn remove_calendar_note<R: tauri::Runtime>(
     note_id: String,
 ) -> Result<(), String> {
     if let Some(cm) = app.try_state::<ConfigManager>() {
-        let mut config = cm.get_config().await;
-        remove_note_from_map(&mut config.calendar_events, &date, &note_id);
-
-        cm.save_immediate(config.clone())
-            .await
-            .map_err(|e| e.to_string())?;
+        let snapshot = cm
+            .update_config(|config| {
+                remove_note_from_map(&mut config.calendar_events, &date, &note_id);
+                Ok(config.clone())
+            })
+            .await?;
 
         use tauri::Emitter;
-        let _ = app.emit("config-changed", &config);
+        let _ = app.emit("config-changed", &snapshot);
         Ok(())
     } else {
         Err("ConfigManager not available".to_string())
@@ -133,15 +133,15 @@ pub async fn toggle_calendar_note<R: tauri::Runtime>(
     note_id: String,
 ) -> Result<(), String> {
     if let Some(cm) = app.try_state::<ConfigManager>() {
-        let mut config = cm.get_config().await;
-        toggle_note_in_map(&mut config.calendar_events, &date, &note_id);
-
-        cm.save_immediate(config.clone())
-            .await
-            .map_err(|e| e.to_string())?;
+        let snapshot = cm
+            .update_config(|config| {
+                toggle_note_in_map(&mut config.calendar_events, &date, &note_id);
+                Ok(config.clone())
+            })
+            .await?;
 
         use tauri::Emitter;
-        let _ = app.emit("config-changed", &config);
+        let _ = app.emit("config-changed", &snapshot);
         Ok(())
     } else {
         Err("ConfigManager not available".to_string())

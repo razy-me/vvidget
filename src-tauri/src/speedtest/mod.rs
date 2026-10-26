@@ -1,7 +1,18 @@
 use crate::config::{ConfigManager, SpeedtestResult};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
+
+static SPEEDTEST_RUNNING: AtomicBool = AtomicBool::new(false);
+
+struct SpeedtestGuard;
+
+impl Drop for SpeedtestGuard {
+    fn drop(&mut self) {
+        SPEEDTEST_RUNNING.store(false, Ordering::SeqCst);
+    }
+}
 
 const CF_SPEEDTEST_PING_URL: &str = "https://speed.cloudflare.com/__down?bytes=0";
 const CF_SPEEDTEST_DOWN_URL: &str = "https://speed.cloudflare.com/__down?bytes=10000000"; // 10 MB payload
@@ -231,6 +242,11 @@ async fn run_upload_phase<R: Runtime>(
 pub async fn run_speedtest<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<SpeedtestResult, String> {
+    if SPEEDTEST_RUNNING.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+        return Err("Speedtest is already running".to_string());
+    }
+    let _guard = SpeedtestGuard;
+
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(6))
         .pool_idle_timeout(Duration::from_secs(10))
@@ -356,16 +372,19 @@ pub async fn save_speedtest_result<R: Runtime>(
     result: SpeedtestResult,
 ) -> Result<(), String> {
     if let Some(cm) = app.try_state::<ConfigManager>() {
-        let mut config = cm.get_config().await;
-        config.speedtest_history.retain(|r| r.timestamp != result.timestamp);
-        config.speedtest_history.push(result);
-        // Keep most recent 10 entries
-        if config.speedtest_history.len() > 10 {
-            let start = config.speedtest_history.len() - 10;
-            config.speedtest_history = config.speedtest_history[start..].to_vec();
-        }
-        cm.save_immediate(config.clone()).await.map_err(|e| e.to_string())?;
-        let _ = app.emit("config-changed", &config);
+        let snapshot = cm
+            .update_config(|config| {
+                config.speedtest_history.retain(|r| r.timestamp != result.timestamp);
+                config.speedtest_history.push(result);
+                // Keep most recent 10 entries
+                if config.speedtest_history.len() > 10 {
+                    let start = config.speedtest_history.len() - 10;
+                    config.speedtest_history = config.speedtest_history[start..].to_vec();
+                }
+                Ok(config.clone())
+            })
+            .await?;
+        let _ = app.emit("config-changed", &snapshot);
     }
     Ok(())
 }
@@ -442,5 +461,23 @@ mod tests {
         // Try connecting to an unresolvable or non-existent local port
         let res = client.get("http://127.0.0.1:9999/__down?bytes=0").send().await;
         assert!(res.is_err(), "Offline or unreachable request must return error cleanly");
+    }
+
+    #[test]
+    fn test_speedtest_concurrency_guard() {
+        assert_eq!(SPEEDTEST_RUNNING.load(Ordering::SeqCst), false);
+
+        {
+            let acquired = SPEEDTEST_RUNNING.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
+            assert!(acquired.is_ok(), "First acquisition must succeed");
+            let _guard = SpeedtestGuard;
+
+            // Second concurrent attempt must fail
+            let second = SPEEDTEST_RUNNING.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
+            assert!(second.is_err(), "Second concurrent attempt must be rejected");
+        }
+
+        // After guard drops, flag must be reset to false
+        assert_eq!(SPEEDTEST_RUNNING.load(Ordering::SeqCst), false);
     }
 }
