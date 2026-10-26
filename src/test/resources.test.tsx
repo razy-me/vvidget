@@ -118,7 +118,7 @@ describe("ResourceWidget component", () => {
     expect(screen.getByText("Network")).toBeDefined();
 
     // CPU core count
-    expect(screen.getByText(`(${MOCK_SYSTEM_METRICS.cpu_cores} Cores)`)).toBeDefined();
+    expect(screen.getByText(`${MOCK_SYSTEM_METRICS.cpu_cores} Cores`)).toBeDefined();
 
     // Network throughput rows
     expect(screen.getByText(/Download/i)).toBeDefined();

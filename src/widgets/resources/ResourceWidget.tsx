@@ -11,7 +11,6 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
-import { MiniGraph } from "./MiniGraph";
 import { MetricBar } from "./MetricBar";
 import { useSystemMetrics } from "@/hooks/useSystemMetrics";
 import { formatBytesGb, formatNetworkSpeed, getMetricVariant } from "@/types/resources";
@@ -30,7 +29,7 @@ export interface ResourceWidgetProps {
 export const ResourceWidget: FC<ResourceWidgetProps> = ({
   className,
 }) => {
-  const { metrics, cpuHistory, error, refresh } = useSystemMetrics();
+  const { metrics, error, refresh } = useSystemMetrics();
 
   // Identify system drive (typically C:) index in disks array, fallback to 0
   const systemDiskIndex = useMemo(() => {
@@ -92,38 +91,31 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
         </div>
       ) : (
         <>
-          {/* Section 1: CPU with MiniGraph sparkline & Top Process */}
+          {/* Section 1: CPU with MetricBar & Top Process */}
           <div className="flex flex-col gap-1.5 bg-[var(--fluent-card-bg)]/40 p-2 rounded-lg">
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1.5 font-medium">
-                <Cpu className="w-3.5 h-3.5 text-sky-400" />
-                <span>CPU</span>
-                {metrics && (
-                  <span className="text-[10px] text-[var(--fluent-text-secondary)]">
-                    ({metrics.cpu_cores} Cores)
-                  </span>
-                )}
-              </div>
-              <span
-                className={cn(
-                  "text-xs tabular-nums font-semibold min-w-[36px] text-right",
-                  cpuVariant === "error"
-                    ? "text-[var(--fluent-error)]"
-                    : cpuVariant === "warning"
-                    ? "text-[var(--fluent-warning)]"
-                    : "text-[var(--fluent-text-primary)]"
-                )}
-              >
-                {cpuPercent}%
-              </span>
-            </div>
-
-            {/* Sparkline Trend */}
-            <MiniGraph
-              data={cpuHistory}
+            <MetricBar
+              label="CPU"
+              valueDisplay={metrics ? `${metrics.cpu_cores} Cores` : ""}
+              percent={cpuPercent}
+              icon={<Cpu className="w-3.5 h-3.5 text-sky-400" />}
               variant={cpuVariant}
-              height={28}
-              className="mt-0.5 rounded"
+              detailTooltip={
+                metrics && (
+                  <div className="text-[11px] space-y-0.5">
+                    <div>Usage: {cpuPercent}%</div>
+                    <div>Cores: {metrics.cpu_cores}</div>
+                    {metrics.top_process_name && (
+                      <div>
+                        Top Process: {metrics.top_process_name} (
+                        {metrics.top_process_cpu !== null && metrics.top_process_cpu !== undefined
+                          ? `${Math.round(metrics.top_process_cpu)}%`
+                          : "0%"}
+                        )
+                      </div>
+                    )}
+                  </div>
+                )
+              }
             />
 
             {/* Top Process Indicator */}
