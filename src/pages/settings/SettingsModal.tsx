@@ -151,7 +151,7 @@ export const SettingsModal: FC = () => {
 
   return (
     <div
-      className="min-h-screen bg-[var(--fluent-acrylic-bg)] text-[var(--fluent-text-primary)] flex flex-col font-sans select-none"
+      className="h-screen w-screen max-h-screen bg-[var(--fluent-acrylic-bg)] text-[var(--fluent-text-primary)] flex flex-col font-sans select-none overflow-hidden"
       data-testid="settings-modal"
     >
       {/* Fluent Window Title Bar */}
@@ -179,9 +179,9 @@ export const SettingsModal: FC = () => {
       </header>
 
       {/* Main Content Area: Sidebar Navigation + Tab Pane */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Navigation Sidebar */}
-        <aside className="w-44 border-r border-[var(--fluent-stroke)] p-3 space-y-1 bg-black/10 shrink-0">
+        <aside className="w-44 border-r border-[var(--fluent-stroke)] p-3 space-y-1 bg-black/10 shrink-0 overflow-y-auto">
           <button
             type="button"
             onClick={() => setActiveTab("general")}
