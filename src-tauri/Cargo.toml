@@ -44,6 +44,8 @@ features = [
     "Devices_Enumeration",
     "Devices_Bluetooth",
     "Foundation_Collections",
+    "Devices_Power",
+    "System_Power",
 ]
 
 [profile.release]
