@@ -41,7 +41,7 @@ Based on Gemini 4 Argon audit feedback: 5 Work Packages addressing system-level 
     - Fix `SpeedtestWidget` bottom card padding/clipping and add interactive Play button overlay in gauge circle.
   - **Acceptance**: `cargo test bluetooth` and `npm.cmd test -- bluetooth speedtest` pass.
 
-- [ ] **WP-05: Launcher Icons & Compact Search + Calendar/Clock Polish**
+- [x] **WP-05: Launcher Icons & Compact Search + Calendar/Clock Polish**
   - **Files**: `src-tauri/src/config/model.rs`, `src-tauri/src/launcher/mod.rs`, `src/types/config.ts`, `src/widgets/launcher/GameLauncherWidget.tsx`, `src/widgets/calendar/CalendarWidget.tsx`, `src/widgets/clock/ClockWidget.tsx`, plus tests.
   - **Scope**:
     - In `GameLauncherWidget`, remove duplicate inner title and move `+` button next to the search input.
@@ -51,9 +51,9 @@ Based on Gemini 4 Argon audit feedback: 5 Work Packages addressing system-level 
   - **Acceptance**: `cargo test launcher` and `npm.cmd test -- launcher calendar clock` pass.
 
 ## Review & Verification Gates
-- [ ] **Phase 4: Tier 1 Change Review & Test Suite Pass**
-  - `npm.cmd run lint`
-  - `npm.cmd run test`
-  - `cargo test --manifest-path src-tauri/Cargo.toml`
-- [ ] **Phase 5: Release Build Verification**
-  - `npm.cmd run build`
+- [x] **Phase 4: Tier 1 Change Review & Test Suite Pass**
+  - `npm.cmd run lint` (0 errors)
+  - `npm.cmd test` (29 test files, 234 passed)
+  - `cargo test --manifest-path src-tauri/Cargo.toml` (137 passed)
+- [x] **Phase 5: Release Build Verification**
+  - `npm.cmd run build` (tsc + vite passed)

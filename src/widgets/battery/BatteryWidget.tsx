@@ -342,7 +342,7 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
       )}
 
       {/* Quick-Action Footer */}
-      <div className="pt-0.5">
+      <div className="pt-0.5 px-1 pb-0.5">
         <button
           type="button"
           onClick={handleOpenPower}

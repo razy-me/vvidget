@@ -331,34 +331,13 @@ pub unsafe fn apply_tool_window_styles(_raw_hwnd: *mut core::ffi::c_void, _no_ac
     Ok(())
 }
 
-/// Applies safe DWM window attributes (rounded corners DWMWA_WINDOW_CORNER_PREFERENCE = 2,
-/// and DWMWA_SYSTEMBACKDROP_TYPE = 3 for acrylic) on Windows 11 without failing on older builds.
-pub fn apply_acrylic_effect<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>, _dark_mode: bool) -> Result<(), String> {
-    #[cfg(windows)]
-    if let Ok(raw_hwnd) = window.hwnd() {
-        unsafe {
-            let hwnd = HWND(raw_hwnd.0);
-
-            // DWMWA_WINDOW_CORNER_PREFERENCE (33) -> DWMWCP_ROUND (2)
-            let corner_preference: DWM_WINDOW_CORNER_PREFERENCE = DWMWCP_ROUND;
-            let _ = DwmSetWindowAttribute(
-                hwnd,
-                DWMWA_WINDOW_CORNER_PREFERENCE,
-                &corner_preference as *const _ as *const core::ffi::c_void,
-                std::mem::size_of::<DWM_WINDOW_CORNER_PREFERENCE>() as u32,
-            );
-
-            // DWMWA_SYSTEMBACKDROP_TYPE (38) -> DWMSBT_TRANSIENTWINDOW (3) for acrylic backdrop
-            let backdrop_type: DWM_SYSTEMBACKDROP_TYPE = DWMSBT_TRANSIENTWINDOW;
-            let _ = DwmSetWindowAttribute(
-                hwnd,
-                DWMWA_SYSTEMBACKDROP_TYPE,
-                &backdrop_type as *const _ as *const core::ffi::c_void,
-                std::mem::size_of::<DWM_SYSTEMBACKDROP_TYPE>() as u32,
-            );
-        }
-    }
-    let _ = window;
+/// Applies native window transparency and composition.
+/// On Windows 11 with transparent: true, WebView2 uses DirectComposition per-pixel alpha transparency.
+/// Applying DWMWA_SYSTEMBACKDROP_TYPE or AccentPolicy on the HWND fills the ENTIRE rectangular window
+/// with an opaque flat grey tint when inactive (WS_EX_NOACTIVATE), creating an ugly square grey border
+/// around the rounded widget cards. By keeping the HWND purely transparent, WebView2 composites the
+/// rounded CSS Fluent cards directly onto the desktop with smooth anti-aliased corners and no borders!
+pub fn apply_acrylic_effect<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>, _dark_mode: bool) -> Result<(), String> {
     Ok(())
 }
 

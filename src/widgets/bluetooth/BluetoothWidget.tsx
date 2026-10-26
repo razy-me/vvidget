@@ -321,15 +321,17 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
       </div>
 
       {/* Quick-action Button */}
-      <button
-        type="button"
-        onClick={handleOpenSettings}
-        data-testid="open-settings-btn"
-        className="w-full py-1.5 px-3 rounded-lg bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] active:bg-[var(--fluent-card-active)] border border-[var(--fluent-stroke)] text-xs font-medium text-[var(--fluent-text-primary)] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--fluent-accent)] flex-shrink-0 cursor-pointer"
-      >
-        <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
-        <span>Windows Bluetooth-Einstellungen öffnen</span>
-      </button>
+      <div className="pt-1 px-1">
+        <button
+          type="button"
+          onClick={handleOpenSettings}
+          data-testid="open-settings-btn"
+          className="w-full py-1.5 px-3 rounded-lg bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] active:bg-[var(--fluent-card-active)] border border-[var(--fluent-stroke)] text-xs font-medium text-[var(--fluent-text-primary)] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--fluent-accent)] flex-shrink-0 cursor-pointer"
+        >
+          <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+          <span>Windows Bluetooth-Einstellungen öffnen</span>
+        </button>
+      </div>
     </Card>
   );
 };

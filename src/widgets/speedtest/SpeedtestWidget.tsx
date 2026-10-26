@@ -264,7 +264,7 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
       )}
 
       {/* Bottom Footer: Action Button & History Sparkline */}
-      <div className="flex items-center justify-between gap-2 pt-1 border-t border-[var(--fluent-stroke)]">
+      <div className="flex items-center justify-between gap-2 pt-1 border-t border-[var(--fluent-stroke)] px-1 pb-0.5">
         {/* Action Button */}
         <button
           type="button"

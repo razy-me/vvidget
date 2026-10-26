@@ -75,11 +75,11 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
       )}
 
       {/* Content Layer */}
-      <div className="relative z-10">
+      <div className="relative z-10 flex flex-col justify-between h-full">
         {/* Top Header Row */}
-        <div className="flex items-center justify-between mb-2.5">
+        <div className="flex items-center justify-between mb-1.5">
           <div className="flex items-center gap-1.5 min-w-0">
-            <div className="w-5 h-5 flex items-center justify-center text-[var(--fluent-text-secondary)]">
+            <div className="w-4 h-4 flex items-center justify-center text-[var(--fluent-text-secondary)]">
               {isActive && session.is_playing ? (
                 <Radio className="w-3.5 h-3.5 text-emerald-400" />
               ) : (
@@ -101,7 +101,7 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
               onClick={() => void refresh()}
               disabled={isLoading}
               title="Medienstatus aktualisieren"
-              className="p-1 rounded-md text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-bg)] transition-colors active:scale-95 disabled:opacity-50"
+              className="p-0.5 rounded text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-bg)] transition-colors active:scale-95 disabled:opacity-50"
               aria-label="Medienstatus aktualisieren"
             >
               <RefreshCw className={`w-3 h-3 ${isLoading ? "animate-spin" : ""}`} />
@@ -111,7 +111,7 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
 
         {/* Error notification if any */}
         {error && (
-          <div className="mb-2 p-1.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px] flex items-center gap-1.5">
+          <div className="mb-1.5 p-1 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[10px] flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">{error}</span>
           </div>
@@ -119,11 +119,11 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
 
         {/* Main Content Area */}
         {isActive ? (
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-1.5">
             {/* Track Info & Artwork */}
-            <div className="flex items-center gap-3">
-              {/* Album Cover Art with rounded-xl (12px) */}
-              <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] shadow-sm group">
+            <div className="flex items-center gap-2.5">
+              {/* Album Cover Art with rounded-lg */}
+              <div className="relative w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] shadow-sm group">
                 {session.album_art_url && !imgError ? (
                   <img
                     key={session.album_art_url}
@@ -135,7 +135,7 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
                   />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-emerald-950/40 to-[var(--fluent-card-bg)] text-emerald-400/80">
-                    <Music className="w-6 h-6" />
+                    <Music className="w-5 h-5" />
                   </div>
                 )}
               </div>
@@ -180,19 +180,19 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
               onPlayPause={() => void playPause()}
               onNext={() => void nextTrack()}
               onPrevious={() => void previousTrack()}
-              size="md"
+              size="sm"
             />
           </div>
         ) : (
           /* Polished German Locale Idle State */
-          <div className="py-4 flex flex-col items-center justify-center text-center">
-            <div className="w-12 h-12 rounded-full bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] flex items-center justify-center text-[var(--fluent-text-secondary)] mb-2.5 shadow-inner">
-              <Music className="w-5 h-5 opacity-60" />
+          <div className="py-2.5 flex flex-col items-center justify-center text-center">
+            <div className="w-10 h-10 rounded-full bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] flex items-center justify-center text-[var(--fluent-text-secondary)] mb-2 shadow-inner">
+              <Music className="w-4 h-4 opacity-60" />
             </div>
             <p className="text-xs font-medium text-[var(--fluent-text-primary)]">
               Keine Wiedergabe aktiv
             </p>
-            <p className="text-[11px] text-[var(--fluent-text-secondary)] mt-0.5 max-w-[200px] leading-relaxed">
+            <p className="text-[10px] text-[var(--fluent-text-secondary)] mt-0.5 max-w-[200px] leading-relaxed">
               Starte die Wiedergabe in Spotify oder einem Media Player
             </p>
           </div>
@@ -200,7 +200,7 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
 
         {/* Footer: Master Volume Slider */}
         <div
-          className="flex items-center gap-2 pt-2 border-t border-[var(--fluent-stroke)]/40 mt-2.5"
+          className="flex items-center gap-2 pt-1.5 border-t border-[var(--fluent-stroke)]/40 mt-1"
           data-testid="master-volume-control"
         >
           <button
@@ -208,7 +208,7 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
             onClick={() => void toggleMute()}
             title={isMuted ? "Stummschaltung aufheben" : "Stummschalten"}
             aria-label={isMuted ? "Unmute" : "Mute"}
-            className="p-1 rounded-md text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-bg)] transition-colors active:scale-95 shrink-0"
+            className="p-0.5 rounded text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-bg)] transition-colors active:scale-95 shrink-0"
           >
             {isMuted || volume === 0 ? (
               <VolumeX className="w-3.5 h-3.5" />
