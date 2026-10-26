@@ -45,9 +45,14 @@ export function findNearestNonOverlappingSlot(
   const baseSnappedX = Math.round(targetX / gridX) * gridX;
   const baseSnappedY = Math.round(targetY / gridY) * gridY;
 
+  const minGridX = Math.ceil(minX / gridX) * gridX;
+  const maxGridX = Math.floor(maxX / gridX) * gridX;
+  const minGridY = Math.ceil(minY / gridY) * gridY;
+  const maxGridY = Math.floor(maxY / gridY) * gridY;
+
   const candidate = {
-    x: Math.max(minX, Math.min(maxX, baseSnappedX)),
-    y: Math.max(minY, Math.min(maxY, baseSnappedY)),
+    x: Math.max(minGridX, Math.min(maxGridX, baseSnappedX)),
+    y: Math.max(minGridY, Math.min(maxGridY, baseSnappedY)),
     width,
     height,
   };
@@ -59,10 +64,10 @@ export function findNearestNonOverlappingSlot(
   }
 
   // Exhaustive search over all valid screen grid positions to guarantee the closest free slot
-  const minCol = Math.floor(minX / gridX);
-  const maxCol = Math.ceil(maxX / gridX);
-  const minRow = Math.floor(minY / gridY);
-  const maxRow = Math.ceil(maxY / gridY);
+  const minCol = Math.ceil(minX / gridX);
+  const maxCol = Math.floor(maxX / gridX);
+  const minRow = Math.ceil(minY / gridY);
+  const maxRow = Math.floor(maxY / gridY);
 
   interface SlotCandidate {
     x: number;
@@ -72,9 +77,9 @@ export function findNearestNonOverlappingSlot(
   let bestSlot: SlotCandidate | null = null;
 
   for (let c = minCol; c <= maxCol; c++) {
-    const candX = Math.max(minX, Math.min(maxX, c * gridX));
+    const candX = c * gridX;
     for (let r = minRow; r <= maxRow; r++) {
-      const candY = Math.max(minY, Math.min(maxY, r * gridY));
+      const candY = r * gridY;
 
       const testRect = { x: candX, y: candY, width, height };
       const overlaps = occupied.some((other) => rectsOverlap(testRect, other));

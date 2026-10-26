@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
+import fs from "node:fs";
+import path from "node:path";
 import { HeaderBar, WidgetContainer } from "@/components/layout";
 
 describe("HeaderBar Component", () => {
@@ -49,6 +51,14 @@ describe("HeaderBar Component", () => {
     const button = screen.getByLabelText("Close Weather widget");
     fireEvent.click(button);
     expect(handleClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("regression M4-03: applies pointer-events-none when hidden in independent mode to avoid occluding content", () => {
+    const { container } = render(
+      <HeaderBar title="Spotify" isLocked={false} layoutMode="independent" widgetId="spotify" />
+    );
+    const header = container.querySelector("header");
+    expect(header).toHaveClass("opacity-0", "pointer-events-none", "group-hover:pointer-events-auto", "group-focus-within:pointer-events-auto");
   });
 });
 
@@ -138,5 +148,22 @@ describe("WidgetContainer Component", () => {
 
     const header = container.querySelector("header");
     expect(header).toHaveClass("absolute", "opacity-0", "group-hover:opacity-100");
+  });
+});
+
+describe("Fluent Styles & Tokens (M4-06, X2-01)", () => {
+  const fluentCssPath = path.resolve(__dirname, "../styles/fluent.css");
+  const fluentCss = fs.readFileSync(fluentCssPath, "utf-8");
+
+  it("regression M4-06: defines --fluent-card-subtle in both dark and light themes", () => {
+    // Dark theme (:root)
+    expect(fluentCss).toMatch(/:root\s*\{[^}]*--fluent-card-subtle:\s*rgba\(255,\s*255,\s*255,\s*0\.02\);/s);
+    // Light theme (.theme-light)
+    expect(fluentCss).toMatch(/\.theme-light\s*\{[^}]*--fluent-card-subtle:\s*rgba\(255,\s*255,\s*255,\s*0\.5\);/s);
+  });
+
+  it("regression X2-01: defines backdrop-filter and -webkit-backdrop-filter blur on .fluent-acrylic", () => {
+    expect(fluentCss).toMatch(/\.fluent-acrylic\s*\{[^}]*backdrop-filter:\s*blur\(20px\)\s+saturate\(180%\);/s);
+    expect(fluentCss).toMatch(/\.fluent-acrylic\s*\{[^}]*-webkit-backdrop-filter:\s*blur\(20px\)\s+saturate\(180%\);/s);
   });
 });

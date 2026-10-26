@@ -61,7 +61,7 @@ export const DockItem: FC<DockItemProps> = ({
 
         <div className="flex items-center gap-1 flex-shrink-0">
           {onHide && (
-            <Tooltip content="Hide from Dock" position="top" delay={300}>
+            <Tooltip content="Hide from Dock" position="bottom" delay={300}>
               <button
                 type="button"
                 onClick={onHide}
@@ -75,7 +75,7 @@ export const DockItem: FC<DockItemProps> = ({
 
           <Tooltip
             content={isCollapsed ? "Expand widget" : "Collapse widget"}
-            position="top"
+            position="bottom"
             delay={300}
           >
             <button
@@ -95,14 +95,16 @@ export const DockItem: FC<DockItemProps> = ({
       </div>
 
       {/* Item Body with smooth collapsible state */}
-      {!isCollapsed && (
-        <div
-          className="p-2.5 transition-all duration-200"
-          data-testid={`dock-item-content-${id}`}
-        >
-          {children}
-        </div>
-      )}
+      <div
+        className={cn(
+          "p-2.5 transition-all duration-200 overflow-hidden",
+          isCollapsed && "hidden"
+        )}
+        data-testid={`dock-item-content-${id}`}
+        hidden={isCollapsed}
+      >
+        {children}
+      </div>
     </Card>
   );
 };

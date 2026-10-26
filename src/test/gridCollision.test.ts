@@ -144,4 +144,42 @@ describe("gridCollision utilities", () => {
       )
     ).toBe(false);
   });
+
+  it("regression M4-02: maintains strict grid alignment when work area bounds do not divide evenly by grid step", () => {
+    // Work area 1032px with 240px widget height gives maxY = 792px, gridY = 120px
+    // 792 is not a multiple of 120 (792 / 120 = 6.6)
+    // Similarly maxX = 1035px with gridX = 160px
+    const occupied: GridRect[] = [
+      { id: "bottom-blocker", x: 160, y: 600, width: 320, height: 120 },
+    ];
+
+    // Dragging near bottom boundary (e.g. y = 800)
+    const slot = findNearestNonOverlappingSlot(
+      200,
+      800,
+      320,
+      240,
+      occupied,
+      160,
+      120,
+      0,
+      1035,
+      0,
+      792
+    );
+
+    // Returned coordinates MUST be strict integer multiples of gridX and gridY
+    expect(slot.x % 160).toBe(0);
+    expect(slot.y % 120).toBe(0);
+    // Must be within bounds
+    expect(slot.x).toBeLessThanOrEqual(1035);
+    expect(slot.y).toBeLessThanOrEqual(792);
+    // Must not overlap blocker
+    expect(
+      rectsOverlap(
+        { x: slot.x, y: slot.y, width: 320, height: 240 },
+        occupied[0]
+      )
+    ).toBe(false);
+  });
 });

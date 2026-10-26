@@ -8,6 +8,7 @@
   --fluent-card-bg: rgba(255, 255, 255, 0.04);
   --fluent-card-hover: rgba(255, 255, 255, 0.08);
   --fluent-card-active: rgba(255, 255, 255, 0.06);
+  --fluent-card-subtle: rgba(255, 255, 255, 0.02);
   --fluent-stroke: rgba(255, 255, 255, 0.08);
   --fluent-stroke-subtle: rgba(255, 255, 255, 0.05);
   --fluent-text-primary: rgba(255, 255, 255, 0.92);
@@ -37,6 +38,7 @@
   --fluent-card-bg: rgba(255, 255, 255, 0.7);
   --fluent-card-hover: rgba(255, 255, 255, 0.9);
   --fluent-card-active: rgba(255, 255, 255, 0.8);
+  --fluent-card-subtle: rgba(255, 255, 255, 0.5);
   --fluent-stroke: rgba(0, 0, 0, 0.08);
   --fluent-stroke-subtle: rgba(0, 0, 0, 0.04);
   --fluent-text-primary: rgba(0, 0, 0, 0.90);
@@ -55,6 +57,8 @@
 /* Acrylic style class for desktop widget containers */
 .fluent-acrylic {
   background-color: var(--fluent-acrylic-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
 
 .fluent-border {

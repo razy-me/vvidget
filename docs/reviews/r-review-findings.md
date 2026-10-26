@@ -565,8 +565,8 @@
              return Err(format!(
 ```
 
-### [MAJOR] [OPEN] M4-02 `Math.ceil` in `gridCollision.ts` generates off-grid candidate coordinates clamped outside desktop grid
-- **Status**: OPEN
+### [MAJOR] [FIXED] M4-02 `Math.ceil` in `gridCollision.ts` generates off-grid candidate coordinates clamped outside desktop grid
+- **Status**: FIXED
 - **Where**: `src/utils/gridCollision.ts:63-78`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -595,8 +595,8 @@
 +  const maxRow = Math.floor(maxY / gridY);
 ```
 
-### [MAJOR] [OPEN] M4-03 Invisible `HeaderBar` lacks `pointer-events-none` when `opacity-0` and occludes top of widget content
-- **Status**: OPEN
+### [MAJOR] [FIXED] M4-03 Invisible `HeaderBar` lacks `pointer-events-none` when `opacity-0` and occludes top of widget content
+- **Status**: FIXED
 - **Where**: `src/components/layout/HeaderBar.tsx:66-70`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -614,8 +614,8 @@
            isGridDragging && "opacity-100"
 ```
 
-### [MAJOR] [OPEN] M4-04 Conditional DOM unmounting of children in `DockItem` destroys widget state and causes abrupt layout shift
-- **Status**: OPEN
+### [MAJOR] [FIXED] M4-04 Conditional DOM unmounting of children in `DockItem` destroys widget state and causes abrupt layout shift
+- **Status**: FIXED
 - **Where**: `src/components/docking/DockItem.tsx:98-105`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -646,8 +646,8 @@
 +      </div>
 ```
 
-### [MAJOR] [OPEN] M4-05 Tooltips clipped by parent `Card` `overflow-hidden` when positioned at `top` or right boundaries
-- **Status**: OPEN
+### [MAJOR] [FIXED] M4-05 Tooltips clipped by parent `Card` `overflow-hidden` when positioned at `top` or right boundaries
+- **Status**: FIXED
 - **Where**: `src/components/docking/DockItem.tsx:37, 64-80` & `src/components/ui/Tooltip.tsx:51-55`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -671,8 +671,8 @@
              delay={300}
 ```
 
-### [MAJOR] [OPEN] M4-06 Undefined CSS token `--fluent-card-subtle` breaks active grid drag visual feedback
-- **Status**: OPEN
+### [MAJOR] [FIXED] M4-06 Undefined CSS token `--fluent-card-subtle` breaks active grid drag visual feedback
+- **Status**: FIXED
 - **Where**: `src/styles/fluent.css:3-33` & `src/components/layout/HeaderBar.tsx:58`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -1142,8 +1142,8 @@
              Ok(new_id)
 ```
 
-### [MAJOR] [OPEN] X2-01 Missing Backdrop Blur on Fluent Acrylic Surfaces Destroys Native Windows 11 Material Depth
-- **Status**: OPEN
+### [MAJOR] [FIXED] X2-01 Missing Backdrop Blur on Fluent Acrylic Surfaces Destroys Native Windows 11 Material Depth
+- **Status**: FIXED
 - **Where**: `src/styles/fluent.css:56-58`
 - **Source**: `r-review` (Tier 3) (2026-10-26)
 - **Confidence**: HIGH

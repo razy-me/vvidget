@@ -172,11 +172,11 @@ describe("DockContainer Component", () => {
     const collapseBtn = screen.getByRole("button", { name: /collapse system resources content/i });
     fireEvent.click(collapseBtn);
 
-    expect(screen.queryByTestId("dock-item-content-resources")).not.toBeInTheDocument();
+    expect(screen.getByTestId("dock-item-content-resources")).toHaveClass("hidden");
 
     const expandBtn = screen.getByRole("button", { name: /expand system resources content/i });
     fireEvent.click(expandBtn);
-    expect(screen.getByTestId("dock-item-content-resources")).toBeInTheDocument();
+    expect(screen.getByTestId("dock-item-content-resources")).not.toHaveClass("hidden");
   });
 
   it("collapses and expands all widgets when toolbar toggle button is clicked", () => {
@@ -193,16 +193,16 @@ describe("DockContainer Component", () => {
     const collapseAllBtn = screen.getByRole("button", { name: /collapse all widgets/i });
     fireEvent.click(collapseAllBtn);
 
-    expect(screen.queryByTestId("dock-item-content-resources")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("dock-item-content-spotify")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("dock-item-content-weather")).not.toBeInTheDocument();
+    expect(screen.getByTestId("dock-item-content-resources")).toHaveClass("hidden");
+    expect(screen.getByTestId("dock-item-content-spotify")).toHaveClass("hidden");
+    expect(screen.getByTestId("dock-item-content-weather")).toHaveClass("hidden");
 
     const expandAllBtn = screen.getByRole("button", { name: /expand all widgets/i });
     fireEvent.click(expandAllBtn);
 
-    expect(screen.getByTestId("dock-item-content-resources")).toBeInTheDocument();
-    expect(screen.getByTestId("dock-item-content-spotify")).toBeInTheDocument();
-    expect(screen.getByTestId("dock-item-content-weather")).toBeInTheDocument();
+    expect(screen.getByTestId("dock-item-content-resources")).not.toHaveClass("hidden");
+    expect(screen.getByTestId("dock-item-content-spotify")).not.toHaveClass("hidden");
+    expect(screen.getByTestId("dock-item-content-weather")).not.toHaveClass("hidden");
   });
 
   it("hides widget from dock when hide button is clicked", () => {

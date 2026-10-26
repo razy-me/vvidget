@@ -4,7 +4,7 @@ Base Commit: `597d12488d6c8deccbeb626ef23b984f723f49b0`
 
 | FIXED | REJECTED | STALE | INVALID | DEFERRED |
 |---|---|---|---|---|
-| 23 | 0 | 0 | 0 | 0 |
+| 29 | 0 | 0 | 0 | 0 |
 
 ## Clusters
 | Cluster | Findings | Files | Order | Parallel group |
@@ -42,12 +42,12 @@ Base Commit: `597d12488d6c8deccbeb626ef23b984f723f49b0`
 | M3-08 | MAJOR | `src-tauri/src/launcher/mod.rs:444` | VALID | C3 | FIXED | Allowed &, ', $, % in filesystem paths while preserving shell operator filtering | 423cd64 | `test_validate_launch_target_paths_with_ampersand_and_apostrophe` |
 | X1-04 | MAJOR | `src-tauri/src/launcher/mod.rs:488` | VALID | C3 | FIXED | Offloaded synchronous Steam/Epic game disk & registry scanning to spawn_blocking | 423cd64 | `test_scan_installed_games_async` |
 | X1-05 | MAJOR | `src-tauri/src/sysinfo/mod.rs:28` | VALID | C3 | FIXED | Offloaded uninitialized fallback 200ms sleep MetricsCollector::new to spawn_blocking | 423cd64 | `test_metrics_fallback_spawn_blocking` |
-| M4-02 | MAJOR | `src/utils/gridCollision.ts:48` | VALID | C4 | OPEN | | | |
-| M4-03 | MAJOR | `src/components/layout/HeaderBar.tsx:45` | VALID | C4 | OPEN | | | |
-| M4-04 | MAJOR | `src/components/docking/DockItem.tsx:55` | VALID | C4 | OPEN | | | |
-| M4-05 | MAJOR | `src/components/docking/DockItem.tsx:88` | VALID | C4 | OPEN | | | |
-| M4-06 | MAJOR | `src/styles/fluent.css:42` | VALID | C4 | OPEN | | | |
-| X2-01 | MAJOR | `src/styles/fluent.css:56` | VALID | C4 | OPEN | | | |
+| M4-02 | MAJOR | `src/utils/gridCollision.ts:48` | VALID | C4 | FIXED | Aligned candidate search bounds to integer grid steps eliminating fractional clamp offset | 480c9dc | `regression M4-02: maintains strict grid alignment` |
+| M4-03 | MAJOR | `src/components/layout/HeaderBar.tsx:45` | VALID | C4 | FIXED | Added pointer-events-none to opacity-0 HeaderBar preventing invisible header occluding clicks | 480c9dc | `regression M4-03: applies pointer-events-none` |
+| M4-04 | MAJOR | `src/components/docking/DockItem.tsx:55` | VALID | C4 | FIXED | Maintained children in DOM with hidden class/attr preserving widget state across collapse | 480c9dc | `regression M4-04: preserves child component state` |
+| M4-05 | MAJOR | `src/components/docking/DockItem.tsx:88` | VALID | C4 | FIXED | Switched DockItem header tooltips to bottom position preventing parent overflow clipping | 480c9dc | `regression M4-05: tooltips on dock header buttons use bottom position` |
+| M4-06 | MAJOR | `src/styles/fluent.css:42` | VALID | C4 | FIXED | Defined --fluent-card-subtle token in :root and .theme-light for active grid drag feedback | 480c9dc | `regression M4-06: defines --fluent-card-subtle` |
+| X2-01 | MAJOR | `src/styles/fluent.css:56` | VALID | C4 | FIXED | Added backdrop-filter blur(20px) saturate(180%) and webkit prefix to .fluent-acrylic | 480c9dc | `regression X2-01: defines backdrop-filter and -webkit-backdrop-filter blur` |
 | X1-01 | MAJOR | `src/hooks/useConfig.ts:68` | VALID | C5 | OPEN | | | |
 | X1-02 | MAJOR | `src/hooks/useConfig.ts:69` | VALID | C5 | OPEN | | | |
 | X1-03 | MAJOR | `src/hooks/useCalendar.ts:68` | VALID | C5 | OPEN | | | |
