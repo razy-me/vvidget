@@ -96,28 +96,31 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
     match fs::read_to_string(target_path) {
         Ok(content) => match serde_json::from_str::<AppConfig>(&content) {
             Ok(mut parsed) => {
-                // Self-healing migration: upgrade to exact desktop icon grid aspect ratios and dimensions (120x128)
+                // Self-healing migration: upgrade to 12x9 desktop grid dimensions (160x120)
                 let mut upgraded = false;
                 for (id, placement) in parsed.widgets.iter_mut() {
-                    if id == "resources" && ((placement.logical_width - 360.0).abs() > 0.1 || (placement.logical_height - 384.0).abs() > 0.1) {
-                        placement.logical_width = 360.0;
-                        placement.logical_height = 384.0;
-                        upgraded = true;
-                    }
-                    if id == "spotify" && ((placement.logical_width - 360.0).abs() > 0.1 || (placement.logical_height - 256.0).abs() > 0.1) {
-                        placement.logical_width = 360.0;
-                        placement.logical_height = 256.0;
-                        upgraded = true;
-                    }
-                    if id == "weather" && ((placement.logical_width - 360.0).abs() > 0.1 || (placement.logical_height - 512.0).abs() > 0.1) {
-                        placement.logical_width = 360.0;
-                        placement.logical_height = 512.0;
+                    let (target_w, target_h) = match id.as_str() {
+                        "resources" => (320.0, 360.0),
+                        "spotify" => (320.0, 240.0),
+                        "weather" => (320.0, 480.0),
+                        "speedtest" => (320.0, 240.0),
+                        "launcher" => (320.0, 360.0),
+                        "quick_settings" => (320.0, 240.0),
+                        "calendar" => (320.0, 360.0),
+                        "clock" => (320.0, 360.0),
+                        "bluetooth" => (320.0, 240.0),
+                        "battery" => (320.0, 360.0),
+                        _ => (320.0, 240.0),
+                    };
+                    if (placement.logical_width - target_w).abs() > 0.1 || (placement.logical_height - target_h).abs() > 0.1 {
+                        placement.logical_width = target_w;
+                        placement.logical_height = target_h;
                         upgraded = true;
                     }
 
-                    // Quantize any off-grid coordinates to exact multiples of the desktop icon grid (120x128)
-                    let snapped_x = (placement.logical_x / 120.0).round() * 120.0;
-                    let snapped_y = (placement.logical_y / 128.0).round() * 128.0;
+                    // Quantize any off-grid coordinates to exact multiples of the 12x9 desktop grid (160x120)
+                    let snapped_x = (placement.logical_x / 160.0).round() * 160.0;
+                    let snapped_y = (placement.logical_y / 120.0).round() * 120.0;
                     if (placement.logical_x - snapped_x).abs() > 0.1 || (placement.logical_y - snapped_y).abs() > 0.1 {
                         placement.logical_x = snapped_x;
                         placement.logical_y = snapped_y;
@@ -154,8 +157,8 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
                                     if dx.abs() != r && dy.abs() != r {
                                         continue;
                                     }
-                                    let cand_x = (x + dx as f64 * 120.0).max(0.0);
-                                    let cand_y = (y + dy as f64 * 128.0).max(0.0);
+                                    let cand_x = (x + dx as f64 * 160.0).max(0.0);
+                                    let cand_y = (y + dy as f64 * 120.0).max(0.0);
                                     let cand_overlaps = occupied.iter().any(|(_, ox, oy, ow, oh)| {
                                         cand_x < ox + ow - 2.0 && cand_x + w > ox + 2.0 && cand_y < oy + oh - 2.0 && cand_y + h > oy + 2.0
                                     });
@@ -611,9 +614,9 @@ mod tests {
             h.await.unwrap();
         }
 
-        // Wait past debounce duration to verify stability (up to 2 seconds under test load)
+        // Wait past debounce duration to verify stability (up to 3 seconds under test load)
         let mut success = false;
-        for _ in 0..20 {
+        for _ in 0..30 {
             tokio::time::sleep(Duration::from_millis(100)).await;
             if let Ok(content) = fs::read_to_string(&path) {
                 if let Ok(cfg) = serde_json::from_str::<AppConfig>(&content) {
@@ -696,18 +699,18 @@ mod tests {
         assert!(!recovered);
 
         let res = &loaded.widgets["resources"];
-        assert_eq!(res.logical_width, 360.0);
-        assert_eq!(res.logical_height, 384.0);
-        assert_eq!(res.logical_x, 840.0); // 828.0 / 120.0 = 6.9 -> round to 7 * 120.0 = 840.0
-        assert_eq!(res.logical_y, 128.0); // 84.5 / 128.0 = 0.66 -> round to 1 * 128.0 = 128.0
+        assert_eq!(res.logical_width, 320.0);
+        assert_eq!(res.logical_height, 360.0);
+        assert_eq!(res.logical_x, 800.0); // 828.0 / 160.0 = 5.175 -> round to 5 * 160.0 = 800.0
+        assert_eq!(res.logical_y, 120.0); // 84.5 / 120.0 = 0.704 -> round to 1 * 120.0 = 120.0
 
         let spotify = &loaded.widgets["spotify"];
-        assert_eq!(spotify.logical_width, 360.0);
-        assert_eq!(spotify.logical_height, 256.0);
+        assert_eq!(spotify.logical_width, 320.0);
+        assert_eq!(spotify.logical_height, 240.0);
 
         let weather = &loaded.widgets["weather"];
-        assert_eq!(weather.logical_width, 360.0);
-        assert_eq!(weather.logical_height, 512.0);
+        assert_eq!(weather.logical_width, 320.0);
+        assert_eq!(weather.logical_height, 480.0);
 
         let _ = fs::remove_dir_all(&dir);
     }

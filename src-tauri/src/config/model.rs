@@ -23,7 +23,7 @@ impl Default for WidgetPlacement {
             logical_x: 40.0,
             logical_y: 40.0,
             logical_width: 320.0,
-            logical_height: 180.0,
+            logical_height: 240.0,
             scale_factor: 1.0,
             monitor_id: None,
         }
@@ -77,8 +77,8 @@ impl Default for WeatherSettings {
     }
 }
 
-pub const DESKTOP_GRID_LOGICAL_X: f64 = 120.0;
-pub const DESKTOP_GRID_LOGICAL_Y: f64 = 128.0;
+pub const DESKTOP_GRID_LOGICAL_X: f64 = 160.0;
+pub const DESKTOP_GRID_LOGICAL_Y: f64 = 120.0;
 
 /// Discovered or user-pinned application/game in the Launcher widget.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
@@ -198,9 +198,9 @@ impl Default for AppConfig {
                 id: "resources".to_string(),
                 visible: true,
                 logical_x: 960.0,
-                logical_y: 128.0,
-                logical_width: 360.0,
-                logical_height: 384.0,
+                logical_y: 120.0,
+                logical_width: 320.0,
+                logical_height: 360.0,
                 scale_factor: 1.0,
                 monitor_id: None,
             },
@@ -212,9 +212,9 @@ impl Default for AppConfig {
                 id: "spotify".to_string(),
                 visible: true,
                 logical_x: 960.0,
-                logical_y: 512.0,
-                logical_width: 360.0,
-                logical_height: 256.0,
+                logical_y: 480.0,
+                logical_width: 320.0,
+                logical_height: 240.0,
                 scale_factor: 1.0,
                 monitor_id: None,
             },
@@ -225,10 +225,10 @@ impl Default for AppConfig {
             WidgetPlacement {
                 id: "weather".to_string(),
                 visible: true,
-                logical_x: 600.0,
-                logical_y: 128.0,
-                logical_width: 360.0,
-                logical_height: 512.0,
+                logical_x: 640.0,
+                logical_y: 120.0,
+                logical_width: 320.0,
+                logical_height: 480.0,
                 scale_factor: 1.0,
                 monitor_id: None,
             },
@@ -275,18 +275,18 @@ mod tests {
 
         let res = &config.widgets["resources"];
         assert!(res.visible);
-        assert_eq!(res.logical_width, 360.0);
-        assert_eq!(res.logical_height, 384.0);
+        assert_eq!(res.logical_width, 320.0);
+        assert_eq!(res.logical_height, 360.0);
 
         let spotify = &config.widgets["spotify"];
         assert!(spotify.visible);
-        assert_eq!(spotify.logical_width, 360.0);
-        assert_eq!(spotify.logical_height, 256.0);
+        assert_eq!(spotify.logical_width, 320.0);
+        assert_eq!(spotify.logical_height, 240.0);
 
         let weather = &config.widgets["weather"];
         assert!(weather.visible);
-        assert_eq!(weather.logical_width, 360.0);
-        assert_eq!(weather.logical_height, 512.0);
+        assert_eq!(weather.logical_width, 320.0);
+        assert_eq!(weather.logical_height, 480.0);
 
         // Verify extended collections default to empty
         assert!(config.launcher_items.is_empty());
@@ -319,7 +319,7 @@ mod tests {
         assert_eq!(wp.logical_x, 40.0);
         assert_eq!(wp.logical_y, 40.0);
         assert_eq!(wp.logical_width, 320.0);
-        assert_eq!(wp.logical_height, 180.0);
+        assert_eq!(wp.logical_height, 240.0);
         assert_eq!(wp.scale_factor, 1.0);
         assert!(wp.monitor_id.is_none());
     }

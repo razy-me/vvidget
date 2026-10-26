@@ -7,58 +7,58 @@ import {
 
 describe("gridCollision utilities", () => {
   it("detects overlapping rectangles correctly", () => {
-    const r1 = { x: 120, y: 128, width: 360, height: 384 };
+    const r1 = { x: 160, y: 120, width: 320, height: 360 };
     // Intersecting rect
-    const r2 = { x: 240, y: 256, width: 360, height: 256 };
+    const r2 = { x: 320, y: 240, width: 320, height: 240 };
     expect(rectsOverlap(r1, r2)).toBe(true);
 
     // Completely separate rect
-    const r3 = { x: 840, y: 128, width: 360, height: 384 };
+    const r3 = { x: 800, y: 120, width: 320, height: 360 };
     expect(rectsOverlap(r1, r3)).toBe(false);
 
     // Perfectly adjacent edge-to-edge (x=480, right of r1=480)
-    const rAdjacent = { x: 480, y: 128, width: 360, height: 384 };
+    const rAdjacent = { x: 480, y: 120, width: 320, height: 360 };
     expect(rectsOverlap(r1, rAdjacent)).toBe(false);
   });
 
   it("snaps to target slot directly when unobstructed", () => {
     const occupied: GridRect[] = [
-      { id: "resources", x: 120, y: 128, width: 360, height: 384 },
+      { id: "resources", x: 160, y: 120, width: 320, height: 360 },
     ];
 
-    // Dropping at (480, 128) - free adjacent cell
+    // Dropping at (485, 125) - free adjacent cell
     const slot = findNearestNonOverlappingSlot(
       485,
-      130,
-      360,
-      256,
+      125,
+      320,
+      240,
       occupied,
+      160,
       120,
-      128,
       0,
       1920,
       0,
       1080
     );
 
-    expect(slot).toEqual({ x: 480, y: 128 });
+    expect(slot).toEqual({ x: 480, y: 120 });
   });
 
   it("relocates to nearest free adjacent grid slot when target is occupied", () => {
     const occupied: GridRect[] = [
-      // Resources occupies x: [120..480], y: [128..512]
-      { id: "resources", x: 120, y: 128, width: 360, height: 384 },
+      // Resources occupies x: [160..480], y: [120..480]
+      { id: "resources", x: 160, y: 120, width: 320, height: 360 },
     ];
 
-    // User attempts to drop Media Controls (360x256) directly on top of Resources (x=120, y=128)
+    // User attempts to drop Media Controls (320x240) directly on top of Resources (x=160, y=120)
     const slot = findNearestNonOverlappingSlot(
+      160,
       120,
-      128,
-      360,
-      256,
+      320,
+      240,
       occupied,
+      160,
       120,
-      128,
       0,
       1920,
       0,
@@ -68,36 +68,36 @@ describe("gridCollision utilities", () => {
     // Must not overlap Resources!
     expect(
       rectsOverlap(
-        { x: slot.x, y: slot.y, width: 360, height: 256 },
+        { x: slot.x, y: slot.y, width: 320, height: 240 },
         occupied[0]
       )
     ).toBe(false);
 
     // Should snap to immediately adjacent free slot (e.g. x: 480 or y: 0)
     expect([
-      { x: 480, y: 128 },
-      { x: 120, y: 0 },
-      { x: 120, y: 512 },
+      { x: 480, y: 120 },
+      { x: 160, y: 0 },
+      { x: 160, y: 480 },
     ]).toContainEqual(slot);
   });
 
   it("avoids multiple occupied widgets on screen", () => {
     const occupied: GridRect[] = [
-      // Widget 1 at (120, 128, 360, 384)
-      { id: "w1", x: 120, y: 128, width: 360, height: 384 },
-      // Widget 2 at (480, 128, 360, 256)
-      { id: "w2", x: 480, y: 128, width: 360, height: 256 },
+      // Widget 1 at (160, 120, 320, 360)
+      { id: "w1", x: 160, y: 120, width: 320, height: 360 },
+      // Widget 2 at (480, 120, 320, 240)
+      { id: "w2", x: 480, y: 120, width: 320, height: 240 },
     ];
 
-    // Attempt to drop at (240, 128) overlapping both
+    // Attempt to drop at (320, 120) overlapping both
     const slot = findNearestNonOverlappingSlot(
-      240,
-      128,
-      360,
-      256,
-      occupied,
+      320,
       120,
-      128,
+      320,
+      240,
+      occupied,
+      160,
+      120,
       0,
       1920,
       0,
@@ -107,7 +107,7 @@ describe("gridCollision utilities", () => {
     for (const occ of occupied) {
       expect(
         rectsOverlap(
-          { x: slot.x, y: slot.y, width: 360, height: 256 },
+          { x: slot.x, y: slot.y, width: 320, height: 240 },
           occ
         )
       ).toBe(false);
@@ -116,30 +116,30 @@ describe("gridCollision utilities", () => {
 
   it("finds closest slot on the left third of screen above an existing widget", () => {
     const occupied: GridRect[] = [
-      // Weather sits in column 2 at (240, 384, width 360, height 512)
-      { id: "weather", x: 240, y: 384, width: 360, height: 512 },
+      // Weather sits in column 2 at (320, 360, width 320, height 480)
+      { id: "weather", x: 320, y: 360, width: 320, height: 480 },
     ];
 
-    // User drags Media Controls (360x256) towards top-left (0, 100)
+    // User drags Media Controls (320x240) towards top-left (0, 100)
     const slot = findNearestNonOverlappingSlot(
       0,
       100,
-      360,
-      256,
+      320,
+      240,
       occupied,
+      160,
       120,
-      128,
       0,
       1440,
       0,
       900
     );
 
-    // Slot must be on the left third (x <= 240) and must not overlap Weather
-    expect(slot.x).toBeLessThanOrEqual(240);
+    // Slot must be on the left third (x <= 320) and must not overlap Weather
+    expect(slot.x).toBeLessThanOrEqual(320);
     expect(
       rectsOverlap(
-        { x: slot.x, y: slot.y, width: 360, height: 256 },
+        { x: slot.x, y: slot.y, width: 320, height: 240 },
         occupied[0]
       )
     ).toBe(false);

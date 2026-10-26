@@ -154,8 +154,8 @@ impl Default for SnapConfig {
             snap_to_edges: true,
             snap_to_widgets: true,
             snap_to_grid: true,
-            grid_size_x: 120,
-            grid_size_y: 128,
+            grid_size_x: 160,
+            grid_size_y: 120,
         }
     }
 }
@@ -165,8 +165,8 @@ impl SnapConfig {
     pub fn with_dpi(scale: f64) -> Self {
         let s = if scale > 0.0 { scale } else { 1.0 };
         Self {
-            grid_size_x: (120.0 * s).round() as i32,
-            grid_size_y: (128.0 * s).round() as i32,
+            grid_size_x: (160.0 * s).round() as i32,
+            grid_size_y: (120.0 * s).round() as i32,
             ..Default::default()
         }
     }
@@ -614,35 +614,35 @@ mod tests {
     #[test]
     fn test_snap_config_default_and_dpi_scaling() {
         let default_config = SnapConfig::default();
-        assert_eq!(default_config.grid_size_x, 120);
-        assert_eq!(default_config.grid_size_y, 128);
+        assert_eq!(default_config.grid_size_x, 160);
+        assert_eq!(default_config.grid_size_y, 120);
 
-        // At 200% DPI, grid should scale to 240 x 256
+        // At 200% DPI, grid should scale to 320 x 240
         let dpi_200 = SnapConfig::with_dpi(2.0);
-        assert_eq!(dpi_200.grid_size_x, 240);
-        assert_eq!(dpi_200.grid_size_y, 256);
+        assert_eq!(dpi_200.grid_size_x, 320);
+        assert_eq!(dpi_200.grid_size_y, 240);
     }
 
     #[test]
     fn test_snap_to_desktop_grid_120_128() {
         let work_area = Rect::new(0, 0, 1920, 1080);
-        // Window is moved to (235, 250) - within 16px of (240, 256), which is 2*120, 2*128
-        let mut moving = Rect::new(235, 250, 595, 544);
+        // Window is moved to (315, 235) - within 16px of (320, 240), which is 2*160, 2*120
+        let mut moving = Rect::new(315, 235, 635, 475);
         let config = SnapConfig::default();
 
         let res = apply_magnetic_snapping(&mut moving, &work_area, &[], &config);
-        assert!(res.snapped_x, "Should snap horizontally to 2 * 120 = 240");
-        assert!(res.snapped_y, "Should snap vertically to 2 * 128 = 256");
-        assert_eq!(moving.left, 240);
-        assert_eq!(moving.top, 256);
+        assert!(res.snapped_x, "Should snap horizontally to 2 * 160 = 320");
+        assert!(res.snapped_y, "Should snap vertically to 2 * 120 = 240");
+        assert_eq!(moving.left, 320);
+        assert_eq!(moving.top, 240);
     }
 
     #[test]
     fn test_rects_overlap_detection() {
-        let r1 = Rect::new(0, 0, 360, 256);
-        let r2 = Rect::new(200, 100, 560, 356); // overlapping
-        let r3 = Rect::new(360, 0, 720, 256); // adjacent touching
-        let r4 = Rect::new(400, 0, 760, 256); // far away
+        let r1 = Rect::new(0, 0, 320, 240);
+        let r2 = Rect::new(200, 100, 520, 340); // overlapping
+        let r3 = Rect::new(320, 0, 640, 240); // adjacent touching
+        let r4 = Rect::new(400, 0, 720, 240); // far away
 
         assert!(rects_overlap(&r1, &r2, 2));
         assert!(!rects_overlap(&r1, &r3, 2), "Adjacent rects with 2px margin do not overlap");
@@ -652,38 +652,38 @@ mod tests {
     #[test]
     fn test_find_nearest_non_overlapping_slot_unoccupied() {
         let work_area = Rect::new(0, 0, 1440, 900);
-        let target = Rect::new(20, 20, 380, 276); // w=360, h=256
-        let res = find_nearest_non_overlapping_slot(&target, &[], 120, 128, &work_area);
+        let target = Rect::new(20, 20, 340, 260); // w=320, h=240
+        let res = find_nearest_non_overlapping_slot(&target, &[], 160, 120, &work_area);
         assert_eq!(res.left, 0);
         assert_eq!(res.top, 0);
-        assert_eq!(res.width(), 360);
-        assert_eq!(res.height(), 256);
+        assert_eq!(res.width(), 320);
+        assert_eq!(res.height(), 240);
     }
 
     #[test]
     fn test_find_nearest_non_overlapping_slot_collision_finds_adjacent_slot() {
         let work_area = Rect::new(0, 0, 1440, 900);
-        // An existing widget occupies (0, 0, 360, 256)
-        let existing = vec![Rect::new(0, 0, 360, 256)];
+        // An existing widget occupies (0, 0, 320, 240)
+        let existing = vec![Rect::new(0, 0, 320, 240)];
         // Moving widget dragged right onto (0, 0)
-        let target = Rect::new(50, 50, 410, 306); // w=360, h=256
-        let res = find_nearest_non_overlapping_slot(&target, &existing, 120, 128, &work_area);
+        let target = Rect::new(50, 50, 370, 290); // w=320, h=240
+        let res = find_nearest_non_overlapping_slot(&target, &existing, 160, 120, &work_area);
         // Must NOT overlap existing
         assert!(!rects_overlap(&res, &existing[0], 2));
-        // Should find adjacent column or row (e.g. left=360 or top=256)
-        assert!(res.left >= 360 || res.top >= 256);
+        // Should find adjacent column or row (e.g. left=320 or top=240)
+        assert!(res.left >= 320 || res.top >= 240);
     }
 
     #[test]
     fn test_find_nearest_non_overlapping_slot_left_third() {
         let work_area = Rect::new(0, 0, 1440, 900);
         // Existing widget at x=480, y=0 (middle)
-        let existing = vec![Rect::new(480, 0, 840, 384)];
+        let existing = vec![Rect::new(480, 0, 800, 360)];
         // Target is dragged to left third at x=20, y=100
-        let target = Rect::new(20, 100, 380, 356); // w=360, h=256
-        let res = find_nearest_non_overlapping_slot(&target, &existing, 120, 128, &work_area);
+        let target = Rect::new(20, 100, 340, 340); // w=320, h=240
+        let res = find_nearest_non_overlapping_slot(&target, &existing, 160, 120, &work_area);
         assert_eq!(res.left, 0, "Should place at column 0 in the left third");
-        assert_eq!(res.top, 128, "Should snap to row 1 (128)");
+        assert_eq!(res.top, 120, "Should snap to row 1 (120)");
         assert!(!rects_overlap(&res, &existing[0], 2));
     }
 }

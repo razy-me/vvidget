@@ -4,8 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { findNearestNonOverlappingSlot, type GridRect } from "@/utils/gridCollision";
 import { getWidgetMetadata } from "@/widgets/registry";
 
-export const DESKTOP_GRID_LOGICAL_X = 120.0;
-export const DESKTOP_GRID_LOGICAL_Y = 128.0;
+export const DESKTOP_GRID_LOGICAL_X = 160.0;
+export const DESKTOP_GRID_LOGICAL_Y = 120.0;
 export const DESKTOP_GRID_X = DESKTOP_GRID_LOGICAL_X;
 export const DESKTOP_GRID_Y = DESKTOP_GRID_LOGICAL_Y;
 
@@ -37,8 +37,8 @@ export function useGridDrag({
   onDragStateChange,
 }: UseGridDragOptions) {
   const meta = widgetId ? getWidgetMetadata(widgetId) : undefined;
-  const defaultW = meta?.defaultWidth || 360;
-  const defaultH = meta?.defaultHeight || 256;
+  const defaultW = meta?.defaultWidth || 320;
+  const defaultH = meta?.defaultHeight || 240;
 
   const [isDragging, setIsDragging] = useState(false);
   const [skeletonSlot, setSkeletonSlot] = useState<SkeletonSlot | null>(null);

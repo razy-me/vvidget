@@ -59,8 +59,8 @@ describe("Widget Registry", () => {
     const dynamicMeta = getWidgetMetadata("quick_settings_123");
     expect(dynamicMeta).toBeDefined();
     expect(dynamicMeta?.id).toBe("quick_settings");
-    expect(dynamicMeta?.defaultWidth).toBe(360);
-    expect(dynamicMeta?.defaultHeight).toBe(256);
+    expect(dynamicMeta?.defaultWidth).toBe(320);
+    expect(dynamicMeta?.defaultHeight).toBe(240);
   });
 
   it("returns all 10 widgets as a list via getAllWidgetMetadata", () => {

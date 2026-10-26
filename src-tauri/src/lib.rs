@@ -59,18 +59,18 @@ pub mod integration {
             .cloned()
             .unwrap_or_else(|| {
                 let (w, h) = match widget_id.as_str() {
-                    "resources" => (360.0, 384.0),
-                    "spotify" => (360.0, 256.0),
-                    "weather" => (360.0, 512.0),
-                    "speedtest" => (360.0, 256.0),
-                    "launcher" => (360.0, 384.0),
-                    "quick_settings" => (360.0, 256.0),
-                    "calendar" => (360.0, 384.0),
-                    "clock" => (360.0, 384.0),
-                    "bluetooth" => (360.0, 256.0),
-                    "battery" => (360.0, 384.0),
-                    id if id.starts_with("quick_settings") => (360.0, 256.0),
-                    _ => (340.0, 420.0),
+                    "resources" => (320.0, 360.0),
+                    "spotify" => (320.0, 240.0),
+                    "weather" => (320.0, 480.0),
+                    "speedtest" => (320.0, 240.0),
+                    "launcher" => (320.0, 360.0),
+                    "quick_settings" => (320.0, 240.0),
+                    "calendar" => (320.0, 360.0),
+                    "clock" => (320.0, 360.0),
+                    "bluetooth" => (320.0, 240.0),
+                    "battery" => (320.0, 360.0),
+                    id if id.starts_with("quick_settings") => (320.0, 240.0),
+                    _ => (320.0, 240.0),
                 };
                 crate::config::WidgetPlacement {
                     id: widget_id.clone(),
@@ -146,7 +146,7 @@ pub mod integration {
                 placement.logical_y = logical_y;
                 (placement.logical_width, placement.logical_height)
             } else {
-                (360.0, 256.0)
+                (320.0, 240.0)
             };
             if let Some(wm) = app.try_state::<WindowManager>() {
                 wm.update_window_position(&widget_id, logical_x, logical_y, w, h);
@@ -353,10 +353,10 @@ pub mod integration {
                 .unwrap_or(crate::config::WidgetPlacement {
                     id: new_id.clone(),
                     visible: true,
-                    logical_x: 120.0,
-                    logical_y: 128.0,
-                    logical_width: 360.0,
-                    logical_height: 256.0,
+                    logical_x: 160.0,
+                    logical_y: 120.0,
+                    logical_width: 320.0,
+                    logical_height: 240.0,
                     scale_factor: 1.0,
                     monitor_id: None,
                 });
@@ -548,7 +548,7 @@ pub fn run() {
                 tauri::WebviewUrl::App("index.html?view=skeleton".into()),
             )
             .title("Widgetz Skeleton")
-            .inner_size(360.0, 256.0)
+            .inner_size(320.0, 240.0)
             .visible(false)
             .resizable(true)
             .decorations(false)

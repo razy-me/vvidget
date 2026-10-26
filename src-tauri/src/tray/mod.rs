@@ -283,24 +283,24 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
                     tauri::async_runtime::spawn(async move {
                         if let Ok(mut config) = load_config(handle.clone()).await {
                             let (w, h) = match widget_key {
-                                "resources" => (360.0, 384.0),
-                                "spotify" => (360.0, 256.0),
-                                "weather" => (360.0, 512.0),
-                                "speedtest" => (360.0, 256.0),
-                                "launcher" => (360.0, 384.0),
-                                "quick_settings" => (360.0, 256.0),
-                                "calendar" => (360.0, 384.0),
-                                "clock" => (360.0, 384.0),
-                                "bluetooth" => (360.0, 256.0),
-                                "battery" => (360.0, 384.0),
-                                _ => (360.0, 256.0),
+                                "resources" => (320.0, 360.0),
+                                "spotify" => (320.0, 240.0),
+                                "weather" => (320.0, 480.0),
+                                "speedtest" => (320.0, 240.0),
+                                "launcher" => (320.0, 360.0),
+                                "quick_settings" => (320.0, 240.0),
+                                "calendar" => (320.0, 360.0),
+                                "clock" => (320.0, 360.0),
+                                "bluetooth" => (320.0, 240.0),
+                                "battery" => (320.0, 360.0),
+                                _ => (320.0, 240.0),
                             };
                             let entry = config.widgets.entry(widget_key.to_string()).or_insert_with(|| {
                                 crate::config::WidgetPlacement {
                                     id: widget_key.to_string(),
                                     visible: false,
-                                    logical_x: 120.0,
-                                    logical_y: 128.0,
+                                    logical_x: 160.0,
+                                    logical_y: 120.0,
                                     logical_width: w,
                                     logical_height: h,
                                     scale_factor: 1.0,

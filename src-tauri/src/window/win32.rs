@@ -46,12 +46,12 @@ pub struct DesktopGridMetrics {
 impl Default for DesktopGridMetrics {
     fn default() -> Self {
         Self {
-            cell_width: 120.0,
-            cell_height: 128.0,
-            logical_x: 120.0,
-            logical_y: 128.0,
-            physical_x: 120,
-            physical_y: 128,
+            cell_width: 160.0,
+            cell_height: 120.0,
+            logical_x: 160.0,
+            logical_y: 120.0,
+            physical_x: 160,
+            physical_y: 120,
             scale_factor: 1.0,
         }
     }
@@ -367,15 +367,15 @@ fn query_desktop_grid_metrics() -> DesktopGridMetrics {
                 96
             };
             let s = if dpi > 0 { dpi as f64 / 96.0 } else { 1.0 };
-            let px = (120.0 * s).round() as i32;
-            let py = (128.0 * s).round() as i32;
+            let px = (160.0 * s).round() as i32;
+            let py = (120.0 * s).round() as i32;
             (s, px, py)
         };
 
-        // Standard desktop widget grid pitch in logical pixels is strictly 120.0 x 128.0,
-        // perfectly aligning with widget card dimensions (width 360, heights 256, 384, 512).
-        let logical_x = 120.0;
-        let logical_y = 128.0;
+        // Standard 12x9 desktop widget grid pitch in logical pixels is strictly 160.0 x 120.0,
+        // perfectly dividing a 1920x1080 display into 12 columns x 9 rows.
+        let logical_x = 160.0;
+        let logical_y = 120.0;
 
         DesktopGridMetrics {
             cell_width: logical_x,
