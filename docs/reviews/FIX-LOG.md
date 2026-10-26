@@ -4,7 +4,7 @@ Base Commit: `597d12488d6c8deccbeb626ef23b984f723f49b0`
 
 | FIXED | REJECTED | STALE | INVALID | DEFERRED |
 |---|---|---|---|---|
-| 29 | 0 | 0 | 0 | 0 |
+| 34 | 0 | 0 | 0 | 0 |
 
 ## Clusters
 | Cluster | Findings | Files | Order | Parallel group |
@@ -48,11 +48,11 @@ Base Commit: `597d12488d6c8deccbeb626ef23b984f723f49b0`
 | M4-05 | MAJOR | `src/components/docking/DockItem.tsx:88` | VALID | C4 | FIXED | Switched DockItem header tooltips to bottom position preventing parent overflow clipping | 480c9dc | `regression M4-05: tooltips on dock header buttons use bottom position` |
 | M4-06 | MAJOR | `src/styles/fluent.css:42` | VALID | C4 | FIXED | Defined --fluent-card-subtle token in :root and .theme-light for active grid drag feedback | 480c9dc | `regression M4-06: defines --fluent-card-subtle` |
 | X2-01 | MAJOR | `src/styles/fluent.css:56` | VALID | C4 | FIXED | Added backdrop-filter blur(20px) saturate(180%) and webkit prefix to .fluent-acrylic | 480c9dc | `regression X2-01: defines backdrop-filter and -webkit-backdrop-filter blur` |
-| X1-01 | MAJOR | `src/hooks/useConfig.ts:68` | VALID | C5 | OPEN | | | |
-| X1-02 | MAJOR | `src/hooks/useConfig.ts:69` | VALID | C5 | OPEN | | | |
-| X1-03 | MAJOR | `src/hooks/useCalendar.ts:68` | VALID | C5 | OPEN | | | |
-| M5-05 | MAJOR | `src/hooks/useMasterVolume.ts:50` | VALID | C5 | OPEN | | | |
-| M6-05 | MAJOR | `src/hooks/useCalendar.ts:70` | VALID | C5 | OPEN | | | |
+| X1-01 | MAJOR | `src/hooks/useConfig.ts:68` | VALID | C5 | FIXED | Added isDisposed guard and immediate unlisten to prevent async Tauri listener leaks on unmount | 611e4cf | `regression X1-01: unsubscribes and prevents listener leak if unmounted before listen resolves` |
+| X1-02 | MAJOR | `src/hooks/useConfig.ts:69` | VALID | C5 | FIXED | Synchronized latestConfigRef with event.payload and reloadConfig preventing reversion of external config changes | 611e4cf | `regression X1-02: synchronously updates latestConfigRef on config-changed event` |
+| X1-03 | MAJOR | `src/hooks/useCalendar.ts:68` | VALID | C5 | FIXED | Replaced shallow spread with direct assignment in config sync effect preventing deleted date key resurrection | 611e4cf | `regression M6-05, X1-03: reconciles deleted calendar dates from config without retaining stale keys` |
+| M5-05 | MAJOR | `src/hooks/useMasterVolume.ts:50` | VALID | C5 | FIXED | Invoked toggle_master_mute alongside set_master_volume when adjusting volume while muted to unmute native Windows endpoint | 611e4cf | `regression M5-05: unmutes native Windows endpoint when volume is increased while muted` |
+| M6-05 | MAJOR | `src/hooks/useCalendar.ts:70` | VALID | C5 | FIXED | Replaced shallow spread with direct assignment in config sync effect preventing deleted date key resurrection | 611e4cf | `regression M6-05, X1-03: reconciles deleted calendar dates from config without retaining stale keys` |
 | M5-01 | MAJOR | `src/widgets/battery/BatterySparkline.tsx:49` | VALID | C6 | OPEN | | | |
 | M5-02 | MAJOR | `src/widgets/resources/ResourceWidget.tsx:85` | VALID | C6 | OPEN | | | |
 | M5-03 | MAJOR | `src/widgets/bluetooth/BluetoothWidget.tsx:110` | VALID | C6 | OPEN | | | |

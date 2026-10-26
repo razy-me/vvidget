@@ -75,12 +75,16 @@ export function useMasterVolume(initialVolume = 0.5, initialMuted = false): UseM
   const setVolume = useCallback(async (level: number) => {
     const clamped = Math.max(0, Math.min(1, level));
     setVolumeState(clamped);
-    if (isMuted && clamped > 0) {
+    const wasMuted = isMuted;
+    if (wasMuted && clamped > 0) {
       setIsMutedState(false);
     }
     if (!isTauri()) return;
 
     try {
+      if (wasMuted && clamped > 0) {
+        await safeInvoke("toggle_master_mute");
+      }
       await safeInvoke("set_master_volume", { level: clamped });
     } catch (err) {
       if (isMountedRef.current) {

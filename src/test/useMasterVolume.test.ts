@@ -1,0 +1,156 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { renderHook, act, waitFor } from "@testing-library/react";
+import { useMasterVolume } from "@/hooks/useMasterVolume";
+
+const mockInvoke = vi.fn();
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
+
+describe("useMasterVolume Hook (regression M5-05)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_master_volume") return Promise.resolve(0.3);
+      if (cmd === "get_master_mute") return Promise.resolve(true);
+      if (cmd === "toggle_master_mute") return Promise.resolve(false);
+      if (cmd === "set_master_volume") return Promise.resolve();
+      return Promise.resolve();
+    });
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+  });
+
+  it("unmutes native Windows endpoint when volume is increased while muted (regression M5-05)", async () => {
+    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+      invoke: mockInvoke,
+    };
+
+    // Initialize with mock return for get_master_volume = 0.2 and get_master_mute = true
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_master_volume") return Promise.resolve(0.2);
+      if (cmd === "get_master_mute") return Promise.resolve(true);
+      if (cmd === "toggle_master_mute") return Promise.resolve(false);
+      if (cmd === "set_master_volume") return Promise.resolve();
+      return Promise.resolve();
+    });
+
+    const { result } = renderHook(() => useMasterVolume(0.2, true));
+
+    // Wait for initial refresh to finish
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(result.current.isMuted).toBe(true);
+    expect(result.current.volume).toBe(0.2);
+
+    mockInvoke.mockClear();
+
+    // User drags volume slider to 45% (0.45)
+    await act(async () => {
+      await result.current.setVolume(0.45);
+    });
+
+    // React state reflects unmuted and updated volume
+    expect(result.current.volume).toBe(0.45);
+    expect(result.current.isMuted).toBe(false);
+
+    // Verify both toggle_master_mute and set_master_volume were called in order
+    expect(mockInvoke).toHaveBeenCalledTimes(2);
+    expect(mockInvoke).toHaveBeenNthCalledWith(1, "toggle_master_mute", undefined);
+    expect(mockInvoke).toHaveBeenNthCalledWith(2, "set_master_volume", { level: 0.45 });
+  });
+
+  it("does not call toggle_master_mute when volume is set to 0 while muted", async () => {
+    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+      invoke: mockInvoke,
+    };
+
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_master_volume") return Promise.resolve(0.2);
+      if (cmd === "get_master_mute") return Promise.resolve(true);
+      return Promise.resolve();
+    });
+
+    const { result } = renderHook(() => useMasterVolume(0.2, true));
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    mockInvoke.mockClear();
+
+    await act(async () => {
+      await result.current.setVolume(0);
+    });
+
+    expect(result.current.volume).toBe(0);
+    expect(result.current.isMuted).toBe(true);
+
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(mockInvoke).toHaveBeenCalledWith("set_master_volume", { level: 0 });
+    expect(mockInvoke).not.toHaveBeenCalledWith("toggle_master_mute", expect.anything());
+  });
+
+  it("only calls set_master_volume when adjusting volume while unmuted", async () => {
+    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+      invoke: mockInvoke,
+    };
+
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_master_volume") return Promise.resolve(0.5);
+      if (cmd === "get_master_mute") return Promise.resolve(false);
+      return Promise.resolve();
+    });
+
+    const { result } = renderHook(() => useMasterVolume(0.5, false));
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    mockInvoke.mockClear();
+
+    await act(async () => {
+      await result.current.setVolume(0.75);
+    });
+
+    expect(result.current.volume).toBe(0.75);
+    expect(result.current.isMuted).toBe(false);
+
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(mockInvoke).toHaveBeenCalledWith("set_master_volume", { level: 0.75 });
+    expect(mockInvoke).not.toHaveBeenCalledWith("toggle_master_mute", expect.anything());
+  });
+
+  it("toggles mute state via toggle_master_mute", async () => {
+    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+      invoke: mockInvoke,
+    };
+
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_master_volume") return Promise.resolve(0.5);
+      if (cmd === "get_master_mute") return Promise.resolve(false);
+      if (cmd === "toggle_master_mute") return Promise.resolve(true);
+      return Promise.resolve();
+    });
+
+    const { result } = renderHook(() => useMasterVolume(0.5, false));
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    mockInvoke.mockClear();
+
+    await act(async () => {
+      await result.current.toggleMute();
+    });
+
+    expect(mockInvoke).toHaveBeenCalledWith("toggle_master_mute", undefined);
+  });
+});

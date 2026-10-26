@@ -67,10 +67,7 @@ export function useCalendar(options?: UseCalendarOptions): UseCalendarReturn {
   // Sync with config if initialEvents was not explicitly passed
   useEffect(() => {
     if (!options?.initialEvents && config.calendar_events) {
-      setEvents((prev) => ({
-        ...prev,
-        ...config.calendar_events,
-      }));
+      setEvents(config.calendar_events);
     }
   }, [config.calendar_events, options?.initialEvents]);
 

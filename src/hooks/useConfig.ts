@@ -44,6 +44,7 @@ export function useConfig(): UseConfigReturn {
     setError(null);
     try {
       const loaded = await safeInvoke<AppConfig>("load_config");
+      latestConfigRef.current = loaded;
       setConfig(loaded);
     } catch (err) {
       // In web/test preview, keep DEFAULT_CONFIG without fatal error
@@ -64,18 +65,27 @@ export function useConfig(): UseConfigReturn {
 
     if (!isTauri()) return;
 
+    let isDisposed = false;
     let unlistenFn: (() => void) | undefined;
     void import("@tauri-apps/api/event").then(({ listen }) => {
+      if (isDisposed) return;
       void listen<AppConfig>("config-changed", (event) => {
+        if (isDisposed) return;
         if (event.payload) {
+          latestConfigRef.current = event.payload;
           setConfig(event.payload);
         }
       }).then((unlisten) => {
-        unlistenFn = unlisten;
+        if (isDisposed) {
+          unlisten();
+        } else {
+          unlistenFn = unlisten;
+        }
       });
     });
 
     return () => {
+      isDisposed = true;
       if (unlistenFn) {
         unlistenFn();
       }

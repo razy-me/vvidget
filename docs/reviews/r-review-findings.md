@@ -835,8 +835,8 @@
 
 ---
 
-### [MAJOR] [OPEN] M5-05 `setVolume` updates UI mute state without unmuting native Windows audio endpoint
-- **Status**: OPEN
+### [MAJOR] [FIXED] M5-05 `setVolume` updates UI mute state without unmuting native Windows audio endpoint
+- **Status**: FIXED
 - **Where**: `src/hooks/useMasterVolume.ts:75-91`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -931,8 +931,8 @@
          className
 ```
 
-### [MAJOR] [OPEN] M6-05 Stale key retention in `useCalendar` preserves deleted calendar dates across updates
-- **Status**: OPEN
+### [MAJOR] [FIXED] M6-05 Stale key retention in `useCalendar` preserves deleted calendar dates across updates
+- **Status**: FIXED
 - **Where**: `src/hooks/useCalendar.ts:70-74`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -978,8 +978,8 @@
 +  }, [digitalTime, alarmTime, isAlarmEnabled, alarmTriggered]);
 ```
 
-### [MAJOR] [OPEN] X1-01 Permanent Tauri event listener leak on unmount during asynchronous listener setup in useConfig and useSpeedtest
-- **Status**: OPEN
+### [MAJOR] [FIXED] X1-01 Permanent Tauri event listener leak on unmount during asynchronous listener setup in useConfig and useSpeedtest
+- **Status**: FIXED
 - **Where**: `src/hooks/useConfig.ts:68-82`, `src/hooks/useSpeedtest.ts:132-180`
 - **Source**: `r-review` (Cross-Cutting X1) (2026-10-26)
 - **Confidence**: HIGH
@@ -1018,8 +1018,8 @@
      };
 ```
 
-### [MAJOR] [OPEN] X1-02 Stale config ref desynchronization causes subsequent writes to revert external changes
-- **Status**: OPEN
+### [MAJOR] [FIXED] X1-02 Stale config ref desynchronization causes subsequent writes to revert external changes
+- **Status**: FIXED
 - **Where**: `src/hooks/useConfig.ts:69-75`, `src/hooks/useConfig.ts:114-116`
 - **Source**: `r-review` (Cross-Cutting X1) (2026-10-26)
 - **Confidence**: HIGH
@@ -1039,8 +1039,8 @@
        })
 ```
 
-### [MAJOR] [OPEN] X1-03 Shallow object spread in useCalendar config sync resurrects deleted calendar date entries
-- **Status**: OPEN
+### [MAJOR] [FIXED] X1-03 Shallow object spread in useCalendar config sync resurrects deleted calendar date entries
+- **Status**: FIXED
 - **Where**: `src/hooks/useCalendar.ts:68-75`
 - **Source**: `r-review` (Cross-Cutting X1) (2026-10-26)
 - **Confidence**: HIGH

@@ -8,12 +8,27 @@ const mockInvoke = vi.fn().mockImplementation((cmd: string) => {
   return Promise.resolve();
 });
 
+const mockUnlisten = vi.fn();
+const eventListeners: Record<string, ((event: { payload: unknown }) => void)[]> = {};
+let customListenImpl: ((event: string, cb: (e: { payload: unknown }) => void) => Promise<() => void>) | null = null;
+
+const mockListen = vi.fn().mockImplementation((event: string, cb: (e: { payload: unknown }) => void) => {
+  if (customListenImpl) {
+    return customListenImpl(event, cb);
+  }
+  if (!eventListeners[event]) {
+    eventListeners[event] = [];
+  }
+  eventListeners[event].push(cb);
+  return Promise.resolve(mockUnlisten);
+});
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn().mockResolvedValue(() => {}),
+  listen: (...args: unknown[]) => mockListen(...args),
 }));
 
 describe("AppConfig data contracts and defaults", () => {
@@ -93,6 +108,104 @@ describe("AppConfig data contracts and defaults", () => {
       );
     });
 
+    unmount();
+    delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+  });
+
+  it("unsubscribes and prevents listener leak if unmounted before listen resolves (regression X1-01)", async () => {
+    (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {
+      invoke: mockInvoke,
+    };
+    const unlistenSpy = vi.fn();
+    let resolveListen!: (unlisten: () => void) => void;
+    customListenImpl = () =>
+      new Promise((resolve) => {
+        resolveListen = resolve;
+      });
+
+    const { unmount } = renderHook(() => useConfig());
+
+    // Allow import("@tauri-apps/api/event") to resolve so listen() is called
+    await waitFor(() => {
+      expect(resolveListen).toBeDefined();
+    });
+
+    // Unmount while listen() is in-flight
+    unmount();
+
+    // Now resolve the asynchronous listen call
+    resolveListen(unlistenSpy);
+
+    // Verify unlisten was called immediately because isDisposed was true
+    await waitFor(() => {
+      expect(unlistenSpy).toHaveBeenCalledTimes(1);
+    });
+
+    customListenImpl = null;
+    delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+  });
+
+  it("synchronously updates latestConfigRef on config-changed event to avoid reverting external changes (regression X1-02)", async () => {
+    (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {
+      invoke: mockInvoke,
+    };
+    mockInvoke.mockClear();
+
+    const currentListeners: ((event: { payload: unknown }) => void)[] = [];
+    customListenImpl = (_event, cb) => {
+      currentListeners.push(cb);
+      return Promise.resolve(mockUnlisten);
+    };
+
+    const { result, unmount } = renderHook(() => useConfig());
+
+    // Wait until initial load_config and listener registration complete
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(currentListeners.length).toBeGreaterThan(0);
+    });
+
+    const externalConfig = {
+      ...DEFAULT_CONFIG,
+      lock_positions: true,
+      theme: "dark" as const,
+    };
+
+    // External change arrives (e.g. from system tray)
+    act(() => {
+      currentListeners.forEach((listener) =>
+        listener({ payload: externalConfig })
+      );
+    });
+
+    expect(result.current.config.lock_positions).toBe(true);
+
+    // Directly trigger updateWidgetPlacement
+    act(() => {
+      result.current.updateWidgetPlacement("spotify", { logical_x: 120 });
+    });
+
+    // Advance debounced write (or trigger flush)
+    act(() => {
+      window.dispatchEvent(new Event("beforeunload"));
+    });
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith(
+        "save_config_immediate",
+        expect.objectContaining({
+          config: expect.objectContaining({
+            lock_positions: true,
+            theme: "dark",
+            widgets: expect.objectContaining({
+              spotify: expect.objectContaining({ logical_x: 120 }),
+            }),
+          }),
+        }),
+      );
+    });
+
+    customListenImpl = null;
     unmount();
     delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
   });
