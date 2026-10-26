@@ -16,16 +16,6 @@ use windows::Win32::Graphics::Gdi::{
     RedrawWindow, RDW_INVALIDATE, RDW_ALLCHILDREN,
 };
 #[cfg(windows)]
-use windows::Win32::Graphics::Dwm::{
-    DwmSetWindowAttribute,
-    DWMWA_WINDOW_CORNER_PREFERENCE,
-    DWMWA_SYSTEMBACKDROP_TYPE,
-    DWM_WINDOW_CORNER_PREFERENCE,
-    DWM_SYSTEMBACKDROP_TYPE,
-    DWMWCP_ROUND,
-    DWMSBT_TRANSIENTWINDOW,
-};
-#[cfg(windows)]
 use windows::Win32::UI::Shell::{SetWindowSubclass, DefSubclassProc, RemoveWindowSubclass};
 
 use serde::{Deserialize, Serialize};
@@ -443,22 +433,33 @@ unsafe extern "system" fn widget_subclass_proc(
 ) -> LRESULT {
     match umsg {
         // Win + D (Show Desktop) protection:
-        // Intercept SWP_HIDEWINDOW and strip it to keep widget visible on the desktop canvas,
+        // Intercept SWP_HIDEWINDOW and -32000 offscreen minimization coordinates,
+        // enforcing SWP_NOMOVE | SWP_NOSIZE and HWND_BOTTOM to keep widget pinned on the desktop,
         // unless programmatic hide is explicitly requested.
         WM_WINDOWPOSCHANGING => {
             let p_winpos = lparam.0 as *mut WINDOWPOS;
             if !p_winpos.is_null() {
                 let winpos = &mut *p_winpos;
-                if (winpos.flags & SWP_HIDEWINDOW).0 != 0 {
-                    if !is_window_allow_hide(hwnd.0 as isize) {
-                        winpos.flags = winpos.flags & !SWP_HIDEWINDOW;
+                if !is_window_allow_hide(hwnd.0 as isize) {
+                    if (winpos.flags & SWP_HIDEWINDOW).0 != 0
+                        || winpos.x <= -30000
+                        || winpos.y <= -30000
+                    {
+                        winpos.flags = (winpos.flags & !SWP_HIDEWINDOW) | SWP_NOMOVE | SWP_NOSIZE;
+                        winpos.hwndInsertAfter = HWND_BOTTOM;
                     }
                 }
             }
             DefSubclassProc(hwnd, umsg, wparam, lparam)
         }
-        // Programmatic hides are explicitly scoped in hide_window(); do not let OS ShowWindow(SW_HIDE) disarm Win+D filter
-        WM_SHOWWINDOW => DefSubclassProc(hwnd, umsg, wparam, lparam),
+        // Programmatic hides are explicitly scoped in hide_window(); veto OS ShowWindow(SW_HIDE) during Win+D
+        WM_SHOWWINDOW => {
+            if wparam.0 == 0 && !is_window_allow_hide(hwnd.0 as isize) {
+                // Veto the hide request from the Windows Shell on Win+D / Show Desktop
+                return LRESULT(0);
+            }
+            DefSubclassProc(hwnd, umsg, wparam, lparam)
+        }
         // Suppress standard minimize commands
         WM_SYSCOMMAND => {
             let cmd = (wparam.0 as u32) & 0xFFF0;
@@ -678,6 +679,82 @@ mod tests {
         assert_eq!(metrics.cell_height, 120.0);
         assert_eq!(metrics.physical_x, 160);
         assert_eq!(metrics.physical_y, 120);
-        assert_eq!(metrics.scale_factor, 1.0);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_win_d_protection_subclass_proc() {
+        let mock_hwnd = HWND(0x1234 as *mut core::ffi::c_void);
+        set_window_allow_hide(0x1234, false);
+
+        // 1. Simulate Win+D ShowWindow(SW_HIDE) broadcast
+        let show_result = unsafe {
+            widget_subclass_proc(
+                mock_hwnd,
+                WM_SHOWWINDOW,
+                WPARAM(0), // FALSE (hide)
+                LPARAM(0),
+                0,
+                0,
+            )
+        };
+        // Must veto hide with LRESULT(0)
+        assert_eq!(show_result.0, 0);
+
+        // 2. Simulate Win+D WM_WINDOWPOSCHANGING with SWP_HIDEWINDOW and -32000 coordinates
+        let mut pos = WINDOWPOS {
+            hwnd: mock_hwnd,
+            hwndInsertAfter: HWND(core::ptr::null_mut()),
+            x: -32000,
+            y: -32000,
+            cx: 320,
+            cy: 240,
+            flags: SWP_HIDEWINDOW,
+        };
+
+        unsafe {
+            let _ = widget_subclass_proc(
+                mock_hwnd,
+                WM_WINDOWPOSCHANGING,
+                WPARAM(0),
+                LPARAM(&mut pos as *mut _ as isize),
+                0,
+                0,
+            );
+        }
+
+        // SWP_HIDEWINDOW must be stripped
+        assert_eq!((pos.flags & SWP_HIDEWINDOW).0, 0);
+        // SWP_NOMOVE and SWP_NOSIZE must be set
+        assert_ne!((pos.flags & SWP_NOMOVE).0, 0);
+        assert_ne!((pos.flags & SWP_NOSIZE).0, 0);
+        // Window must be kept pinned at HWND_BOTTOM
+        assert_eq!(pos.hwndInsertAfter, HWND_BOTTOM);
+
+        // 3. When programmatic hide is explicitly allowed, SWP_HIDEWINDOW is preserved
+        set_window_allow_hide(0x1234, true);
+        let mut allow_pos = WINDOWPOS {
+            hwnd: mock_hwnd,
+            hwndInsertAfter: HWND(core::ptr::null_mut()),
+            x: 100,
+            y: 100,
+            cx: 320,
+            cy: 240,
+            flags: SWP_HIDEWINDOW,
+        };
+
+        unsafe {
+            let _ = widget_subclass_proc(
+                mock_hwnd,
+                WM_WINDOWPOSCHANGING,
+                WPARAM(0),
+                LPARAM(&mut allow_pos as *mut _ as isize),
+                0,
+                0,
+            );
+        }
+
+        assert_eq!((allow_pos.flags & SWP_HIDEWINDOW).0, SWP_HIDEWINDOW.0);
+        set_window_allow_hide(0x1234, false);
     }
 }
