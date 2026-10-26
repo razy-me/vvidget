@@ -166,7 +166,7 @@ impl Default for SpeedtestResult {
     }
 }
 
-/// Root application configuration persisted in %APPDATA%/Widgetz/config.json.
+/// Root application configuration persisted in %APPDATA%/vvidget/config.json.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(default)]
 pub struct AppConfig {

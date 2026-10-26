@@ -1,6 +1,6 @@
-# 🪟 Widgetz — Lightweight Windows 11 Native Desktop Widgets
+# 🪟 vvidget — Lightweight Windows 11 Native Desktop Widgets
 
-**Widgetz** ist eine extrem ressourceneffiziente, native Desktop-Widget-Anwendung für Windows 11. Entwickelt auf Basis von **Tauri v2 (Rust 2021)** und **React 19 + TypeScript + Tailwind CSS v4**, fügt sie frei platzierbare oder dockbare Widgets mit echter Windows 11 Fluent Design-Optik (DWM Acrylic, Segoe UI Variable, abgerundete Ecken) direkt auf den Desktop ein.
+**vvidget** ist eine extrem ressourceneffiziente, native Desktop-Widget-Anwendung für Windows 11. Entwickelt auf Basis von **Tauri v2 (Rust 2021)** und **React 19 + TypeScript + Tailwind CSS v4**, fügt sie frei platzierbare oder dockbare Widgets mit echter Windows 11 Fluent Design-Optik (DWM Acrylic, Segoe UI Variable, abgerundete Ecken) direkt auf den Desktop ein.
 
 ---
 
@@ -18,7 +18,7 @@
    - Steuerung: Play / Pause, Vorheriger / Nächster Titel.
    - Flüssiger 60 FPS Fortschrittsbalken mit lokaler Zeitstempel-Interpolation.
    - **Zero-Config OS-Integration**: Nutzt die native Windows Global System Media Transport Controls API (GSMTC / WinRT) – funktioniert sofort mit Spotify Desktop und Web ohne Spotify Developer API-Keys oder OAuth-Logins!
-   - Effizientes binäres Album-Art Streaming über Custom Tauri URI-Protokoll (`widgetz://album-art?t=...`).
+   - Effizientes binäres Album-Art Streaming über Custom Tauri URI-Protokoll (`vvidget://album-art?t=...`).
 
 3. 📊 **Systemressourcen (System Resource Utilization)**:
    - **CPU**: Auslastung in % mit Mini-Trend-Sparkline.
@@ -35,7 +35,7 @@
      - *Independent Mode*: Jedes Widget als frei bewegliches, eigenständiges Desktop-Fenster.
      - *Docked Mode*: Alle Widgets in einer vertikalen, einklappbaren Desktop-Leiste mit ultrakompaktem Speicherbedarf (< 90 MB RAM).
    - **System-Tray**: Schnellzugriff zum Sperren von Positionen, Umschalten der Widgets/Modi, Öffnen der Einstellungen und Anzeigen der Logs.
-   - **Resiliente Persistenz**: Automatische Speicherung aller Positionen in `%APPDATA%/Widgetz/config.json` mit 500ms Debounce, atomarer Dateischreibung und automatischer `.corrupt`-Wiederherstellung.
+   - **Resiliente Persistenz**: Automatische Speicherung aller Positionen in `%APPDATA%/vvidget/config.json` mit 500ms Debounce, atomarer Dateischreibung und automatischer `.corrupt`-Wiederherstellung.
 
 ---
 

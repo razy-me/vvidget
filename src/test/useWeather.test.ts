@@ -120,7 +120,7 @@ describe("useWeather Hook", () => {
 
     // Prepopulate localStorage cache
     localStorage.setItem(
-      "widgetz_weather_cache",
+      "vvidget_weather_cache",
       JSON.stringify({ ...mockWeatherData, city: "Munich", isOffline: false })
     );
 

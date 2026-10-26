@@ -228,7 +228,7 @@ export const DockContainer: FC<DockContainerProps> = ({
 
   return (
     <div
-      id="widgetz-dock"
+      id="vvidget-dock"
       data-testid="dock-container"
       data-locked={isLocked}
       className={cn(
@@ -254,7 +254,7 @@ export const DockContainer: FC<DockContainerProps> = ({
             "bg-[var(--fluent-card-bg)] select-none",
             !isLocked ? "cursor-grab active:cursor-grabbing" : "cursor-default"
           )}
-          aria-label="Widgetz desktop dock header"
+          aria-label="vvidget desktop dock header"
         >
           {/* Title & Brand */}
           <div
@@ -274,7 +274,7 @@ export const DockContainer: FC<DockContainerProps> = ({
               className="text-xs font-bold tracking-wide text-[var(--fluent-text-primary)] pointer-events-none"
               data-tauri-drag-region={!isLocked ? true : undefined}
             >
-              Widgetz Dock
+              vvidget Dock
             </h1>
             <span className="pointer-events-none" data-tauri-drag-region={!isLocked ? true : undefined}>
               <Badge size="sm" variant="accent">

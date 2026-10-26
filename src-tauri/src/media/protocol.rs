@@ -61,7 +61,7 @@ pub fn extract_track_id_from_query(query: &str) -> Option<&str> {
     None
 }
 
-/// Handler for the `widgetz` URI protocol: `widgetz://album-art?t=<track_id>`
+/// Handler for the `vvidget` URI protocol: `vvidget://album-art?t=<track_id>`
 pub fn handle_album_art_protocol<R: tauri::Runtime>(
     _ctx: tauri::UriSchemeContext<'_, R>,
     request: tauri::http::Request<Vec<u8>>,

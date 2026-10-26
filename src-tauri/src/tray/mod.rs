@@ -21,7 +21,7 @@ pub fn open_settings_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String
         "settings",
         WebviewUrl::App("index.html?view=settings".into()),
     )
-    .title("Widgetz Settings")
+    .title("vvidget Settings")
     .inner_size(600.0, 720.0)
     .min_inner_size(480.0, 560.0)
     .resizable(true)
@@ -236,12 +236,12 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
     menu.append(&logs_item)?;
 
     menu.append(&PredefinedMenuItem::separator(app)?)?;
-    let quit_item = MenuItem::with_id(app, "quit", "Quit Widgetz", true, None::<&str>)?;
+    let quit_item = MenuItem::with_id(app, "quit", "Quit vvidget", true, None::<&str>)?;
     menu.append(&quit_item)?;
 
     let tray = TrayIconBuilder::new()
         .icon(icon)
-        .tooltip("Widgetz - Windows 11 Desktop Widgets")
+        .tooltip("vvidget - Windows 11 Desktop Widgets")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app_handle, event| {

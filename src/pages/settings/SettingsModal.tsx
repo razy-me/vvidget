@@ -158,7 +158,7 @@ export const SettingsModal: FC = () => {
       <header className="h-10 px-4 border-b border-[var(--fluent-stroke)] flex items-center justify-between shrink-0 bg-[var(--fluent-card-bg)]">
         <div className="flex items-center gap-2">
           <Settings className="w-4 h-4 text-[var(--fluent-accent)]" />
-          <span className="text-xs font-semibold tracking-wide">Widgetz — Desktop Preferences</span>
+          <span className="text-xs font-semibold tracking-wide">vvidget — Desktop Preferences</span>
         </div>
         <div className="flex items-center gap-2">
           {saveSuccess && (
@@ -283,7 +283,7 @@ export const SettingsModal: FC = () => {
                       <div>
                         <div className="text-xs font-semibold">Start with Windows</div>
                         <div className="text-[11px] text-[var(--fluent-text-secondary)]">
-                          Automatically launch Widgetz in background upon system startup
+                          Automatically launch vvidget in background upon system startup
                         </div>
                       </div>
                     </div>
@@ -715,7 +715,7 @@ export const SettingsModal: FC = () => {
                   <Card variant="subtle" className="p-3 space-y-2">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-[var(--fluent-text-secondary)]">Application</span>
-                      <span className="font-semibold">Widgetz Desktop</span>
+                      <span className="font-semibold">vvidget Desktop</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-[var(--fluent-text-secondary)]">Architecture</span>
@@ -728,7 +728,7 @@ export const SettingsModal: FC = () => {
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-[var(--fluent-text-secondary)]">Config Path</span>
                       <span className="font-mono text-[10px] text-[var(--fluent-text-secondary)]">
-                        %APPDATA%/Widgetz/config.json
+                        %APPDATA%/vvidget/config.json
                       </span>
                     </div>
                   </Card>

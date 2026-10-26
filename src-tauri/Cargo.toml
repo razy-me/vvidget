@@ -1,12 +1,12 @@
 [package]
-name = "widgetz"
+name = "vvidget"
 version = "0.1.0"
 description = "Native Windows 11 Desktop Widgets"
-authors = ["Widgetz Team"]
+authors = ["vvidget Team"]
 edition = "2021"
 
 [lib]
-name = "widgetz_lib"
+name = "vvidget_lib"
 crate-type = ["rlib"]
 
 [build-dependencies]

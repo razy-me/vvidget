@@ -7,7 +7,7 @@ import type {
 import { getWeatherCondition } from "./wmoCodes";
 
 const FORECAST_BASE_URL = "https://api.open-meteo.com/v1/forecast";
-const CACHE_STORAGE_KEY = "widgetz_weather_cache";
+const CACHE_STORAGE_KEY = "vvidget_weather_cache";
 
 export interface OpenMeteoApiResponse {
   latitude: number;

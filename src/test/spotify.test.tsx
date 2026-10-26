@@ -238,7 +238,7 @@ describe("SpotifyWidget Component", () => {
         duration_ms: 230000,
         last_updated_system_time_ms: Date.now(),
       },
-      album_art_url: "widgetz://album-art?t=starboy-123",
+      album_art_url: "vvidget://album-art?t=starboy-123",
       can_play_pause: true,
       can_skip_next: true,
       can_skip_previous: true,
@@ -298,7 +298,7 @@ describe("SpotifyWidget Component", () => {
         duration_ms: 100000,
         last_updated_system_time_ms: Date.now(),
       },
-      album_art_url: "widgetz://album-art?t=err-1",
+      album_art_url: "vvidget://album-art?t=err-1",
       can_play_pause: true,
       can_skip_next: true,
       can_skip_previous: true,
@@ -315,7 +315,7 @@ describe("SpotifyWidget Component", () => {
       ...errorSession,
       title: "Fixed Track",
       track_id: "fixed-2",
-      album_art_url: "widgetz://album-art?t=fixed-2",
+      album_art_url: "vvidget://album-art?t=fixed-2",
     };
 
     rerender(<SpotifyWidget sessionOverride={newSession} />);

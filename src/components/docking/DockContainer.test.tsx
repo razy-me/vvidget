@@ -88,7 +88,7 @@ describe("DockContainer Component", () => {
     );
 
     expect(screen.getByTestId("dock-container")).toBeInTheDocument();
-    expect(screen.getByText("Widgetz Dock")).toBeInTheDocument();
+    expect(screen.getByText("vvidget Dock")).toBeInTheDocument();
     expect(screen.getByText("3 Active")).toBeInTheDocument();
     expect(screen.getByTestId("mock-resource-widget")).toBeInTheDocument();
     expect(screen.getByTestId("mock-spotify-widget")).toBeInTheDocument();

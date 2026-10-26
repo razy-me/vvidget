@@ -80,7 +80,7 @@ mod tests {
                 duration_ms: 210000,
                 last_updated_system_time_ms: 1700000000000,
             },
-            album_art_url: Some("widgetz://album-art?t=12345".into()),
+            album_art_url: Some("vvidget://album-art?t=12345".into()),
             can_play_pause: true,
             can_skip_next: true,
             can_skip_previous: true,

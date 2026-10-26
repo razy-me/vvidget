@@ -7,23 +7,43 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::{mpsc, RwLock};
 
-/// Returns the primary application configuration directory (%APPDATA%/Widgetz).
+/// Returns the primary application configuration directory (%APPDATA%/vvidget).
+/// Automatically migrates legacy %APPDATA%/Widgetz if present.
 pub fn resolve_app_dir() -> PathBuf {
-    if let Ok(appdata) = std::env::var("APPDATA") {
-        PathBuf::from(appdata).join("Widgetz")
+    let base = if let Ok(appdata) = std::env::var("APPDATA") {
+        PathBuf::from(appdata)
     } else if let Ok(home) = std::env::var("USERPROFILE") {
-        PathBuf::from(home).join("AppData").join("Roaming").join("Widgetz")
+        PathBuf::from(home).join("AppData").join("Roaming")
     } else {
-        PathBuf::from(".").join(".widgetz")
+        PathBuf::from(".")
+    };
+
+    let new_dir = if base == Path::new(".") {
+        base.join(".vvidget")
+    } else {
+        base.join("vvidget")
+    };
+
+    let legacy_dir = if base == Path::new(".") {
+        base.join(".widgetz")
+    } else {
+        base.join("Widgetz")
+    };
+
+    // Self-healing migration from legacy Widgetz folder if it exists and vvidget doesn't yet
+    if legacy_dir.exists() && !new_dir.exists() {
+        let _ = fs::rename(&legacy_dir, &new_dir);
     }
+
+    new_dir
 }
 
-/// Returns the path to the config file (%APPDATA%/Widgetz/config.json).
+/// Returns the path to the config file (%APPDATA%/vvidget/config.json).
 pub fn resolve_config_path() -> PathBuf {
     resolve_app_dir().join("config.json")
 }
 
-/// Returns the directory where rotating log files are saved (%APPDATA%/Widgetz/logs).
+/// Returns the directory where rotating log files are saved (%APPDATA%/vvidget/logs).
 pub fn resolve_logs_dir() -> PathBuf {
     resolve_app_dir().join("logs")
 }
@@ -360,7 +380,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let path = std::env::temp_dir().join(format!("widgetz_test_{}_{}", std::process::id(), nanos));
+        let path = std::env::temp_dir().join(format!("vvidget_test_{}_{}", std::process::id(), nanos));
         let _ = fs::create_dir_all(&path);
         path
     }

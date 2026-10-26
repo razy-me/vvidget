@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Widgetz",
+  "productName": "vvidget",
   "version": "0.1.0",
-  "identifier": "com.widgetz.desktop",
+  "identifier": "com.vvidget.desktop",
   "build": {
     "beforeDevCommand": "npm.cmd run dev",
     "devUrl": "http://localhost:5173",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Widgetz",
+        "title": "vvidget",
         "label": "main",
         "width": 360,
         "height": 600,
@@ -23,7 +23,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' widgetz: asset: https://asset.localhost data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://api.open-meteo.com https://geocoding-api.open-meteo.com",
+      "csp": "default-src 'self'; img-src 'self' vvidget: asset: https://asset.localhost data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://api.open-meteo.com https://geocoding-api.open-meteo.com",
       "assetProtocol": {
         "enable": true
       }

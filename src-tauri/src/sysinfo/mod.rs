@@ -37,7 +37,7 @@ pub fn start_metrics_worker<R: Runtime>(
     mut collector: MetricsCollector,
 ) -> std::thread::JoinHandle<()> {
     std::thread::Builder::new()
-        .name("widgetz-sysinfo-worker".to_string())
+        .name("vvidget-sysinfo-worker".to_string())
         .spawn(move || {
             let mut last_disk_check = std::time::Instant::now();
 

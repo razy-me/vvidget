@@ -237,7 +237,7 @@ describe("App & AppContent Routing", () => {
 
     render(<AppContent />);
 
-    expect(screen.getByText("Widgetz Desktop Surface")).toBeInTheDocument();
+    expect(screen.getByText("vvidget Desktop Surface")).toBeInTheDocument();
     expect(screen.getByTestId("resource-widget-view")).toBeInTheDocument();
     expect(screen.getByText("Media Controls")).toBeInTheDocument();
     expect(screen.getByText("Weather Forecast")).toBeInTheDocument();
@@ -272,7 +272,7 @@ describe("App & AppContent Routing", () => {
     mockConfig.layout_mode = "independent";
 
     render(<App />);
-    expect(screen.getByText("Widgetz Desktop Surface")).toBeInTheDocument();
+    expect(screen.getByText("vvidget Desktop Surface")).toBeInTheDocument();
   });
 
   it("catches errors with ErrorBoundary and displays recovery UI", () => {

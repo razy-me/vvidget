@@ -39,7 +39,7 @@ describe("Security & Input Sanitization (R8)", () => {
   });
 
   it("safely handles corrupted JSON in localStorage weather cache without crashing", () => {
-    localStorage.setItem("widgetz_weather_cache", "NOT_VALID_JSON{[[{");
+    localStorage.setItem("vvidget_weather_cache", "NOT_VALID_JSON{[[{");
     const cached = getCachedWeather();
     expect(cached).toBeNull();
   });

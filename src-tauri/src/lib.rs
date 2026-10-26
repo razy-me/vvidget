@@ -89,7 +89,7 @@ pub mod integration {
             &label,
             tauri::WebviewUrl::App(format!("index.html?widget={}", widget_id).into()),
         )
-        .title(format!("Widgetz - {}", widget_id))
+        .title(format!("vvidget - {}", widget_id))
         .inner_size(placement.logical_width, placement.logical_height)
         .resizable(false)
         .decorations(false)
@@ -277,7 +277,7 @@ pub mod integration {
             SKELETON_LABEL,
             tauri::WebviewUrl::App("index.html?view=skeleton".into()),
         )
-        .title("Widgetz Skeleton")
+        .title("vvidget Skeleton")
         .inner_size(width, height)
         .position(x, y)
         .resizable(true)
@@ -425,13 +425,13 @@ pub fn run() {
     let shared_metrics = metrics_collector.cached_handle();
 
     let builder = tauri::Builder::default()
-        .register_uri_scheme_protocol("widgetz", handle_album_art_protocol)
+        .register_uri_scheme_protocol("vvidget", handle_album_art_protocol)
         .plugin(
             tauri_plugin_log::Builder::new()
                 .target(tauri_plugin_log::Target::new(
                     tauri_plugin_log::TargetKind::Folder {
                         path: config::resolve_logs_dir(),
-                        file_name: Some("widgetz".to_string()),
+                        file_name: Some("vvidget".to_string()),
                     },
                 ))
                 .build(),
@@ -547,7 +547,7 @@ pub fn run() {
                 "widget_skeleton",
                 tauri::WebviewUrl::App("index.html?view=skeleton".into()),
             )
-            .title("Widgetz Skeleton")
+            .title("vvidget Skeleton")
             .inner_size(320.0, 240.0)
             .visible(false)
             .resizable(true)
@@ -593,7 +593,7 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running widgetz application");
+        .expect("error while running vvidget application");
 }
 
 #[cfg(test)]

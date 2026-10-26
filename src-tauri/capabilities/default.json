@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capability for Widgetz desktop widgets",
+  "description": "Default capability for vvidget desktop widgets",
   "windows": ["*"],
   "permissions": [
     "core:default",

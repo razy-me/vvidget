@@ -179,7 +179,7 @@ mod win {
         // Thumbnail extraction: check in-memory cache first to prevent redundant COM I/O & allocations
         let mut album_art_url = None;
         if get_cached_album_art(&track_id).is_some() {
-            album_art_url = Some(format!("widgetz://album-art?t={}", track_id));
+            album_art_url = Some(format!("vvidget://album-art?t={}", track_id));
         } else if let Ok(thumb_ref) = media_props.Thumbnail() {
             if let Ok(stream_op) = thumb_ref.OpenReadAsync() {
                 if let Ok(stream) = stream_op.get() {
@@ -195,7 +195,7 @@ mod win {
                                             .map(|s| s.to_string())
                                             .unwrap_or_else(|_| "image/jpeg".to_string());
                                         set_cached_album_art(&track_id, bytes, mime_type);
-                                        album_art_url = Some(format!("widgetz://album-art?t={}", track_id));
+                                        album_art_url = Some(format!("vvidget://album-art?t={}", track_id));
                                     }
                                 }
                             }

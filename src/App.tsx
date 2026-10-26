@@ -315,7 +315,7 @@ export const AppContent: FC = () => {
       <header className="w-full max-w-5xl mb-4 flex items-center justify-between px-3 py-2 rounded-xl border border-[var(--fluent-stroke)] bg-[var(--fluent-acrylic-bg)] backdrop-blur-xl shadow-lg">
         <div className="flex items-center gap-2">
           <Layers className="w-4 h-4 text-[var(--fluent-accent)]" />
-          <h1 className="text-xs font-bold tracking-wide">Widgetz Desktop Surface</h1>
+          <h1 className="text-xs font-bold tracking-wide">vvidget Desktop Surface</h1>
           <span className="text-[11px] text-[var(--fluent-text-tertiary)]">
             (Independent Multi-Window Mode)
           </span>
@@ -587,7 +587,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <div className="space-y-1">
               <h2 className="text-sm font-semibold">Something went wrong</h2>
               <p className="text-xs text-[var(--fluent-text-secondary)] line-clamp-3">
-                {this.state.error?.message || "An unexpected error occurred in Widgetz."}
+                {this.state.error?.message || "An unexpected error occurred in vvidget."}
               </p>
             </div>
             <button
