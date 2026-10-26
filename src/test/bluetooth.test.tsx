@@ -76,9 +76,7 @@ describe("BluetoothWidget Component", () => {
     expect(screen.getByText("0 Geräte gekoppelt")).toBeInTheDocument();
     expect(screen.getByTestId("empty-state")).toBeInTheDocument();
     expect(screen.getByText("Keine Geräte gefunden")).toBeInTheDocument();
-    expect(
-      screen.getByText("Windows Bluetooth-Einstellungen öffnen")
-    ).toBeInTheDocument();
+    expect(screen.getByText("Bluetooth-Einstellungen")).toBeInTheDocument();
   });
 
   it("renders device list with connection status, device icons, and battery display", async () => {
@@ -284,5 +282,26 @@ describe("BluetoothWidget Component", () => {
         device_type: "other",
       })
     ).toBe(Bluetooth);
+  });
+
+  it("regression M5-03: quick-toggle button is hidden by default and settings button text is truncated Bluetooth-Einstellungen", async () => {
+    await act(async () => {
+      render(<BluetoothWidget initialDevices={mockDevices} autoFetch={false} />);
+    });
+
+    // Toggle button has 'hidden group-hover:flex' instead of reserving permanent flex space with opacity-0
+    const toggleBtn = screen.getByTestId("device-toggle-btn-bt-audio-1");
+    expect(toggleBtn.className).toContain("hidden");
+    expect(toggleBtn.className).toContain("group-hover:flex");
+    expect(toggleBtn.className).not.toContain("opacity-0");
+
+    // Battery pill has group-hover:hidden
+    const batteryBadge = screen.getByTestId("device-battery-bt-audio-1");
+    expect(batteryBadge.className).toContain("group-hover:hidden");
+
+    // Settings button has concise truncated text
+    const settingsBtn = screen.getByTestId("open-settings-btn");
+    expect(settingsBtn).toHaveTextContent("Bluetooth-Einstellungen");
+    expect(settingsBtn.querySelector("span")?.className).toContain("truncate");
   });
 });

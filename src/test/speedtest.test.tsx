@@ -159,4 +159,12 @@ describe("SpeedtestWidget Component", () => {
     expect(screen.getByTestId("speedtest-stage-badge")).toHaveTextContent("Fehler beim Test");
     expect(screen.getByText("DNS resolution failed")).toBeInTheDocument();
   });
+
+  it("regression M6-02: displays 'Cloudflare Payload' subtitle in upload metric card without truncation", () => {
+    render(<SpeedtestWidget hookOverride={mockCompletedHook} />);
+
+    const uploadMetric = screen.getByTestId("metric-upload");
+    expect(uploadMetric).toHaveTextContent("Cloudflare Payload");
+    expect(uploadMetric).not.toHaveTextContent("Speed test payload");
+  });
 });

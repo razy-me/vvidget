@@ -252,7 +252,7 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
               : "--"}{" "}
             <span className="text-[9px] font-normal text-[var(--fluent-text-secondary)]">Mbps</span>
           </div>
-          <div className="text-[9px] text-[var(--fluent-text-tertiary)] truncate">Speed test payload</div>
+          <div className="text-[9px] text-[var(--fluent-text-tertiary)] truncate">Cloudflare Payload</div>
         </div>
       </div>
 

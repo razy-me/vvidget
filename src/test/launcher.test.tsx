@@ -184,4 +184,41 @@ describe("GameLauncherWidget Component", () => {
       expect(screen.queryByText("GeForce NOW")).not.toBeInTheDocument();
     });
   });
+
+  it("regression M6-04: declares relative positioning on Card container so modal stays bounded", async () => {
+    await act(async () => {
+      render(<GameLauncherWidget initialItems={mockItems} autoScan={false} />);
+    });
+
+    const card = screen.getByTestId("game-launcher-widget");
+    expect(card.className).toContain("relative");
+  });
+
+  it("regression M6-03: image onError manages state reactively so fallback initials persist across re-renders", async () => {
+    await act(async () => {
+      render(<GameLauncherWidget initialItems={mockItems} autoScan={false} />);
+    });
+
+    const portalImg = screen.getByAltText("Portal 2");
+    expect(portalImg).toBeInTheDocument();
+
+    // Trigger image loading failure
+    await act(async () => {
+      fireEvent.error(portalImg);
+    });
+
+    // Image is removed and initials fallback is displayed
+    expect(screen.queryByAltText("Portal 2")).not.toBeInTheDocument();
+    expect(screen.getByText("P2")).toBeInTheDocument();
+
+    // Trigger re-render by typing into search input
+    const searchInput = screen.getByPlaceholderText("Suchen nach Spiel oder App...");
+    await act(async () => {
+      fireEvent.change(searchInput, { target: { value: "Port" } });
+    });
+
+    // Initials fallback MUST still be visible, not disappear or leave an empty hole
+    expect(screen.queryByAltText("Portal 2")).not.toBeInTheDocument();
+    expect(screen.getByText("P2")).toBeInTheDocument();
+  });
 });

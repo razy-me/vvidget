@@ -274,5 +274,26 @@ describe("ClockWidget Component", () => {
       });
       expect(screen.getByText("Klingelt jetzt!")).toBeInTheDocument();
     });
+
+    it("regression M6-06: automatically triggers alarm when current time matches alarm time at 00 seconds", async () => {
+      vi.useFakeTimers();
+      const nearAlarmTime = new Date(2026, 9, 26, 6, 59, 59);
+      vi.setSystemTime(nearAlarmTime);
+
+      await act(async () => {
+        render(<ClockWidget initialTab="wecker" initialTime={nearAlarmTime} />);
+      });
+
+      // Initially alarm is not triggered at 06:59:59
+      expect(screen.queryByText("Klingelt jetzt!")).not.toBeInTheDocument();
+
+      // Advance by 1 second to 07:00:00
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      // Alarm should now be triggered automatically
+      expect(screen.getByText("Klingelt jetzt!")).toBeInTheDocument();
+    });
   });
 });

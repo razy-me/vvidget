@@ -145,12 +145,31 @@ describe("ResourceWidget component", () => {
     fireEvent.click(diskBtnD);
 
     // Active disk switched to D:
-    expect(screen.getByText("Systemlaufwerk (D:)")).toBeDefined();
+    expect(screen.getByText("Laufwerk (D:)")).toBeDefined();
 
     // Click back to C:
     const diskBtnC = screen.getByRole("button", { name: "C:" });
     fireEvent.click(diskBtnC);
     expect(screen.getByText("Systemlaufwerk (C:)")).toBeDefined();
+  });
+
+  it("regression M5-02: secondary disk displays 'Laufwerk (D:)' and does not duplicate Systemlaufwerk", () => {
+    render(<ResourceWidget />);
+
+    // Initially C: is active
+    expect(screen.getByText("Systemlaufwerk (C:)")).toBeInTheDocument();
+    expect(screen.getByText("Local Disk")).toBeInTheDocument();
+
+    // Switch to D:
+    const diskBtnD = screen.getByRole("button", { name: "D:" });
+    fireEvent.click(diskBtnD);
+
+    // Header displays Laufwerk (D:), NOT Systemlaufwerk (D:)
+    expect(screen.getByText("Laufwerk (D:)")).toBeInTheDocument();
+    expect(screen.queryByText("Systemlaufwerk (D:)")).not.toBeInTheDocument();
+
+    // MetricBar displays volume name (Data Drive)
+    expect(screen.getByText("Data Drive")).toBeInTheDocument();
   });
 
   it("renders within WidgetContainer with lock toggle in independent mode", () => {

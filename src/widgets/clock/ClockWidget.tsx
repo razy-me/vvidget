@@ -211,6 +211,14 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
     if (alarmTriggered) setAlarmTriggered(false);
   };
 
+  useEffect(() => {
+    if (!isAlarmEnabled || alarmTriggered) return;
+    const nowStr = `${digitalTime.hours}:${digitalTime.minutes}`;
+    if (nowStr === alarmTime && parseInt(digitalTime.seconds, 10) === 0) {
+      setAlarmTriggered(true);
+    }
+  }, [digitalTime, alarmTime, isAlarmEnabled, alarmTriggered]);
+
   return (
     <Card
       data-testid="clock-widget"

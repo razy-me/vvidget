@@ -158,7 +158,8 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
                 <div className="flex items-center gap-1.5 text-xs font-medium">
                   <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
                   <span>
-                    Systemlaufwerk ({activeDisk.mount_point.replace(/\\$/, "")})
+                    {activeDiskIndex === systemDiskIndex ? "Systemlaufwerk" : "Laufwerk"} (
+                    {activeDisk.mount_point.replace(/\\$/, "")})
                   </span>
                 </div>
 
@@ -188,7 +189,11 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
               </div>
 
               <MetricBar
-                label={activeDisk.name !== activeDisk.mount_point && activeDisk.name ? activeDisk.name : "Systemlaufwerk"}
+                label={
+                  activeDisk.name && activeDisk.name !== activeDisk.mount_point
+                    ? activeDisk.name
+                    : `Belegt (${activeDisk.mount_point.slice(0, 2)})`
+                }
                 valueDisplay={`${diskUsedGb} / ${diskTotalGb}`}
                 percent={diskPercent}
                 variant={diskVariant}

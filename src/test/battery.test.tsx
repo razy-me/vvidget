@@ -99,6 +99,22 @@ describe("BatterySparkline component", () => {
     expect(screen.getByTestId("battery-sparkline-placeholder")).toBeInTheDocument();
     expect(screen.getByText("Sammle Daten...")).toBeInTheDocument();
   });
+
+  it("regression M5-01: uses relative block layout without flex centering to prevent SVG clipping", () => {
+    const { container } = render(
+      <BatterySparkline data={[82, 82, 82, 82]} height={32} />
+    );
+    const wrapper = container.querySelector('[data-testid="battery-sparkline"]');
+    expect(wrapper).toBeInTheDocument();
+    expect(wrapper?.className).toContain("relative");
+    expect(wrapper?.className).toContain("block");
+    expect(wrapper?.className).not.toContain("justify-center");
+    expect(wrapper?.className).not.toContain("flex-col");
+
+    const svg = container.querySelector("svg");
+    expect(svg?.getAttribute("class")).toContain("block");
+    expect(svg?.getAttribute("class")).not.toContain("overflow-visible");
+  });
 });
 
 describe("BatteryWidget component", () => {

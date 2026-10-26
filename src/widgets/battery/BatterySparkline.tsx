@@ -65,7 +65,7 @@ export const BatterySparkline: FC<BatterySparklineProps> = ({
 
   return (
     <div
-      className={cn("w-full overflow-hidden flex flex-col justify-center", className)}
+      className={cn("w-full overflow-hidden relative block", className)}
       style={{ height: `${height}px` }}
       role="img"
       aria-label="Akkukapazitätsverlauf Sparkline"
@@ -74,7 +74,7 @@ export const BatterySparkline: FC<BatterySparklineProps> = ({
       <svg
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
-        className="w-full h-full overflow-visible"
+        className="w-full h-full block"
       >
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">

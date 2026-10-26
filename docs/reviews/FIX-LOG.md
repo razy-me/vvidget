@@ -4,7 +4,7 @@ Base Commit: `597d12488d6c8deccbeb626ef23b984f723f49b0`
 
 | FIXED | REJECTED | STALE | INVALID | DEFERRED |
 |---|---|---|---|---|
-| 34 | 0 | 0 | 0 | 0 |
+| 42 | 0 | 0 | 0 | 0 |
 
 ## Clusters
 | Cluster | Findings | Files | Order | Parallel group |
@@ -53,14 +53,14 @@ Base Commit: `597d12488d6c8deccbeb626ef23b984f723f49b0`
 | X1-03 | MAJOR | `src/hooks/useCalendar.ts:68` | VALID | C5 | FIXED | Replaced shallow spread with direct assignment in config sync effect preventing deleted date key resurrection | 611e4cf | `regression M6-05, X1-03: reconciles deleted calendar dates from config without retaining stale keys` |
 | M5-05 | MAJOR | `src/hooks/useMasterVolume.ts:50` | VALID | C5 | FIXED | Invoked toggle_master_mute alongside set_master_volume when adjusting volume while muted to unmute native Windows endpoint | 611e4cf | `regression M5-05: unmutes native Windows endpoint when volume is increased while muted` |
 | M6-05 | MAJOR | `src/hooks/useCalendar.ts:70` | VALID | C5 | FIXED | Replaced shallow spread with direct assignment in config sync effect preventing deleted date key resurrection | 611e4cf | `regression M6-05, X1-03: reconciles deleted calendar dates from config without retaining stale keys` |
-| M5-01 | MAJOR | `src/widgets/battery/BatterySparkline.tsx:49` | VALID | C6 | OPEN | | | |
-| M5-02 | MAJOR | `src/widgets/resources/ResourceWidget.tsx:85` | VALID | C6 | OPEN | | | |
-| M5-03 | MAJOR | `src/widgets/bluetooth/BluetoothWidget.tsx:110` | VALID | C6 | OPEN | | | |
-| M5-04 | MAJOR | `src/widgets/quick-settings/QuickSettingsWidget.tsx:140` | VALID | C6 | OPEN | | | |
-| M6-02 | MAJOR | `src/widgets/speedtest/SpeedtestWidget.tsx:210` | VALID | C6 | OPEN | | | |
-| M6-03 | MAJOR | `src/widgets/launcher/GameLauncherWidget.tsx:180` | VALID | C6 | OPEN | | | |
-| M6-04 | MAJOR | `src/widgets/launcher/GameLauncherWidget.tsx:260` | VALID | C6 | OPEN | | | |
-| M6-06 | MAJOR | `src/widgets/clock/ClockWidget.tsx:320` | VALID | C6 | OPEN | | | |
+| M5-01 | MAJOR | `src/widgets/battery/BatterySparkline.tsx:68` | VALID | C6 | FIXED | Switched to relative block layout eliminating SVG vertical centering and collapse | d0ba2e0 | `regression M5-01: uses relative block layout without flex centering to prevent SVG clipping` |
+| M5-02 | MAJOR | `src/widgets/resources/ResourceWidget.tsx:160` | VALID | C6 | FIXED | Conditioned Systemlaufwerk on systemDiskIndex and displayed volume name / mount point in MetricBar | d0ba2e0 | `regression M5-02: secondary disk displays 'Laufwerk (D:)' and does not duplicate Systemlaufwerk` |
+| M5-03 | MAJOR | `src/widgets/bluetooth/BluetoothWidget.tsx:282` | VALID | C6 | FIXED | Switched toggle button to hidden group-hover:flex and truncated settings button text | d0ba2e0 | `regression M5-03: quick-toggle button is hidden by default and settings button text is truncated Bluetooth-Einstellungen` |
+| M5-04 | MAJOR | `src/widgets/quick-settings/QuickSettingsWidget.tsx:425` | VALID | C6 | FIXED | Merged pinnedActionIds into customization list allowing custom actions to be toggled and reordered | d0ba2e0 | `regression M5-04: custom actions appear in customization list and can be unpinned` |
+| M6-02 | MAJOR | `src/widgets/speedtest/SpeedtestWidget.tsx:255` | VALID | C6 | FIXED | Replaced Speed test payload with Cloudflare Payload preventing ellipsis truncation | d0ba2e0 | `regression M6-02: displays 'Cloudflare Payload' subtitle in upload metric card without truncation` |
+| M6-03 | MAJOR | `src/widgets/launcher/GameLauncherWidget.tsx:260` | VALID | C6 | FIXED | Managed failed icon states in React state preventing initials from disappearing upon re-render | d0ba2e0 | `regression M6-03: image onError manages state reactively so fallback initials persist across re-renders` |
+| M6-04 | MAJOR | `src/widgets/launcher/GameLauncherWidget.tsx:149` | VALID | C6 | FIXED | Added relative class to Card container keeping modal within widget boundaries | d0ba2e0 | `regression M6-04: declares relative positioning on Card container so modal stays bounded` |
+| M6-06 | MAJOR | `src/widgets/clock/ClockWidget.tsx:214` | VALID | C6 | FIXED | Added tick effect auto-triggering alarm when currentTime matches alarmTime at 00 seconds | d0ba2e0 | `regression M6-06: automatically triggers alarm when current time matches alarm time at 00 seconds` |
 
 ## Deferred — Decisions Needed
 

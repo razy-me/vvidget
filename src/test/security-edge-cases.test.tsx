@@ -164,7 +164,7 @@ describe("Multi-Disk Interaction in ResourceWidget (R5)", () => {
     const dButton = screen.getByRole("button", { name: "D:" });
     fireEvent.click(dButton);
 
-    expect(screen.getByText("Systemlaufwerk (D:)")).toBeInTheDocument();
+    expect(screen.getByText("Laufwerk (D:)")).toBeInTheDocument();
     expect(screen.getByText("Games SSD")).toBeInTheDocument();
     expect(screen.getByText("1500.0 GB / 2000.0 GB")).toBeInTheDocument();
 
@@ -172,7 +172,7 @@ describe("Multi-Disk Interaction in ResourceWidget (R5)", () => {
     const eButton = screen.getByRole("button", { name: "E:" });
     fireEvent.click(eButton);
 
-    expect(screen.getByText("Systemlaufwerk (E:)")).toBeInTheDocument();
+    expect(screen.getByText("Laufwerk (E:)")).toBeInTheDocument();
     expect(screen.getByText("Backup HDD")).toBeInTheDocument();
     expect(screen.getByText("3600.0 GB / 4000.0 GB")).toBeInTheDocument();
   });

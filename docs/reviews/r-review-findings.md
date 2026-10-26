@@ -693,8 +693,8 @@
    --fluent-stroke: rgba(0, 0, 0, 0.08);
 ```
 
-### [MAJOR] [OPEN] M5-01 BatterySparkline flexbox centering and missing min-h-0 causes SVG vertical collapse and clipping
-- **Status**: OPEN
+### [MAJOR] [FIXED] M5-01 BatterySparkline flexbox centering and missing min-h-0 causes SVG vertical collapse and clipping
+- **Status**: FIXED
 - **Where**: `src/widgets/battery/BatterySparkline.tsx:68-78`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -727,8 +727,8 @@
 
 ---
 
-### [MAJOR] [OPEN] M5-02 Erroneous "Systemlaufwerk" header and MetricBar duplicate label for secondary disk drives
-- **Status**: OPEN
+### [MAJOR] [FIXED] M5-02 Erroneous "Systemlaufwerk" header and MetricBar duplicate label for secondary disk drives
+- **Status**: FIXED
 - **Where**: `src/widgets/resources/ResourceWidget.tsx:160-163, 191`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -768,8 +768,8 @@
 
 ---
 
-### [MAJOR] [OPEN] M5-03 Bluetooth device list overflow, name compression by hidden toggle, and bottom button clipping
-- **Status**: OPEN
+### [MAJOR] [FIXED] M5-03 Bluetooth device list overflow, name compression by hidden toggle, and bottom button clipping
+- **Status**: FIXED
 - **Where**: `src/widgets/bluetooth/BluetoothWidget.tsx:203, 278-316, 324-334`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -810,8 +810,8 @@
 
 ---
 
-### [MAJOR] [OPEN] M5-04 Custom quick actions missing from customization list, preventing deletion or reordering
-- **Status**: OPEN
+### [MAJOR] [FIXED] M5-04 Custom quick actions missing from customization list, preventing deletion or reordering
+- **Status**: FIXED
 - **Where**: `src/widgets/quick-settings/QuickSettingsWidget.tsx:424-473`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -860,8 +860,8 @@
 
 ---
 
-### [MAJOR] [OPEN] M6-02 Upload metric subtitle "Speed test payload" truncated to "Speed test paylo..."
-- **Status**: OPEN
+### [MAJOR] [FIXED] M6-02 Upload metric subtitle "Speed test payload" truncated to "Speed test paylo..."
+- **Status**: FIXED
 - **Where**: `src/widgets/speedtest/SpeedtestWidget.tsx:255`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -881,8 +881,8 @@
          </div>
 ```
 
-### [MAJOR] [OPEN] M6-03 Direct DOM mutation in launcher `img.onError` hides both icon and fallback initials upon re-render
-- **Status**: OPEN
+### [MAJOR] [FIXED] M6-03 Direct DOM mutation in launcher `img.onError` hides both icon and fallback initials upon re-render
+- **Status**: FIXED
 - **Where**: `src/widgets/launcher/GameLauncherWidget.tsx:265-272`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -910,8 +910,8 @@
                    ) : null}
 ```
 
-### [MAJOR] [OPEN] M6-04 Add custom game modal escapes card bounds due to missing `relative` on Card
-- **Status**: OPEN
+### [MAJOR] [FIXED] M6-04 Add custom game modal escapes card bounds due to missing `relative` on Card
+- **Status**: FIXED
 - **Where**: `src/widgets/launcher/GameLauncherWidget.tsx:146-153, 343-350`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH
@@ -953,8 +953,8 @@
      }
 ```
 
-### [MAJOR] [OPEN] M6-06 Alarm tab in `ClockWidget` never triggers automatically when current time reaches alarm time
-- **Status**: OPEN
+### [MAJOR] [FIXED] M6-06 Alarm tab in `ClockWidget` never triggers automatically when current time reaches alarm time
+- **Status**: FIXED
 - **Where**: `src/widgets/clock/ClockWidget.tsx:204-213, 811-828`
 - **Source**: `r-review` (2026-10-26)
 - **Confidence**: HIGH

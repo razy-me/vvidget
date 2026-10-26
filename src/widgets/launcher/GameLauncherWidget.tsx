@@ -49,6 +49,7 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
   const [newPathOrUri, setNewPathOrUri] = useState("");
   const [modalError, setModalError] = useState<string | null>(null);
   const [launchingId, setLaunchingId] = useState<string | null>(null);
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
 
   const handleLaunch = async (item: LauncherItem) => {
     setLaunchingId(item.id);
@@ -146,7 +147,7 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
     <Card
       variant="acrylic"
       className={cn(
-        "w-full h-full p-3.5 flex flex-col gap-3 text-[var(--fluent-text-primary)] select-none overflow-hidden",
+        "relative w-full h-full p-3.5 flex flex-col gap-3 text-[var(--fluent-text-primary)] select-none overflow-hidden",
         className
       )}
       data-testid="game-launcher-widget"
@@ -257,32 +258,29 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
               >
                 {/* Left: Icon / Avatar + Title + Badge */}
                 <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
-                  {item.icon_url ? (
+                  {item.icon_url && !failedImages[item.id] ? (
                     <img
                       src={item.icon_url}
                       alt={item.name}
                       className="w-8 h-8 rounded-md object-cover shadow-sm shrink-0 transition-transform group-hover:scale-105 border border-[var(--fluent-stroke-subtle)]"
-                      onError={(e) => {
-                        // Fallback gracefully to initials if image fails to load
-                        (e.currentTarget as HTMLElement).style.display = "none";
-                        const fallback = e.currentTarget.nextElementSibling;
-                        if (fallback) (fallback as HTMLElement).classList.remove("hidden");
+                      onError={() => {
+                        setFailedImages((prev) => ({ ...prev, [item.id]: true }));
                       }}
                     />
-                  ) : null}
-                  <div
-                    className={cn(
-                      "w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold shrink-0 shadow-sm transition-transform group-hover:scale-105",
-                      item.icon_url && "hidden",
-                      item.source === "steam"
-                        ? "bg-sky-500/20 text-sky-300"
-                        : item.source === "epic"
-                        ? "bg-amber-500/20 text-amber-300"
-                        : "bg-purple-500/20 text-purple-300"
-                    )}
-                  >
-                    {getItemInitials(item.name)}
-                  </div>
+                  ) : (
+                    <div
+                      className={cn(
+                        "w-8 h-8 rounded-md flex items-center justify-center text-xs font-bold shrink-0 shadow-sm transition-transform group-hover:scale-105",
+                        item.source === "steam"
+                          ? "bg-sky-500/20 text-sky-300"
+                          : item.source === "epic"
+                          ? "bg-amber-500/20 text-amber-300"
+                          : "bg-purple-500/20 text-purple-300"
+                      )}
+                    >
+                      {getItemInitials(item.name)}
+                    </div>
+                  )}
                   <div className="flex flex-col min-w-0 flex-1">
                     <span
                       className="text-xs font-medium text-[var(--fluent-text-primary)] truncate"

@@ -422,7 +422,8 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
 
           {/* List of predefined actions with toggle and reordering */}
           <div className="flex flex-col gap-1">
-            {PREDEFINED_ACTIONS.map((action) => {
+            {Array.from(new Set([...PREDEFINED_ACTIONS.map((a) => a.id), ...pinnedActionIds])).map((actionId) => {
+              const action = resolveActionDef(actionId);
               const isPinned = pinnedActionIds.includes(action.id);
               const pinnedIndex = pinnedActionIds.indexOf(action.id);
               const ActionIcon = action.icon;

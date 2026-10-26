@@ -220,5 +220,43 @@ describe("QuickSettingsWidget Component", () => {
       );
     });
   });
+
+  it("regression M5-04: custom actions appear in customization list and can be unpinned", async () => {
+    await act(async () => {
+      render(<QuickSettingsWidget instanceId="quick_settings" />);
+    });
+
+    // Open customize dialog
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("customize-tiles-btn"));
+    });
+
+    // Add custom action
+    const customInput = screen.getByTestId("custom-action-input");
+    const addBtn = screen.getByTestId("add-custom-action-btn");
+    await act(async () => {
+      fireEvent.change(customInput, { target: { value: "https://example.com" } });
+      fireEvent.click(addBtn);
+    });
+
+    // The custom action should now be listed in the customization action items
+    const customToggle = screen.getByTestId("toggle-action-custom:https://example.com");
+    expect(customToggle).toBeInTheDocument();
+    expect(customToggle).toBeChecked();
+
+    // Toggle (unpin) the custom action
+    await act(async () => {
+      fireEvent.click(customToggle);
+    });
+    expect(customToggle).not.toBeChecked();
+
+    // Close customize dialog
+    await act(async () => {
+      fireEvent.click(screen.getByText("Fertig"));
+    });
+
+    // Custom action is no longer pinned in tiles
+    expect(screen.queryByTestId("action-tile-custom:https://example.com")).not.toBeInTheDocument();
+  });
 });
 

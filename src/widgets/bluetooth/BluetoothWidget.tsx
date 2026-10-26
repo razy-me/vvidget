@@ -279,7 +279,7 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
                   {device.battery_level != null && (
                     <div
                       data-testid={`device-battery-${device.id}`}
-                      className="flex items-center gap-1 text-[11px] font-medium text-[var(--fluent-text-secondary)] px-1.5 py-0.5 rounded bg-[var(--fluent-subtle-bg)] border border-[var(--fluent-stroke)] flex-shrink-0 group-hover:opacity-40 transition-opacity"
+                      className="flex items-center gap-1 text-[11px] font-medium text-[var(--fluent-text-secondary)] px-1.5 py-0.5 rounded bg-[var(--fluent-subtle-bg)] border border-[var(--fluent-stroke)] flex-shrink-0 group-hover:hidden"
                     >
                       <Battery className="w-3.5 h-3.5 text-emerald-400" />
                       <span>{device.battery_level}%</span>
@@ -301,7 +301,7 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
                       device.connected
                         ? "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20 hover:border-red-500/40"
                         : "bg-[var(--fluent-accent-subtle)] text-[var(--fluent-accent)] border-[var(--fluent-accent)]/30 hover:bg-[var(--fluent-accent)]/20 hover:border-[var(--fluent-accent)]",
-                      "opacity-0 group-hover:opacity-100 focus:opacity-100",
+                      "hidden group-hover:flex focus:flex",
                       isToggling && "opacity-60 pointer-events-none"
                     )}
                   >
@@ -329,7 +329,7 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
           className="w-full py-1.5 px-3 rounded-lg bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] active:bg-[var(--fluent-card-active)] border border-[var(--fluent-stroke)] text-xs font-medium text-[var(--fluent-text-primary)] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--fluent-accent)] flex-shrink-0 cursor-pointer"
         >
           <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
-          <span>Windows Bluetooth-Einstellungen öffnen</span>
+          <span className="truncate">Bluetooth-Einstellungen</span>
         </button>
       </div>
     </Card>
