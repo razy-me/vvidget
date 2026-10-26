@@ -1,9 +1,10 @@
 # Fix: HeaderBar Occludes Widget Buttons and Information on Hover (`FIX-headerbar-occlusion-clipping.md`)
 
-- **Status**: IN_PROGRESS
+- **Status**: FIXED
 - **Mode**: `r-fix-this`
 - **Date**: 2026-10-26
 - **Base Commit**: `d82e98e0b32a013a7f2607dde88c0eae728fd0a5`
+- **Fix Commit**: `aec89f651cddca7ece19e814a5be42ab58372464`
 
 ## 1. Symptom & Success Criterion
 - **Actual**:
