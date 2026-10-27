@@ -885,9 +885,9 @@
 
 ---
 
-### [MAJOR] [OPEN] M6-02 Settings Polling Rate Sliders Fail to Persist on Modal Close and Read Stale Closure State
+### [MAJOR] [FIXED] M6-02 Settings Polling Rate Sliders Fail to Persist on Modal Close and Read Stale Closure State
 - **Where**: `src/pages/settings/SettingsModal.tsx:578-598`, `src/pages/settings/SettingsModal.tsx:631-651`, `src/pages/settings/SettingsModal.tsx:675-695`
-- **Status**: OPEN
+- **Status**: FIXED
 - **Source**: `r-review` (Tier 2/3) (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: bug
@@ -994,9 +994,9 @@
 
 ---
 
-### [MAJOR] [OPEN] M6-03 Clock Alarm Evaluates Against World Clock Timezone and Can Miss Trigger Due to 1-Second Interval Window
+### [MAJOR] [FIXED] M6-03 Clock Alarm Evaluates Against World Clock Timezone and Can Miss Trigger Due to 1-Second Interval Window
 - **Where**: `src/widgets/clock/ClockWidget.tsx:214-220`
-- **Status**: OPEN
+- **Status**: FIXED
 - **Source**: `r-review` (Tier 2/3) (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: bug
@@ -1395,8 +1395,8 @@
 
 ---
 
-### [MAJOR] [OPEN] X-fluent-ux-security-07 Hardcoded Pixel Dimensions in SpeedtestWidget Break Fluid Layout and Clip Card Content
-- **Status**: OPEN
+### [MAJOR] [FIXED] X-fluent-ux-security-07 Hardcoded Pixel Dimensions in SpeedtestWidget Break Fluid Layout and Clip Card Content
+- **Status**: FIXED
 - **Where**: `src/widgets/speedtest/SpeedtestWidget.tsx:88`, `src/widgets/registry.ts:63-64`
 - **Source**: `r-review` (Tier 3) (2026-10-27)
 - **Confidence**: HIGH
@@ -2034,9 +2034,9 @@
 
 ---
 
-### [MINOR] [OPEN] M6-04 Clock Timer Calls State Setter Inside State Updater Function Violating Purity
+### [MINOR] [FIXED] M6-04 Clock Timer Calls State Setter Inside State Updater Function Violating Purity
 - **Where**: `src/widgets/clock/ClockWidget.tsx:98-105`
-- **Status**: OPEN
+- **Status**: FIXED
 - **Source**: `r-review` (Tier 2/3) (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: robustness
@@ -2071,9 +2071,9 @@
 
 ---
 
-### [MINOR] [OPEN] M6-05 Weather `fetchWeather` Swallows `AbortError` and Erroneously Returns Cached Stale Data
+### [MINOR] [FIXED] M6-05 Weather `fetchWeather` Swallows `AbortError` and Erroneously Returns Cached Stale Data
 - **Where**: `src/services/weather/openMeteo.ts:262-269`
-- **Status**: OPEN
+- **Status**: FIXED
 - **Source**: `r-review` (Tier 2/3) (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: contract
@@ -2097,9 +2097,9 @@
 
 ---
 
-### [MINOR] [OPEN] M6-06 Weather `DailyForecast` Unconditionally Labels First Day as "Heute" Even for Stale Offline Cache
+### [MINOR] [FIXED] M6-06 Weather `DailyForecast` Unconditionally Labels First Day as "Heute" Even for Stale Offline Cache
 - **Where**: `src/widgets/weather/DailyForecast.tsx:11-22`
-- **Status**: OPEN
+- **Status**: FIXED
 - **Source**: `r-review` (Tier 2/3) (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: bug

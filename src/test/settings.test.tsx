@@ -297,4 +297,30 @@ describe("SettingsModal component", () => {
       expect(screen.getByText("Tokyo")).toBeInTheDocument();
     });
   });
+
+  it("regression M6-02: updates polling rate sliders with immediate persistence and valueAsNumber", async () => {
+    render(<SettingsModal />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Resources")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Resources"));
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("CPU & RAM Refresh Interval")).toBeInTheDocument();
+      expect(screen.getByLabelText("Disk Refresh Interval")).toBeInTheDocument();
+    });
+
+    const cpuSlider = screen.getByLabelText("CPU & RAM Refresh Interval") as HTMLInputElement;
+    fireEvent.change(cpuSlider, { target: { value: "2500" } });
+    fireEvent.pointerUp(cpuSlider);
+
+    const diskSlider = screen.getByLabelText("Disk Refresh Interval") as HTMLInputElement;
+    fireEvent.change(diskSlider, { target: { value: "30000" } });
+    fireEvent.keyUp(diskSlider);
+
+    expect(screen.getByText("2.5s")).toBeInTheDocument();
+    expect(screen.getByText("30s")).toBeInTheDocument();
+  });
 });

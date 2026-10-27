@@ -11,6 +11,7 @@ import {
   Wifi,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { cn } from "@/utils/cn";
 import { useSpeedtest } from "@/hooks/useSpeedtest";
 import type { SpeedtestResult } from "@/types/config";
 import type { UseSpeedtestReturn } from "@/types/speedtest";
@@ -85,7 +86,10 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
   return (
     <Card
       variant="acrylic"
-      className={`w-[360px] h-[256px] p-3 text-[var(--fluent-text-primary)] font-['Segoe_UI_Variable_Text',_'Segoe_UI',_sans-serif] flex flex-col justify-between select-none overflow-hidden ${className}`}
+      className={cn(
+        "w-full h-full p-3 text-[var(--fluent-text-primary)] font-['Segoe_UI_Variable_Text',_'Segoe_UI',_sans-serif] flex flex-col justify-between select-none overflow-hidden",
+        className
+      )}
       data-testid="speedtest-widget"
     >
       {/* Top Header */}

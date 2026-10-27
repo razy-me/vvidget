@@ -167,4 +167,16 @@ describe("SpeedtestWidget Component", () => {
     expect(uploadMetric).toHaveTextContent("Cloudflare Payload");
     expect(uploadMetric).not.toHaveTextContent("Speed test payload");
   });
+
+  it("regression X-fluent-ux-security-07: renders fluid w-full h-full card and properly merges custom className", () => {
+    render(
+      <SpeedtestWidget hookOverride={mockIdleHook} className="custom-fluid-class" />
+    );
+    const card = screen.getByTestId("speedtest-widget");
+    expect(card.className).toContain("w-full");
+    expect(card.className).toContain("h-full");
+    expect(card.className).toContain("custom-fluid-class");
+    expect(card.className).not.toContain("w-[360px]");
+    expect(card.className).not.toContain("h-[256px]");
+  });
 });

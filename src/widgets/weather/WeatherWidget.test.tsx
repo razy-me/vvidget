@@ -100,8 +100,16 @@ describe("WeatherWidget Component", () => {
   });
 
   it("switches between hourly and 5-day forecast tabs", () => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayWeatherData: WeatherData = {
+      ...mockWeatherData,
+      forecastDaily: [
+        { ...mockWeatherData.forecastDaily[0]!, date: todayStr },
+        mockWeatherData.forecastDaily[1]!,
+      ],
+    };
     vi.spyOn(useWeatherModule, "useWeather").mockReturnValue({
-      weather: mockWeatherData,
+      weather: todayWeatherData,
       loading: false,
       error: null,
       refresh: vi.fn(),
@@ -173,5 +181,35 @@ describe("WeatherWidget Component", () => {
     expect(screen.getByText("Wetter nicht verfügbar")).toBeInTheDocument();
     expect(screen.getByText("Erneut verbinden")).toBeInTheDocument();
     expect(screen.getByText("Network unreachable")).toBeInTheDocument();
+  });
+
+  it("regression M6-06: displays actual day name instead of 'Heute' for stale offline forecast dates", () => {
+    // 2 days ago
+    const twoDaysAgo = new Date(Date.now() - 86400000 * 2);
+    const year = twoDaysAgo.getFullYear();
+    const month = String(twoDaysAgo.getMonth() + 1).padStart(2, "0");
+    const day = String(twoDaysAgo.getDate()).padStart(2, "0");
+    const staleDate = `${year}-${month}-${day}`;
+
+    const staleItems = [
+      {
+        date: staleDate,
+        minTempC: 5,
+        maxTempC: 12,
+        condition: { code: 0, label: "Klar", iconName: "Sun" },
+      },
+    ];
+
+    vi.spyOn(useWeatherModule, "useWeather").mockReturnValue({
+      weather: { ...mockWeatherData, forecastDaily: staleItems, isOffline: true },
+      loading: false,
+      error: null,
+      refresh: vi.fn(),
+      isOffline: true,
+    });
+
+    render(<WeatherWidget />);
+    // Should NOT say "Heute" for 2-day-old forecast item
+    expect(screen.queryByText("Heute")).not.toBeInTheDocument();
   });
 });

@@ -162,4 +162,19 @@ describe("openMeteo service", () => {
       "Network connection down",
     );
   });
+
+  it("regression M6-05: re-throws AbortError and does not return stale offline cache when request is aborted", async () => {
+    const parsed = parseWeatherResponse(mockApiResponse, "Stale Cached City", "Germany");
+    setCachedWeather(parsed);
+
+    const abortError = new DOMException("The operation was aborted", "AbortError");
+    global.fetch = vi.fn().mockRejectedValue(abortError);
+
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      fetchWeather(52.52, 13.41, "New City", "Germany", controller.signal),
+    ).rejects.toThrow("The operation was aborted");
+  });
 });

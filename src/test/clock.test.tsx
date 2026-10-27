@@ -228,6 +228,49 @@ describe("ClockWidget Component", () => {
       expect(screen.queryByTestId("lap-item")).not.toBeInTheDocument();
       expect(screen.getByText("Keine Rundenzeiten erfasst")).toBeInTheDocument();
     });
+
+    it("regression M6-01: resetting stopwatch while running clears accumulated elapsed time on restart", async () => {
+      vi.useFakeTimers();
+
+      await act(async () => {
+        render(<ClockWidget initialTab="stoppuhr" />);
+      });
+
+      const display = screen.getByTestId("stopwatch-display");
+      const startStopBtn = screen.getByTestId("stopwatch-start-stop");
+      const resetBtn = screen.getByTestId("stopwatch-reset");
+
+      // Start stopwatch
+      await act(async () => {
+        fireEvent.click(startStopBtn);
+      });
+
+      // Run for 5 seconds
+      await act(async () => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      // While running, click reset directly
+      await act(async () => {
+        fireEvent.click(resetBtn);
+      });
+
+      expect(display).toHaveTextContent("00:00.00");
+      expect(startStopBtn).toHaveTextContent("Start");
+
+      // Start again - should begin from 00:00, not resume from 5 seconds
+      await act(async () => {
+        fireEvent.click(startStopBtn);
+      });
+
+      // Advance by 1 second
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      // Should be around 1 second, definitely NOT 6 seconds
+      expect(display).toHaveTextContent("00:01.00");
+    });
   });
 
   describe("Wecker (Alarm) Tab", () => {
@@ -294,6 +337,66 @@ describe("ClockWidget Component", () => {
 
       // Alarm should now be triggered automatically
       expect(screen.getByText("Klingelt jetzt!")).toBeInTheDocument();
+    });
+
+    it("regression M6-03: alarm triggers based on local time even when world clock timezone is changed", async () => {
+      vi.useFakeTimers();
+      // Local time 06:59:58
+      const localAlarmTime = new Date(2026, 9, 26, 6, 59, 58);
+      vi.setSystemTime(localAlarmTime);
+
+      await act(async () => {
+        render(<ClockWidget initialTab="uhr" initialTime={localAlarmTime} />);
+      });
+
+      // Change timezone on Uhr tab to Tokyo (+9h)
+      const select = screen.getByLabelText("Zeitzone auswählen");
+      await act(async () => {
+        fireEvent.change(select, { target: { value: "asia_tokyo" } });
+      });
+
+      // Switch to Wecker tab
+      await act(async () => {
+        fireEvent.click(screen.getByRole("tab", { name: /Wecker/i }));
+      });
+
+      // Default alarm is 07:00
+      expect(screen.queryByText("Klingelt jetzt!")).not.toBeInTheDocument();
+
+      // Advance local time by 2 seconds to 07:00:00 local time
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      // Alarm MUST trigger for local 07:00:00, despite Tokyo time being 16:00:00
+      expect(screen.getByText("Klingelt jetzt!")).toBeInTheDocument();
+    });
+
+    it("regression M6-04: timer stopping at 0:00 completes cleanly without state updater side effects", async () => {
+      vi.useFakeTimers();
+
+      await act(async () => {
+        render(<ClockWidget initialTab="timer" />);
+      });
+
+      const preset1m = screen.getByRole("button", { name: "1m" });
+      await act(async () => {
+        fireEvent.click(preset1m);
+      });
+
+      const startPauseBtn = screen.getByTestId("timer-start-pause");
+      await act(async () => {
+        fireEvent.click(startPauseBtn);
+      });
+
+      // Advance to 0
+      await act(async () => {
+        vi.advanceTimersByTime(60000);
+      });
+
+      expect(screen.getByTestId("timer-display")).toHaveTextContent("00:00");
+      expect(screen.getByText("Zeit abgelaufen!")).toBeInTheDocument();
+      expect(startPauseBtn).toHaveTextContent("Start");
     });
   });
 });

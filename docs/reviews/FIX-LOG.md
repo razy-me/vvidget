@@ -4,7 +4,7 @@ Base Commit: `f15c976ba0af577e608d060e0cc3a6a819041011`
 
 | FIXED | REJECTED | STALE | INVALID | DEFERRED |
 |---|---|---|---|---|
-| 37 | 0 | 0 | 0 | 0 |
+| 44 | 0 | 0 | 0 | 0 |
 
 ## Clusters
 | Cluster | Findings | Files | Order | Parallel group |
@@ -58,6 +58,13 @@ Base Commit: `f15c976ba0af577e608d060e0cc3a6a819041011`
 | M5-05 | MINOR | `src/hooks/useMasterVolume.ts:38-73` | FIX | C6 | FIXED | Added 3000ms periodic background polling interval in `useMasterVolume` for external volume sync | pending | `src/test/useMasterVolume.test.ts` |
 | X-ipc-concurrency-03 | MAJOR | `src/hooks/useSpeedtest.ts:132-180` | FIX | C6 | FIXED | Added `isDisposed` cancellation guard preventing Tauri listener leak during async setup | pending | `src/test/useSpeedtest.test.ts` |
 | X-ipc-concurrency-07 | MINOR | `src/hooks/useCalendar.ts:150-209` | FIX | C6 | FIXED | Caught safeInvoke errors, set error state, and rolled back local calendar state from backend snapshot | pending | `src/test/useCalendar.test.ts` |
+| M6-01 | MAJOR | `src/widgets/clock/ClockWidget.tsx:167-169, 189-196` | FIX | C8 | FIXED | Added `isResettingStopwatchRef` so effect cleanup does not re-accumulate elapsed time on stopwatch reset | pending | `src/test/clock.test.tsx` |
+| M6-02 | MAJOR | `src/pages/settings/SettingsModal.tsx:578-598, 631-651, 675-695` | FIX | C8 | FIXED | Read `valueAsNumber` directly from event target and set `saveImmediately = true` on slider release | pending | `src/test/settings.test.tsx` |
+| M6-03 | MAJOR | `src/widgets/clock/ClockWidget.tsx:214-220` | FIX | C8 | FIXED | Evaluated alarm against local system time instead of world timezone, with `lastTriggeredMinuteRef` drift guard | pending | `src/test/clock.test.tsx` |
+| M6-04 | MINOR | `src/widgets/clock/ClockWidget.tsx:98-105` | FIX | C8 | FIXED | Decoupled timer stop effect from `setTimerRemaining` updater function into separate useEffect | pending | `src/test/clock.test.tsx` |
+| M6-05 | MINOR | `src/services/weather/openMeteo.ts:262-269` | FIX | C8 | FIXED | Re-throw AbortError on canceled weather requests instead of swallowing and returning stale cache | pending | `src/services/weather/openMeteo.test.ts` |
+| M6-06 | MINOR | `src/widgets/weather/DailyForecast.tsx:11-22` | FIX | C8 | FIXED | Formatted day name comparing date against today rather than unconditionally labeling index 0 as 'Heute' | pending | `src/widgets/weather/WeatherWidget.test.tsx` |
+| X-fluent-ux-security-07 | MAJOR | `src/widgets/speedtest/SpeedtestWidget.tsx:88` | FIX | C8 | FIXED | Replaced hardcoded `w-[360px] h-[256px]` with `w-full h-full` and merged with `cn()` | pending | `src/test/speedtest.test.tsx` |
 
 ## Deferred — Decisions Needed
 

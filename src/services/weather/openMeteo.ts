@@ -260,6 +260,13 @@ export async function fetchWeather(
     setCachedWeather(weatherData);
     return weatherData;
   } catch (error: unknown) {
+    if (
+      (error instanceof DOMException && error.name === "AbortError") ||
+      (error instanceof Error && error.name === "AbortError") ||
+      signal?.aborted
+    ) {
+      throw error;
+    }
     const cached = getCachedWeather();
     if (cached) {
       return { ...cached, isOffline: true };

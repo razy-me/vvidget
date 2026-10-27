@@ -9,7 +9,16 @@ interface DailyForecastProps {
 const GERMAN_DAY_NAMES = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
 function formatDayName(dateString: string, index: number): string {
-  if (index === 0) return "Heute";
+  const localToday = new Date();
+  const localYear = localToday.getFullYear();
+  const localMonth = String(localToday.getMonth() + 1).padStart(2, "0");
+  const localDay = String(localToday.getDate()).padStart(2, "0");
+  const localTodayKey = `${localYear}-${localMonth}-${localDay}`;
+  const utcTodayKey = localToday.toISOString().slice(0, 10);
+
+  if (dateString === localTodayKey || dateString === utcTodayKey || (index === 0 && !dateString)) {
+    return "Heute";
+  }
   try {
     const date = new Date(dateString);
     if (!isNaN(date.getTime())) {

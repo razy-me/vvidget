@@ -95,16 +95,16 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
   useEffect(() => {
     if (!isTimerRunning) return;
     const interval = setInterval(() => {
-      setTimerRemaining((prev) => {
-        if (prev <= 1) {
-          setIsTimerRunning(false);
-          return 0;
-        }
-        return prev - 1;
-      });
+      setTimerRemaining((prev) => Math.max(0, prev - 1));
     }, 1000);
     return () => clearInterval(interval);
   }, [isTimerRunning]);
+
+  useEffect(() => {
+    if (timerRemaining === 0 && isTimerRunning) {
+      setIsTimerRunning(false);
+    }
+  }, [timerRemaining, isTimerRunning]);
 
   const handleStartPauseTimer = () => {
     if (isTimerCompleted) {
@@ -151,6 +151,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
   const stopwatchStartTimeRef = useRef<number>(0);
   const stopwatchAccumulatedRef = useRef<number>(0);
   const lastLapMsRef = useRef<number>(0);
+  const isResettingStopwatchRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!isStopwatchRunning) return;
@@ -164,7 +165,10 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
 
     return () => {
       clearInterval(interval);
-      stopwatchAccumulatedRef.current += performance.now() - stopwatchStartTimeRef.current;
+      if (!isResettingStopwatchRef.current) {
+        stopwatchAccumulatedRef.current += performance.now() - stopwatchStartTimeRef.current;
+      }
+      isResettingStopwatchRef.current = false;
     };
   }, [isStopwatchRunning]);
 
@@ -187,6 +191,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
   };
 
   const handleResetStopwatch = () => {
+    isResettingStopwatchRef.current = true;
     setIsStopwatchRunning(false);
     stopwatchAccumulatedRef.current = 0;
     lastLapMsRef.current = 0;
@@ -205,6 +210,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
   const [alarmTime, setAlarmTime] = useState<string>("07:00");
   const [alarmLabel, setAlarmLabel] = useState<string>("Aufstehen");
   const [alarmTriggered, setAlarmTriggered] = useState<boolean>(false);
+  const lastTriggeredMinuteRef = useRef<string>("");
 
   const handleToggleAlarm = () => {
     setIsAlarmEnabled(!isAlarmEnabled);
@@ -213,11 +219,15 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
 
   useEffect(() => {
     if (!isAlarmEnabled || alarmTriggered) return;
-    const nowStr = `${digitalTime.hours}:${digitalTime.minutes}`;
-    if (nowStr === alarmTime && parseInt(digitalTime.seconds, 10) === 0) {
+    const localHours = String(currentTime.getHours()).padStart(2, "0");
+    const localMinutes = String(currentTime.getMinutes()).padStart(2, "0");
+    const localNowStr = `${localHours}:${localMinutes}`;
+    const todayKey = `${currentTime.toDateString()}_${localNowStr}`;
+    if (localNowStr === alarmTime && lastTriggeredMinuteRef.current !== todayKey) {
+      lastTriggeredMinuteRef.current = todayKey;
       setAlarmTriggered(true);
     }
-  }, [digitalTime, alarmTime, isAlarmEnabled, alarmTriggered]);
+  }, [currentTime, alarmTime, isAlarmEnabled, alarmTriggered]);
 
   return (
     <Card

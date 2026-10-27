@@ -576,24 +576,26 @@ export const SettingsModal: FC = () => {
                       step={5}
                       value={localWeatherMinutes}
                       onChange={(e) => setLocalWeatherMinutes(Number(e.target.value))}
-                      onPointerUp={() => {
+                      onPointerUp={(e) => {
+                        const val = e.currentTarget.valueAsNumber;
                         void updateConfig((prev) => ({
                           ...prev,
                           polling_rates: {
                             ...prev.polling_rates,
-                            weather_minutes: localWeatherMinutes,
+                            weather_minutes: val,
                           },
-                        }));
+                        }), true);
                         showFeedback();
                       }}
-                      onKeyUp={() => {
+                      onKeyUp={(e) => {
+                        const val = e.currentTarget.valueAsNumber;
                         void updateConfig((prev) => ({
                           ...prev,
                           polling_rates: {
                             ...prev.polling_rates,
-                            weather_minutes: localWeatherMinutes,
+                            weather_minutes: val,
                           },
-                        }));
+                        }), true);
                         showFeedback();
                       }}
                       className="w-full accent-[var(--fluent-accent)] cursor-pointer"
@@ -629,24 +631,26 @@ export const SettingsModal: FC = () => {
                       step={250}
                       value={localCpuRamMs}
                       onChange={(e) => setLocalCpuRamMs(Number(e.target.value))}
-                      onPointerUp={() => {
+                      onPointerUp={(e) => {
+                        const val = e.currentTarget.valueAsNumber;
                         void updateConfig((prev) => ({
                           ...prev,
                           polling_rates: {
                             ...prev.polling_rates,
-                            resources_cpu_ram_ms: localCpuRamMs,
+                            resources_cpu_ram_ms: val,
                           },
-                        }));
+                        }), true);
                         showFeedback();
                       }}
-                      onKeyUp={() => {
+                      onKeyUp={(e) => {
+                        const val = e.currentTarget.valueAsNumber;
                         void updateConfig((prev) => ({
                           ...prev,
                           polling_rates: {
                             ...prev.polling_rates,
-                            resources_cpu_ram_ms: localCpuRamMs,
+                            resources_cpu_ram_ms: val,
                           },
-                        }));
+                        }), true);
                         showFeedback();
                       }}
                       className="w-full accent-[var(--fluent-accent)] cursor-pointer"
@@ -673,24 +677,26 @@ export const SettingsModal: FC = () => {
                       step={5000}
                       value={localDiskMs}
                       onChange={(e) => setLocalDiskMs(Number(e.target.value))}
-                      onPointerUp={() => {
+                      onPointerUp={(e) => {
+                        const val = e.currentTarget.valueAsNumber;
                         void updateConfig((prev) => ({
                           ...prev,
                           polling_rates: {
                             ...prev.polling_rates,
-                            resources_disk_ms: localDiskMs,
+                            resources_disk_ms: val,
                           },
-                        }));
+                        }), true);
                         showFeedback();
                       }}
-                      onKeyUp={() => {
+                      onKeyUp={(e) => {
+                        const val = e.currentTarget.valueAsNumber;
                         void updateConfig((prev) => ({
                           ...prev,
                           polling_rates: {
                             ...prev.polling_rates,
-                            resources_disk_ms: localDiskMs,
+                            resources_disk_ms: val,
                           },
-                        }));
+                        }), true);
                         showFeedback();
                       }}
                       className="w-full accent-[var(--fluent-accent)] cursor-pointer"
