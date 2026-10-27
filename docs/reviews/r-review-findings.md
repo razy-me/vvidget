@@ -625,8 +625,8 @@
 +    .map_err(|e| format!("Launch task join failed: {}", e))?
 ```
 
-### [MAJOR] [OPEN] M4-01 Redundant triple event-listener registration and unthrottled IPC setPosition calls flood backend during grid drag
-- **Status**: OPEN
+### [MAJOR] [FIXED] M4-01 Redundant triple event-listener registration and unthrottled IPC setPosition calls flood backend during grid drag
+- **Status**: FIXED
 - **Where**: `src/hooks/useGridDrag.ts:331`, `src/hooks/useGridDrag.ts:468`, `src/hooks/useGridDrag.ts:509-525`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -655,8 +655,8 @@
 -      document.removeEventListener("mouseup", handleWindowPointerUp);
 ```
 
-### [MAJOR] [OPEN] M4-02 Missing optional chaining on config.widgets in AppContent and DockContainer causes crash on incomplete or empty config
-- **Status**: OPEN
+### [MAJOR] [FIXED] M4-02 Missing optional chaining on config.widgets in AppContent and DockContainer causes crash on incomplete or empty config
+- **Status**: FIXED
 - **Where**: `src/App.tsx:301-310`, `src/components/docking/DockContainer.tsx:85-114`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -701,8 +701,8 @@
 +    if (config.widgets?.weather?.visible ?? true) {
 ```
 
-### [MAJOR] [OPEN] M4-03 Multi-monitor bounding coordinate calculation corrupts virtual desktop boundaries when displays have different DPI scaling
-- **Status**: OPEN
+### [MAJOR] [FIXED] M4-03 Multi-monitor bounding coordinate calculation corrupts virtual desktop boundaries when displays have different DPI scaling
+- **Status**: FIXED
 - **Where**: `src/hooks/useGridDrag.ts:169-174`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -724,8 +724,8 @@
 +            const bottom = top + workSize.height / s;
 ```
 
-### [MAJOR] [OPEN] M5-01 Hardcoded 360x384px card dimensions in BatteryWidget exceed 320x360px window registry
-- **Status**: OPEN
+### [MAJOR] [FIXED] M5-01 Hardcoded 360x384px card dimensions in BatteryWidget exceed 320x360px window registry
+- **Status**: FIXED
 - **Where**: `src/widgets/battery/BatteryWidget.tsx:79, 101, 161, 198`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -760,8 +760,8 @@
 
 ---
 
-### [MAJOR] [OPEN] M5-02 Erroneous "Wird entladen" badge and projection failure on AC power without active charging
-- **Status**: OPEN
+### [MAJOR] [FIXED] M5-02 Erroneous "Wird entladen" badge and projection failure on AC power without active charging
+- **Status**: FIXED
 - **Where**: `src/widgets/battery/BatteryWidget.tsx:290-313`, `src/types/battery.ts:87-106`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -1796,8 +1796,8 @@
          onPositionChange?.(targetX, targetY);
 ```
 
-### [MINOR] [OPEN] M4-06 Missing light-theme status color tokens in fluent.css causes illegible text contrast
-- **Status**: OPEN
+### [MINOR] [FIXED] M4-06 Missing light-theme status color tokens in fluent.css causes illegible text contrast
+- **Status**: FIXED
 - **Where**: `src/styles/fluent.css:24-26`, `src/styles/fluent.css:36-55`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -1819,8 +1819,8 @@
  }
 ```
 
-### [MINOR] [OPEN] M4-07 Tooltip component renders empty styled container when content is empty or null
-- **Status**: OPEN
+### [MINOR] [FIXED] M4-07 Tooltip component renders empty styled container when content is empty or null
+- **Status**: FIXED
 - **Where**: `src/components/ui/Tooltip.tsx:66-79`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -1838,8 +1838,8 @@
          <div
 ```
 
-### [MINOR] [OPEN] M4-08 ProgressBar produces NaN% display and invalid ARIA attribute when value is not a finite number
-- **Status**: OPEN
+### [MINOR] [FIXED] M4-08 ProgressBar produces NaN% display and invalid ARIA attribute when value is not a finite number
+- **Status**: FIXED
 - **Where**: `src/components/ui/ProgressBar.tsx:30-31`, `src/components/ui/ProgressBar.tsx:59`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH

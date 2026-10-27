@@ -47,6 +47,19 @@ describe("ProgressBar Primitive", () => {
     render(<ProgressBar value={50} max={50} min={50} showLabel />);
     expect(screen.getByText("0%")).toBeInTheDocument();
   });
+
+  it("handles non-finite values (NaN/Infinity) safely without displaying NaN% (M4-08)", () => {
+    const { rerender } = render(<ProgressBar value={NaN} showLabel />);
+    const bar = screen.getByRole("progressbar");
+    expect(bar).toHaveAttribute("aria-valuenow", "0");
+    expect(screen.getByText("0%")).toBeInTheDocument();
+    expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
+
+    rerender(<ProgressBar value={Infinity} max={100} min={0} showLabel />);
+    const infBar = screen.getByRole("progressbar");
+    expect(infBar).toHaveAttribute("aria-valuenow", "0");
+    expect(screen.getByText("0%")).toBeInTheDocument();
+  });
 });
 
 describe("Badge Primitive", () => {
@@ -149,5 +162,35 @@ describe("Tooltip Primitive", () => {
     );
     const wrapper = container.firstChild as HTMLElement;
     expect(wrapper).toHaveClass("w-full", "flex", "justify-between");
+  });
+
+  it("does not render tooltip container when content is empty or null (M4-07)", () => {
+    vi.useFakeTimers();
+
+    const { rerender } = render(
+      <Tooltip content="" delay={100}>
+        <button>Empty Content</button>
+      </Tooltip>
+    );
+
+    const button = screen.getByText("Empty Content");
+    fireEvent.mouseEnter(button.parentElement!);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    rerender(
+      <Tooltip content={null} delay={100}>
+        <button>Empty Content</button>
+      </Tooltip>
+    );
+    fireEvent.mouseEnter(button.parentElement!);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    vi.useRealTimers();
   });
 });

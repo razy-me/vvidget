@@ -4,7 +4,7 @@ Base Commit: `f15c976ba0af577e608d060e0cc3a6a819041011`
 
 | FIXED | REJECTED | STALE | INVALID | DEFERRED |
 |---|---|---|---|---|
-| 44 | 0 | 0 | 0 | 0 |
+| 50 | 0 | 0 | 0 | 0 |
 
 ## Clusters
 | Cluster | Findings | Files | Order | Parallel group |
@@ -13,7 +13,7 @@ Base Commit: `f15c976ba0af577e608d060e0cc3a6a819041011`
 | C2: Actions & Launcher Security | M1-01, X-fluent-ux-security-01, X-fluent-ux-security-02, X-fluent-ux-security-03, X-fluent-ux-security-04, M3-07, X-ipc-concurrency-05, X-ipc-concurrency-06 | `src-tauri/src/actions/mod.rs`, `src-tauri/src/launcher/mod.rs` | 1 | G1 (Backend) |
 | C3: Storage, Calendar & Geolocation | M2-01, M2-02, M2-03, M2-04, M2-05, M2-06, M2-07, M2-08 | `src-tauri/src/config/mod.rs`, `src-tauri/src/config/storage.rs`, `src-tauri/src/calendar/mod.rs`, `src-tauri/src/geo/winrt.rs`, `src-tauri/src/speedtest/mod.rs` | 1 | G1 (Backend) |
 | C4: Hardware Telemetry & Services | M3-01, M3-02, M3-03, M3-04, M3-05, M3-06, M3-10, M3-11, M3-12 | `src-tauri/src/bluetooth/mod.rs`, `src-tauri/src/battery/mod.rs`, `src-tauri/src/media/mod.rs`, `src-tauri/src/media/gsmtc.rs`, `src-tauri/src/sysinfo/collector.rs`, `src-tauri/src/sysinfo/mod.rs`, `src-tauri/src/audio/mod.rs` | 1 | G1 (Backend) |
-| C5: Frontend Shell, Grid Dragging & Tokens | M4-01, M4-02, M4-03, M4-06, M4-07, M4-08 | `src/App.tsx`, `src/hooks/useGridDrag.ts`, `src/components/ui/ProgressBar.tsx`, `src/components/ui/Tooltip.tsx`, `src/styles/fluent.css` | 2 | G2 (Frontend) |
+| C5: Frontend Shell, Grid Dragging & Tokens | M4-01, M4-02, M4-03, M4-06, M4-07, M4-08 | `src/App.tsx`, `src/hooks/useGridDrag.ts`, `src/components/ui/ProgressBar.tsx`, `src/components/ui/Tooltip.tsx`, `src/styles/fluent.css`, `src/components/docking/DockContainer.tsx` | 2 | G2 (Frontend) |
 | C6: Audio, Speedtest & Calendar Hooks | M5-03, M5-05, X-ipc-concurrency-03, X-ipc-concurrency-07 | `src/hooks/useMasterVolume.ts`, `src/hooks/useSpeedtest.ts`, `src/hooks/useCalendar.ts` | 2 | G2 (Frontend) |
 | C7: System & Hardware Widgets | M5-01, M5-02, M5-04, M5-06, M5-07, M5-08, M5-09, X-ipc-concurrency-04, X-fluent-ux-security-06 | `src/widgets/battery/BatteryWidget.tsx`, `src/widgets/bluetooth/BluetoothWidget.tsx`, `src/widgets/quick-settings/QuickSettingsWidget.tsx`, `src/widgets/resources/MetricBar.tsx` | 2 | G2 (Frontend) |
 | C8: Productivity, Media & Settings | M6-01, M6-02, M6-03, M6-04, M6-05, M6-06, X-fluent-ux-security-07 | `src/widgets/clock/ClockWidget.tsx`, `src/widgets/speedtest/SpeedtestWidget.tsx`, `src/services/weather/openMeteo.ts`, `src/widgets/weather/DailyForecast.tsx`, `src/pages/settings/SettingsModal.tsx` | 2 | G2 (Frontend) |
@@ -54,6 +54,12 @@ Base Commit: `f15c976ba0af577e608d060e0cc3a6a819041011`
 | M3-10 | MINOR | `src-tauri/src/sysinfo/collector.rs:28-30` | FIX | C4 | FIXED | Removed synchronous 200ms startup sleep from `MetricsCollector::new()` eliminating cold startup delay | 6ff3831 | `test_collector_network_and_top_process` |
 | M3-11 | MINOR | `src-tauri/src/sysinfo/mod.rs:48-55` | FIX | C4 | FIXED | Cached configuration in sysinfo worker with 5-second refresh interval eliminating 500ms `block_on` churn | 6ff3831 | `test_metrics_collector_collects_valid_data` |
 | M3-12 | MINOR | `src-tauri/src/audio/mod.rs:10-23` | FIX | C4 | FIXED | Implemented `with_endpoint_volume` caching endpoint volume with 2s TTL across rapid slider ticks | 6ff3831 | `test_endpoint_volume_caching_and_reuse` |
+| M4-01 | MAJOR | `src/hooks/useGridDrag.ts:331, 468, 509-525` | FIX | C5 | FIXED | Removed redundant document and mouseup listeners; stopped propagation and clamped IPC setPosition calls | pending | `src/test/useGridDrag.test.ts` |
+| M4-02 | MAJOR | `src/App.tsx:301-310`, `src/components/docking/DockContainer.tsx:85-114` | FIX | C5 | FIXED | Added optional chaining to `config.widgets?.` in AppContent and DockContainer preventing crash on undefined config | pending | `src/test/app.test.tsx`, `src/test/docking-edge-cases.test.tsx` |
+| M4-03 | MAJOR | `src/hooks/useGridDrag.ts:169-174` | FIX | C5 | FIXED | Converted virtual desktop display coordinates to current window logical units via current scale `s` | pending | `src/test/useGridDrag.test.ts` |
+| M4-06 | MINOR | `src/styles/fluent.css:24-26, 36-55` | FIX | C5 | FIXED | Added light theme status color variables (`--fluent-success`, `--fluent-warning`, `--fluent-error`) with WCAG AA contrast | pending | `src/test/primitives.test.tsx` |
+| M4-07 | MINOR | `src/components/ui/Tooltip.tsx:66-79` | FIX | C5 | FIXED | Added `Boolean(content)` guard preventing rendering empty tooltip container when content is empty or null | pending | `src/test/primitives.test.tsx` |
+| M4-08 | MINOR | `src/components/ui/ProgressBar.tsx:30-31, 59` | FIX | C5 | FIXED | Handled non-finite values (`NaN`, `Infinity`) falling back safely to `min` preventing invalid ARIA and NaN% label | pending | `src/test/primitives.test.tsx` |
 | M5-03 | MAJOR | `src/hooks/useMasterVolume.ts:75-96` | FIX | C6 | FIXED | Added `isMutedRef` updated synchronously on drag to guard against duplicate `toggle_master_mute` calls | pending | `src/test/useMasterVolume.test.ts` |
 | M5-05 | MINOR | `src/hooks/useMasterVolume.ts:38-73` | FIX | C6 | FIXED | Added 3000ms periodic background polling interval in `useMasterVolume` for external volume sync | pending | `src/test/useMasterVolume.test.ts` |
 | X-ipc-concurrency-03 | MAJOR | `src/hooks/useSpeedtest.ts:132-180` | FIX | C6 | FIXED | Added `isDisposed` cancellation guard preventing Tauri listener leak during async setup | pending | `src/test/useSpeedtest.test.ts` |

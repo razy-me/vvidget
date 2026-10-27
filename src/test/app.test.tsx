@@ -294,4 +294,14 @@ describe("App & AppContent Routing", () => {
 
     consoleError.mockRestore();
   });
+
+  it("renders AppContent without crash when config.widgets is undefined (M4-02)", () => {
+    window.location.search = "";
+    mockConfig.layout_mode = "independent";
+    // @ts-expect-error simulating corrupt/partial config without widgets
+    mockConfig.widgets = undefined;
+
+    expect(() => render(<AppContent />)).not.toThrow();
+    expect(screen.getByText("vvidget Desktop Surface")).toBeInTheDocument();
+  });
 });

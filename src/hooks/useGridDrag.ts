@@ -163,13 +163,12 @@ export function useGridDrag({
           let maxBottom = -Infinity;
 
           for (const m of monitors) {
-            const mScale = m.scaleFactor || s || 1.0;
             const workPos = m.workArea?.position || m.position;
             const workSize = m.workArea?.size || m.size;
-            const left = workPos.x / mScale;
-            const top = workPos.y / mScale;
-            const right = left + workSize.width / mScale;
-            const bottom = top + workSize.height / mScale;
+            const left = workPos.x / s;
+            const top = workPos.y / s;
+            const right = left + workSize.width / s;
+            const bottom = top + workSize.height / s;
 
             if (left < minLeft) minLeft = left;
             if (right > maxRight) maxRight = right;
@@ -188,13 +187,12 @@ export function useGridDrag({
         } else {
           const monitor = await currentMonitor().catch(() => null);
           if (monitor) {
-            const mScale = monitor.scaleFactor || s;
             const workPos = monitor.workArea?.position || monitor.position;
             const workSize = monitor.workArea?.size || monitor.size;
-            const monLeft = workPos.x / mScale;
-            const monTop = workPos.y / mScale;
-            const monW = workSize.width / mScale;
-            const monH = workSize.height / mScale;
+            const monLeft = workPos.x / s;
+            const monTop = workPos.y / s;
+            const monW = workSize.width / s;
+            const monH = workSize.height / s;
             boundMinX = monLeft;
             boundMaxX = Math.max(monLeft, monLeft + monW - widgetW);
             boundMinY = monTop;
@@ -311,6 +309,9 @@ export function useGridDrag({
   const onPointerMove = useCallback(
     async (e: React.PointerEvent) => {
       if (!dragRef.current.active) return;
+      if (typeof e.stopPropagation === "function") {
+        e.stopPropagation();
+      }
 
       const deltaX = e.screenX - dragRef.current.startScreenX;
       const deltaY = e.screenY - dragRef.current.startScreenY;
@@ -322,13 +323,17 @@ export function useGridDrag({
       const targetX = Math.max(dragRef.current.minX, Math.min(dragRef.current.maxX, rawTargetX));
       const targetY = Math.max(dragRef.current.minY, Math.min(dragRef.current.maxY, rawTargetY));
 
+      if (targetX === dragRef.current.lastTargetX && targetY === dragRef.current.lastTargetY) {
+        return;
+      }
+
       dragRef.current.lastTargetX = targetX;
       dragRef.current.lastTargetY = targetY;
 
       // Smooth 1:1 real-time drag tracking on pointer move (smoothly following cursor)
       try {
         const appWindow = getCurrentWindow();
-        void appWindow.setPosition(new LogicalPosition(targetX, targetY));
+        appWindow.setPosition(new LogicalPosition(targetX, targetY)).catch(() => {});
         onPositionChange?.(targetX, targetY);
       } catch {
         // Non-Tauri fallback
@@ -460,12 +465,16 @@ export function useGridDrag({
       const targetX = Math.max(dragRef.current.minX, Math.min(dragRef.current.maxX, rawTargetX));
       const targetY = Math.max(dragRef.current.minY, Math.min(dragRef.current.maxY, rawTargetY));
 
+      if (targetX === dragRef.current.lastTargetX && targetY === dragRef.current.lastTargetY) {
+        return;
+      }
+
       dragRef.current.lastTargetX = targetX;
       dragRef.current.lastTargetY = targetY;
 
       try {
         const appWindow = getCurrentWindow();
-        void appWindow.setPosition(new LogicalPosition(targetX, targetY));
+        appWindow.setPosition(new LogicalPosition(targetX, targetY)).catch(() => {});
         onPositionChange?.(targetX, targetY);
       } catch {
         // Non-Tauri fallback
@@ -509,19 +518,11 @@ export function useGridDrag({
     window.addEventListener("pointermove", handleWindowPointerMove);
     window.addEventListener("pointerup", handleWindowPointerUp);
     window.addEventListener("pointercancel", handleWindowPointerUp);
-    window.addEventListener("mouseup", handleWindowPointerUp);
-    document.addEventListener("pointermove", handleWindowPointerMove);
-    document.addEventListener("pointerup", handleWindowPointerUp);
-    document.addEventListener("mouseup", handleWindowPointerUp);
 
     return () => {
       window.removeEventListener("pointermove", handleWindowPointerMove);
       window.removeEventListener("pointerup", handleWindowPointerUp);
       window.removeEventListener("pointercancel", handleWindowPointerUp);
-      window.removeEventListener("mouseup", handleWindowPointerUp);
-      document.removeEventListener("pointermove", handleWindowPointerMove);
-      document.removeEventListener("pointerup", handleWindowPointerUp);
-      document.removeEventListener("mouseup", handleWindowPointerUp);
     };
   }, [isDragging, currentGridX, currentGridY, onPositionChange, endDrag]);
 

@@ -82,7 +82,7 @@ export const DockContainer: FC<DockContainerProps> = ({
       component: ReactNode;
     }> = [];
 
-    if (config.widgets.resources?.visible ?? true) {
+    if (config.widgets?.resources?.visible ?? true) {
       list.push({
         id: "resources",
         title: "System Resources",
@@ -93,7 +93,7 @@ export const DockContainer: FC<DockContainerProps> = ({
       });
     }
 
-    if (config.widgets.spotify?.visible ?? true) {
+    if (config.widgets?.spotify?.visible ?? true) {
       list.push({
         id: "spotify",
         title: "Media Controls",
@@ -102,7 +102,7 @@ export const DockContainer: FC<DockContainerProps> = ({
       });
     }
 
-    if (config.widgets.weather?.visible ?? true) {
+    if (config.widgets?.weather?.visible ?? true) {
       list.push({
         id: "weather",
         title: "Weather Forecast",
@@ -111,7 +111,7 @@ export const DockContainer: FC<DockContainerProps> = ({
       });
     }
 
-    if (config.widgets.speedtest?.visible) {
+    if (config.widgets?.speedtest?.visible) {
       list.push({
         id: "speedtest",
         title: "Internet Speedtest",
@@ -120,7 +120,7 @@ export const DockContainer: FC<DockContainerProps> = ({
       });
     }
 
-    if (config.widgets.launcher?.visible) {
+    if (config.widgets?.launcher?.visible) {
       list.push({
         id: "launcher",
         title: "Game Launcher",
@@ -130,7 +130,7 @@ export const DockContainer: FC<DockContainerProps> = ({
     }
 
     // Quick Settings base instance
-    if (config.widgets.quick_settings?.visible) {
+    if (config.widgets?.quick_settings?.visible) {
       const title = config.quick_settings_instances?.quick_settings?.title ?? "Quick Settings";
       list.push({
         id: "quick_settings",
@@ -167,7 +167,7 @@ export const DockContainer: FC<DockContainerProps> = ({
       });
     }
 
-    if (config.widgets.calendar?.visible) {
+    if (config.widgets?.calendar?.visible) {
       list.push({
         id: "calendar",
         title: "Calendar & Notes",
@@ -176,7 +176,7 @@ export const DockContainer: FC<DockContainerProps> = ({
       });
     }
 
-    if (config.widgets.clock?.visible) {
+    if (config.widgets?.clock?.visible) {
       list.push({
         id: "clock",
         title: "Clock & Timers",
@@ -185,7 +185,7 @@ export const DockContainer: FC<DockContainerProps> = ({
       });
     }
 
-    if (config.widgets.bluetooth?.visible) {
+    if (config.widgets?.bluetooth?.visible) {
       list.push({
         id: "bluetooth",
         title: "Bluetooth Devices",
@@ -194,7 +194,7 @@ export const DockContainer: FC<DockContainerProps> = ({
       });
     }
 
-    if (config.widgets.battery?.visible) {
+    if (config.widgets?.battery?.visible) {
       list.push({
         id: "battery",
         title: "Battery & Power",

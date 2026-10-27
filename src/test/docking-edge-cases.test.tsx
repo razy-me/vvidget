@@ -159,4 +159,19 @@ describe("DockContainer Edge Cases (R1, R7)", () => {
       screen.getByText("Enable widgets in Settings or right-click the System Tray icon.")
     ).toBeInTheDocument();
   });
+
+  it("renders DockContainer without crashing when config.widgets is undefined (M4-02)", () => {
+    // @ts-expect-error simulating missing widgets property
+    mockConfig.widgets = undefined;
+
+    expect(() =>
+      render(
+        <ThemeProvider>
+          <DockContainer />
+        </ThemeProvider>
+      )
+    ).not.toThrow();
+    // Default starter widgets (resources, spotify, weather) default to visible: true
+    expect(screen.getByText("3 Active")).toBeInTheDocument();
+  });
 });

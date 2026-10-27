@@ -298,16 +298,16 @@ export const AppContent: FC = () => {
   }
 
   // 4. Main Window (Independent Preview / Multi-Widget Canvas for Web/Test environment)
-  const isResourcesVisible = config.widgets.resources?.visible ?? true;
-  const isSpotifyVisible = config.widgets.spotify?.visible ?? true;
-  const isWeatherVisible = config.widgets.weather?.visible ?? true;
-  const isSpeedtestVisible = config.widgets.speedtest?.visible ?? false;
-  const isLauncherVisible = config.widgets.launcher?.visible ?? false;
-  const isQuickSettingsVisible = config.widgets.quick_settings?.visible ?? false;
-  const isBluetoothVisible = config.widgets.bluetooth?.visible ?? false;
-  const isBatteryVisible = config.widgets.battery?.visible ?? false;
-  const isCalendarVisible = config.widgets.calendar?.visible ?? false;
-  const isClockVisible = config.widgets.clock?.visible ?? false;
+  const isResourcesVisible = config.widgets?.resources?.visible ?? true;
+  const isSpotifyVisible = config.widgets?.spotify?.visible ?? true;
+  const isWeatherVisible = config.widgets?.weather?.visible ?? true;
+  const isSpeedtestVisible = config.widgets?.speedtest?.visible ?? false;
+  const isLauncherVisible = config.widgets?.launcher?.visible ?? false;
+  const isQuickSettingsVisible = config.widgets?.quick_settings?.visible ?? false;
+  const isBluetoothVisible = config.widgets?.bluetooth?.visible ?? false;
+  const isBatteryVisible = config.widgets?.battery?.visible ?? false;
+  const isCalendarVisible = config.widgets?.calendar?.visible ?? false;
+  const isClockVisible = config.widgets?.clock?.visible ?? false;
 
   return (
     <main className="min-h-screen p-4 flex flex-col items-center justify-start text-[var(--fluent-text-primary)] bg-transparent">

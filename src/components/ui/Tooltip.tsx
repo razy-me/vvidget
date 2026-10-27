@@ -63,7 +63,7 @@ export const Tooltip: FC<TooltipProps> = ({
       onBlur={hideTooltip}
     >
       {children}
-      {isVisible && (
+      {isVisible && Boolean(content) && (
         <div
           role="tooltip"
           className={cn(

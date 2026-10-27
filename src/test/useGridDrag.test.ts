@@ -593,4 +593,101 @@ describe("useGridDrag Hook", () => {
       })
     );
   });
+
+  it("registers pointer listeners only on window without duplicate document or mouseup listeners during drag (M4-01)", async () => {
+    const windowSpy = vi.spyOn(window, "addEventListener");
+    const documentSpy = vi.spyOn(document, "addEventListener");
+
+    const { result } = renderHook(() =>
+      useGridDrag({
+        widgetId: "resources",
+      })
+    );
+
+    await act(async () => {
+      await result.current.dragProps.onPointerDown({
+        button: 0,
+        screenX: 200,
+        screenY: 200,
+        pointerId: 1,
+        target: document.createElement("div"),
+        currentTarget: { setPointerCapture: vi.fn(), releasePointerCapture: vi.fn() },
+      } as unknown as React.PointerEvent);
+    });
+
+    expect(result.current.isDragging).toBe(true);
+
+    const docEvents = documentSpy.mock.calls.map((call) => call[0]);
+    expect(docEvents).not.toContain("pointermove");
+    expect(docEvents).not.toContain("pointerup");
+    expect(docEvents).not.toContain("mouseup");
+
+    const winEvents = windowSpy.mock.calls.map((call) => call[0]);
+    expect(winEvents).toContain("pointermove");
+    expect(winEvents).toContain("pointerup");
+    expect(winEvents).toContain("pointercancel");
+    expect(winEvents).not.toContain("mouseup");
+
+    windowSpy.mockRestore();
+    documentSpy.mockRestore();
+  });
+
+  it("computes multi-monitor bounds correctly when displays have different scale factors (M4-03)", async () => {
+    vi.mocked(availableMonitors).mockResolvedValueOnce([
+      {
+        name: "Display 1",
+        position: { x: 0, y: 0 },
+        size: { width: 1920, height: 1080 },
+        scaleFactor: 1.0,
+        workArea: {
+          position: { x: 0, y: 0 },
+          size: { width: 1920, height: 1080 },
+        },
+      },
+      {
+        name: "Display 2",
+        position: { x: 1920, y: 0 },
+        size: { width: 2880, height: 1620 },
+        scaleFactor: 1.5,
+        workArea: {
+          position: { x: 1920, y: 0 },
+          size: { width: 2880, height: 1620 },
+        },
+      },
+    ] as unknown as import("@tauri-apps/api/window").Monitor[]);
+
+    const { result } = renderHook(() =>
+      useGridDrag({
+        widgetId: "resources",
+      })
+    );
+
+    const appWindow = getCurrentWindow();
+
+    await act(async () => {
+      await result.current.dragProps.onPointerDown({
+        button: 0,
+        screenX: 200,
+        screenY: 200,
+        pointerId: 1,
+        target: document.createElement("div"),
+        currentTarget: { setPointerCapture: vi.fn() },
+      } as unknown as React.PointerEvent);
+    });
+
+    // Drag to Display 2 (virtual desktop coordinate x = 3500)
+    // Display 1 (0 to 1920) + Display 2 (1920 to 1920 + 2880 = 4800)
+    // Widget width is 320, so boundMaxX = 4800 - 320 = 4480.
+    // At delta +3340 from start window x=160 -> rawTargetX = 3500
+    await act(async () => {
+      await result.current.dragProps.onPointerMove({
+        screenX: 200 + 3340,
+        screenY: 200,
+      } as unknown as React.PointerEvent);
+    });
+
+    expect(appWindow.setPosition).toHaveBeenCalledWith(
+      expect.objectContaining({ x: 3500 })
+    );
+  });
 });

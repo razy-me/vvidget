@@ -235,6 +235,15 @@
   3. *Swallowing IPC errors silently in calendar hook*: Causes optimistic UI desynchronization where notes appear created or deleted in the frontend despite failing backend persistence.
 - **Reason / trade-offs**: Eliminates race conditions in volume unmuting, prevents memory leaks on component unmount, and guarantees eventual consistency and actionable error feedback for calendar operations.
 
+## D-033 Frontend Shell, Grid Dragging Optimization & Fluent Design Tokens (Fixer C5)
+- **Decision**: In `useGridDrag`, eliminate duplicate event listener registrations on `document` and redundant `mouseup` listeners, call `e.stopPropagation()` on header pointer move to prevent dual execution via window event bubbling, and clamp `setPosition` IPC calls to deduplicate unchanged coordinates. Calculate multi-monitor virtual desktop bounds using the current window's scale factor `s` rather than per-display scale factors to preserve true logical desktop boundaries. Guard all accesses to `config.widgets` across `AppContent` and `DockContainer` with optional chaining (`config.widgets?.`) to prevent crashes during empty or partial configuration synchronization. Add accessible light-theme status tokens (`--fluent-success`, `--fluent-warning`, `--fluent-error`) in `fluent.css` satisfying WCAG AA contrast. In `Tooltip`, guard popup rendering with `Boolean(content)` to prevent empty styled containers on empty string or null. In `ProgressBar`, sanitize non-finite values (`NaN`, `Infinity`) falling back safely to `min` to ensure compliant ARIA attributes and clean percentage display.
+- **Alternatives considered**:
+  1. *Keeping listeners on document and window*: Triple-registers listeners during pointer movement at 1000Hz, flooding the Tauri backend with redundant IPC calls.
+  2. *Dividing monitor coordinates by individual display scale factor*: Creates artificial coordinate overlap and shrinks available virtual desktop drag boundaries on secondary displays.
+  3. *Unchecked property access on config.widgets*: Throws unhandled TypeError on startup when configuration is loaded asynchronously or partially hydrated.
+- **Reason / trade-offs**: Delivers smooth, low-latency 60fps widget dragging with minimal IPC overhead, prevents UI crashes on uninitialized config, and ensures accessible, valid Fluent UI component rendering across all theme variants.
+
+
 
 
 

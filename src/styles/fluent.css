@@ -52,6 +52,11 @@
   /* Control Fill Tokens - Light Theme */
   --fluent-control-bg: rgba(0, 0, 0, 0.04);
   --fluent-control-active: rgba(0, 0, 0, 0.08);
+
+  /* Status Colors - Light Theme */
+  --fluent-success: #0f7b0f;
+  --fluent-warning: #9d5d00;
+  --fluent-error: #c42b1c;
 }
 
 /* Acrylic style class for desktop widget containers */
