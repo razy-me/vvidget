@@ -258,5 +258,65 @@ describe("QuickSettingsWidget Component", () => {
     // Custom action is no longer pinned in tiles
     expect(screen.queryByTestId("action-tile-custom:https://example.com")).not.toBeInTheDocument();
   });
+
+  it("regression M5-07: does not display false positive 'Gestartet' feedback when quick action fails", async () => {
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "execute_quick_action") {
+        return Promise.reject(new Error("Target executable not found"));
+      }
+      return Promise.resolve();
+    });
+
+    await act(async () => {
+      render(<QuickSettingsWidget instanceId="quick_settings" />);
+    });
+
+    const soundTile = screen.getByTestId("action-tile-sound");
+    await act(async () => {
+      fireEvent.click(soundTile);
+    });
+
+    // Verify tactile feedback was NOT activated
+    expect(soundTile).toHaveAttribute("data-active", "false");
+    expect(screen.queryByText("Gestartet")).not.toBeInTheDocument();
+  });
+
+  it("regression X-ipc-concurrency-04: updates instance title and pins atomically without competing IPC cascades", async () => {
+    let capturedUpdatedInstance: unknown = null;
+    mockInvoke.mockImplementation((cmd: string, args: unknown) => {
+      if (cmd === "update_quick_settings_instance") {
+        capturedUpdatedInstance = (args as { instance: unknown })?.instance;
+        return Promise.resolve();
+      }
+      return Promise.resolve();
+    });
+
+    await act(async () => {
+      render(<QuickSettingsWidget instanceId="quick_settings" />);
+    });
+
+    // Edit title
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("edit-title-btn"));
+    });
+    const input = screen.getByTestId("edit-title-input");
+    await act(async () => {
+      fireEvent.change(input, { target: { value: "Pro Tools Center" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+    });
+
+    expect(screen.getByTestId("instance-title")).toHaveTextContent("Pro Tools Center");
+    expect(mockInvoke).toHaveBeenCalledWith(
+      "update_quick_settings_instance",
+      expect.objectContaining({
+        instance: expect.objectContaining({
+          title: "Pro Tools Center",
+        }),
+      }),
+    );
+    expect(capturedUpdatedInstance).toMatchObject({
+      title: "Pro Tools Center",
+    });
+  });
 });
 

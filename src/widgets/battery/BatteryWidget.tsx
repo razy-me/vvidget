@@ -76,7 +76,7 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
         <Card
           variant="acrylic"
           className={cn(
-            "w-[360px] h-[384px] p-5 flex flex-col items-center justify-center text-center select-none text-[var(--fluent-text-secondary)]",
+            "w-full h-full p-5 flex flex-col items-center justify-center text-center select-none text-[var(--fluent-text-secondary)]",
             className
           )}
           data-testid="battery-widget-dismissed"
@@ -98,7 +98,7 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
       <Card
         variant="acrylic"
         className={cn(
-          "w-[360px] h-[384px] p-5 flex flex-col justify-between select-none relative overflow-hidden",
+          "w-full h-full p-5 flex flex-col justify-between select-none relative overflow-hidden",
           className
         )}
         data-testid="battery-widget-no-battery"
@@ -158,7 +158,7 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
       <Card
         variant="acrylic"
         className={cn(
-          "w-[360px] h-[384px] p-5 flex flex-col items-center justify-center text-center select-none",
+          "w-full h-full p-5 flex flex-col items-center justify-center text-center select-none",
           className
         )}
         data-testid="battery-widget-loading"
@@ -195,7 +195,7 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
     <Card
       variant="acrylic"
       className={cn(
-        "w-[360px] h-[384px] p-4 flex flex-col justify-between text-[var(--fluent-text-primary)] select-none overflow-hidden",
+        "w-full h-full p-4 flex flex-col justify-between text-[var(--fluent-text-primary)] select-none overflow-hidden",
         className
       )}
       data-testid="battery-widget"
@@ -289,6 +289,8 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
             <span className="font-semibold" data-testid="projection-20">
               {is_charging
                 ? "Wird geladen"
+                : is_plugged_in
+                ? "Netzbetrieb"
                 : formatEstimatedMinutes(estimated_mins_to_20_percent)}
             </span>
           </div>
@@ -298,6 +300,8 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
             <span className="font-semibold" data-testid="projection-10">
               {is_charging
                 ? "Wird geladen"
+                : is_plugged_in
+                ? "Netzbetrieb"
                 : formatEstimatedMinutes(estimated_mins_to_10_percent)}
             </span>
           </div>
@@ -305,7 +309,7 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
           <div className="flex items-center justify-between px-0.5">
             <span className="text-[var(--fluent-text-secondary)]">Bis leer:</span>
             <span className="font-semibold text-sky-400" data-testid="projection-empty">
-              {is_charging
+              {is_charging || is_plugged_in
                 ? "Netzbetrieb"
                 : formatEstimatedMinutes(estimated_mins_to_empty)}
             </span>

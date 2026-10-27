@@ -85,7 +85,7 @@ describe("BluetoothWidget Component", () => {
     });
 
     // Header badge
-    expect(screen.getByTestId("bluetooth-status")).toHaveTextContent("Aktiv");
+    expect(screen.getByTestId("bluetooth-status")).toHaveTextContent("Verbunden");
     expect(screen.getByText("5 Geräte gekoppelt")).toBeInTheDocument();
 
     // Verify all devices are rendered
@@ -97,9 +97,9 @@ describe("BluetoothWidget Component", () => {
     expect(screen.getByText("Google Pixel 8")).toBeInTheDocument();
     expect(screen.getByText("Generic OBD2 Adapter")).toBeInTheDocument();
 
-    // Verify connection status labels
+    // Verify connection status labels (1 in header status badge + 2 in device items = 3)
     const connectedBadges = screen.getAllByText("Verbunden");
-    expect(connectedBadges.length).toBe(2);
+    expect(connectedBadges.length).toBe(3);
 
     const pairedBadges = screen.getAllByText("Gekoppelt");
     expect(pairedBadges.length).toBe(3);
@@ -125,7 +125,7 @@ describe("BluetoothWidget Component", () => {
       expect(mockInvoke).toHaveBeenCalledWith("get_bluetooth_devices");
     });
 
-    expect(screen.getByTestId("bluetooth-status")).toHaveTextContent("Aktiv");
+    expect(screen.getByTestId("bluetooth-status")).toHaveTextContent("Verbunden");
     expect(screen.getByText("Sony WH-1000XM4")).toBeInTheDocument();
   });
 
@@ -303,5 +303,84 @@ describe("BluetoothWidget Component", () => {
     const settingsBtn = screen.getByTestId("open-settings-btn");
     expect(settingsBtn).toHaveTextContent("Bluetooth-Einstellungen");
     expect(settingsBtn.querySelector("span")?.className).toContain("truncate");
+  });
+
+  it("regression M5-04: shows Bereit with neutral badge when all paired devices are disconnected", async () => {
+    const disconnectedDevices: BluetoothDeviceInfo[] = [
+      {
+        id: "d1",
+        name: "Keychron K2",
+        connected: false,
+        paired: true,
+        battery_level: null,
+        device_type: "keyboard",
+      },
+      {
+        id: "d2",
+        name: "Razer DeathAdder",
+        connected: false,
+        paired: true,
+        battery_level: null,
+        device_type: "mouse",
+      },
+    ];
+
+    await act(async () => {
+      render(<BluetoothWidget initialDevices={disconnectedDevices} autoFetch={false} />);
+    });
+
+    const statusBadge = screen.getByTestId("bluetooth-status");
+    expect(statusBadge).toHaveTextContent("Bereit");
+    expect(statusBadge.className).not.toContain("bg-emerald-500/15");
+    expect(statusBadge.className).toContain("bg-neutral-500/15");
+  });
+
+  it("regression M5-08: displays error message when toggle_bluetooth_device fails instead of swallowing", async () => {
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "toggle_bluetooth_device") {
+        return Promise.reject(new Error("WinRT disconnect not supported directly; please use Windows Settings"));
+      }
+      return Promise.resolve();
+    });
+
+    await act(async () => {
+      render(<BluetoothWidget initialDevices={mockDevices} autoFetch={false} />);
+    });
+
+    const toggleBtn = screen.getByTestId("device-toggle-btn-bt-audio-1");
+    await act(async () => {
+      fireEvent.click(toggleBtn);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Fehler beim Laden")).toBeInTheDocument();
+      expect(
+        screen.getByText(/WinRT disconnect not supported directly/)
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("regression M5-09: handles component unmount gracefully during in-flight async invoke", async () => {
+    let resolveDevices: (devices: BluetoothDeviceInfo[]) => void = () => {};
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_bluetooth_devices") {
+        return new Promise<BluetoothDeviceInfo[]>((resolve) => {
+          resolveDevices = resolve;
+        });
+      }
+      return Promise.resolve();
+    });
+
+    const { unmount } = render(<BluetoothWidget autoFetch={true} />);
+
+    // Unmount before promise resolves
+    unmount();
+
+    // Now resolve the promise
+    await act(async () => {
+      resolveDevices(mockDevices);
+    });
+
+    // Verification passes if no unhandled error occurs
   });
 });

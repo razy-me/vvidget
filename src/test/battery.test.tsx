@@ -8,6 +8,7 @@ import {
   formatEstimatedMinutes,
   getChargingBadgeInfo,
   isHighDrainRate,
+  MOCK_BATTERY_STATUS,
   type BatteryStatus,
 } from "@/types/battery";
 
@@ -325,6 +326,57 @@ describe("BatteryWidget component", () => {
     fireEvent.click(btn);
 
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("regression M5-01: renders with w-full h-full and never hardcodes 360x384px dimensions", () => {
+    const { rerender } = render(
+      <BatteryWidget statusOverride={MOCK_BATTERY_STATUS} />
+    );
+    const widget = screen.getByTestId("battery-widget");
+    expect(widget.className).toContain("w-full");
+    expect(widget.className).toContain("h-full");
+    expect(widget.className).not.toContain("w-[360px]");
+    expect(widget.className).not.toContain("h-[384px]");
+
+    // No battery (desktop mode)
+    rerender(
+      <BatteryWidget
+        statusOverride={{
+          ...MOCK_BATTERY_STATUS,
+          has_battery: false,
+        }}
+      />
+    );
+    const noBatteryCard = screen.getByTestId("battery-widget-no-battery");
+    expect(noBatteryCard.className).toContain("w-full");
+    expect(noBatteryCard.className).toContain("h-full");
+    expect(noBatteryCard.className).not.toContain("w-[360px]");
+    expect(noBatteryCard.className).not.toContain("h-[384px]");
+  });
+
+  it("regression M5-02: handles AC wall power without active charging (battery health 80% threshold)", () => {
+    // getChargingBadgeInfo test
+    const acNotChargingBadge = getChargingBadgeInfo(80, false, true);
+    expect(acNotChargingBadge.label).toBe("Netzbetrieb ⚡");
+    expect(acNotChargingBadge.variant).toBe("accent");
+
+    // Widget rendering test
+    render(
+      <BatteryWidget
+        statusOverride={{
+          ...MOCK_BATTERY_STATUS,
+          charge_percent: 80,
+          is_charging: false,
+          is_plugged_in: true,
+          drain_rate_percent_per_min: 0.0,
+        }}
+      />
+    );
+
+    expect(screen.getByTestId("battery-charging-badge")).toHaveTextContent("Netzbetrieb ⚡");
+    expect(screen.getByTestId("projection-20")).toHaveTextContent("Netzbetrieb");
+    expect(screen.getByTestId("projection-10")).toHaveTextContent("Netzbetrieb");
+    expect(screen.getByTestId("projection-empty")).toHaveTextContent("Netzbetrieb");
   });
 });
 

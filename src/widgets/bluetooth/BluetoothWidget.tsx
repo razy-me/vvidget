@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, type FC } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type FC } from "react";
 import {
   Bluetooth,
   Headphones,
@@ -83,6 +83,14 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const fetchDevices = useCallback(async () => {
     setIsLoading(true);
@@ -90,12 +98,18 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const list = await invoke<BluetoothDeviceInfo[]>("get_bluetooth_devices");
-      setDevices(list || []);
+      if (isMountedRef.current) {
+        setDevices(list || []);
+      }
     } catch (err) {
       console.error("Failed to load bluetooth devices:", err);
-      setError(err instanceof Error ? err.message : String(err));
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -108,13 +122,20 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
         deviceId: device.id,
         connect: targetState,
       });
-      setDevices((prev) =>
-        prev.map((d) => (d.id === device.id ? { ...d, connected: result } : d))
-      );
+      if (isMountedRef.current) {
+        setDevices((prev) =>
+          prev.map((d) => (d.id === device.id ? { ...d, connected: result } : d))
+        );
+      }
     } catch (err) {
       console.error("Failed to toggle bluetooth device:", err);
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setTogglingId(null);
+      if (isMountedRef.current) {
+        setTogglingId(null);
+      }
     }
   }, []);
 
@@ -144,7 +165,8 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
     });
   }, [devices]);
 
-  const statusText = devices.length > 0 ? "Aktiv" : "Keine Geräte";
+  const hasConnected = devices.some((d) => d.connected);
+  const statusText = hasConnected ? "Verbunden" : devices.length > 0 ? "Bereit" : "Keine Geräte";
 
   return (
     <Card
@@ -171,7 +193,7 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
                 data-testid="bluetooth-status"
                 className={cn(
                   "text-[10px] px-1.5 py-0.2 rounded-full font-medium flex-shrink-0",
-                  devices.length > 0
+                  hasConnected
                     ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
                     : "bg-neutral-500/15 text-[var(--fluent-text-secondary)] border border-[var(--fluent-stroke)]"
                 )}

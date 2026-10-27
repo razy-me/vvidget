@@ -1200,8 +1200,8 @@
 
 ---
 
-### [MAJOR] [OPEN] X-ipc-concurrency-04 Dual competing writes and redundant IPC cascades in `QuickSettingsWidget.tsx:saveInstance`
-- **Status**: OPEN
+### [MAJOR] [FIXED] X-ipc-concurrency-04 Dual competing writes and redundant IPC cascades in `QuickSettingsWidget.tsx:saveInstance`
+- **Status**: FIXED
 - **Where**: `src/widgets/quick-settings/QuickSettingsWidget.tsx:142-156`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -1370,8 +1370,9 @@
 
 ---
 
-### [MAJOR] [OPEN] X-fluent-ux-security-06 Stacked Redundant Headers Cause Layout Squeeze and Vertical Clipping in 240px Windows
-- **Status**: OPEN
+### [MAJOR] [DEFERRED] X-fluent-ux-security-06 Stacked Redundant Headers Cause Layout Squeeze and Vertical Clipping in 240px Windows
+- **Status**: DEFERRED
+- **Deferred Reason**: Cross-cutting architectural design decision across C1 (window dimensions in `lib.rs`), C5 (`WidgetContainer.tsx` / `App.tsx`), C7 (`QuickSettingsWidget.tsx`, `BluetoothWidget.tsx`), and C8 (`SpeedtestWidget.tsx`). Suppressing `HeaderBar` removes OS drag region and lock controls; suppressing internal headers removes widget action buttons (+ Duplizieren, customize, refresh). Options: (A) Provide container action slot in `HeaderBar` to merge controls into outer header; (B) Increase `defaultHeight` in `registry.ts` and `src-tauri` from 240 to 280px. Recommendation: Option B for minimal risk, or Option A coordinated in a unified layout pass.
 - **Where**: `src/widgets/quick-settings/QuickSettingsWidget.tsx:320-360`, `src/widgets/bluetooth/BluetoothWidget.tsx:160-185`, `src/widgets/speedtest/SpeedtestWidget.tsx:91-109`, `src/components/layout/WidgetContainer.tsx:55-67`
 - **Source**: `r-review` (Tier 3) (2026-10-27)
 - **Confidence**: HIGH
@@ -1857,8 +1858,8 @@
      const percentage = max <= min ? 0 : Math.round(((clampedValue - min) / (max - min)) * 100);
 ```
 
-### [MINOR] [OPEN] M5-04 Bluetooth status badge displays green "Aktiv" when all paired devices are disconnected
-- **Status**: OPEN
+### [MINOR] [FIXED] M5-04 Bluetooth status badge displays green "Aktiv" when all paired devices are disconnected
+- **Status**: FIXED
 - **Where**: `src/widgets/bluetooth/BluetoothWidget.tsx:147, 172-179`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -1913,8 +1914,8 @@
 
 ---
 
-### [MINOR] [OPEN] M5-06 MetricBar unvalidated `NaN` produces `"NaN%"` and invalid CSS progress bar width
-- **Status**: OPEN
+### [MINOR] [FIXED] M5-06 MetricBar unvalidated `NaN` produces `"NaN%"` and invalid CSS progress bar width
+- **Status**: FIXED
 - **Where**: `src/widgets/resources/MetricBar.tsx:28-30`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -1935,8 +1936,8 @@
 
 ---
 
-### [MINOR] [OPEN] M5-07 False positive "Gestartet" feedback when quick action fails in QuickSettingsWidget
-- **Status**: OPEN
+### [MINOR] [FIXED] M5-07 False positive "Gestartet" feedback when quick action fails in QuickSettingsWidget
+- **Status**: FIXED
 - **Where**: `src/widgets/quick-settings/QuickSettingsWidget.tsx:201-228`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -1970,8 +1971,8 @@
 
 ---
 
-### [MINOR] [OPEN] M5-08 Swallowed error in `handleToggleDevice` leaves user without feedback when WinRT disconnection fails
-- **Status**: OPEN
+### [MINOR] [FIXED] M5-08 Swallowed error in `handleToggleDevice` leaves user without feedback when WinRT disconnection fails
+- **Status**: FIXED
 - **Where**: `src/widgets/bluetooth/BluetoothWidget.tsx:114-118`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -1991,8 +1992,8 @@
 
 ---
 
-### [MINOR] [OPEN] M5-09 Missing unmount cancellation guards in BluetoothWidget async handlers
-- **Status**: OPEN
+### [MINOR] [FIXED] M5-09 Missing unmount cancellation guards in BluetoothWidget async handlers
+- **Status**: FIXED
 - **Where**: `src/widgets/bluetooth/BluetoothWidget.tsx:82-120`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH

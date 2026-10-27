@@ -106,6 +106,22 @@ describe("MetricBar component", () => {
 
     expect(screen.getByText("100%")).toBeDefined();
   });
+
+  it("regression M5-06: safely handles NaN percent without rendering NaN% or invalid progressbar value", () => {
+    render(
+      <MetricBar
+        label="Initializing Sensor"
+        valueDisplay="—"
+        percent={NaN}
+      />
+    );
+
+    expect(screen.getByText("0%")).toBeDefined();
+    expect(screen.queryByText(/NaN/)).toBeNull();
+
+    const progress = screen.getByRole("progressbar");
+    expect(progress.getAttribute("aria-valuenow")).toBe("0");
+  });
 });
 
 describe("ResourceWidget component", () => {

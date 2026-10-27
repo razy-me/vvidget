@@ -25,7 +25,8 @@ export const MetricBar: FC<MetricBarProps> = ({
   className,
   size = "sm",
 }) => {
-  const roundedPercent = Math.min(Math.max(Math.round(percent), 0), 100);
+  const safePercent = Number.isFinite(percent) ? percent : 0;
+  const roundedPercent = Math.min(Math.max(Math.round(safePercent), 0), 100);
   const activeVariant = variant ?? getMetricVariant(roundedPercent);
 
   const content = (

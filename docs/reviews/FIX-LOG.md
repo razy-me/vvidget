@@ -4,7 +4,7 @@ Base Commit: `f15c976ba0af577e608d060e0cc3a6a819041011`
 
 | FIXED | REJECTED | STALE | INVALID | DEFERRED |
 |---|---|---|---|---|
-| 50 | 0 | 0 | 0 | 0 |
+| 58 | 0 | 0 | 0 | 1 |
 
 ## Clusters
 | Cluster | Findings | Files | Order | Parallel group |
@@ -71,8 +71,20 @@ Base Commit: `f15c976ba0af577e608d060e0cc3a6a819041011`
 | M6-05 | MINOR | `src/services/weather/openMeteo.ts:262-269` | FIX | C8 | FIXED | Re-throw AbortError on canceled weather requests instead of swallowing and returning stale cache | pending | `src/services/weather/openMeteo.test.ts` |
 | M6-06 | MINOR | `src/widgets/weather/DailyForecast.tsx:11-22` | FIX | C8 | FIXED | Formatted day name comparing date against today rather than unconditionally labeling index 0 as 'Heute' | pending | `src/widgets/weather/WeatherWidget.test.tsx` |
 | X-fluent-ux-security-07 | MAJOR | `src/widgets/speedtest/SpeedtestWidget.tsx:88` | FIX | C8 | FIXED | Replaced hardcoded `w-[360px] h-[256px]` with `w-full h-full` and merged with `cn()` | pending | `src/test/speedtest.test.tsx` |
+| M5-01 | MAJOR | `src/widgets/battery/BatteryWidget.tsx:79, 101, 161, 198` | FIX | C7 | FIXED | Replaced hardcoded `w-[360px] h-[384px]` with `w-full h-full` on all Card container states | pending | `src/test/battery.test.tsx` |
+| M5-02 | MAJOR | `src/widgets/battery/BatteryWidget.tsx:290-313`, `src/types/battery.ts:87-106` | FIX | C7 | FIXED | Added "Netzbetrieb ⚡" badge & projection fallbacks when plugged in on AC without active charging | pending | `src/test/battery.test.tsx` |
+| M5-04 | MINOR | `src/widgets/bluetooth/BluetoothWidget.tsx:147, 172-179` | FIX | C7 | FIXED | Evaluated `hasConnected` so badge shows "Verbunden" only when devices are connected and "Bereit" when idle | pending | `src/test/bluetooth.test.tsx` |
+| M5-06 | MINOR | `src/widgets/resources/MetricBar.tsx:28-30` | FIX | C7 | FIXED | Added `Number.isFinite(percent)` check preventing NaN% text and invalid CSS / ARIA values | pending | `src/test/resources.test.tsx` |
+| M5-07 | MINOR | `src/widgets/quick-settings/QuickSettingsWidget.tsx:201-228` | FIX | C7 | FIXED | Set tactile "Gestartet" feedback only after successful action invocation, preventing false positive on failure | pending | `src/test/quickSettings.test.tsx` |
+| M5-08 | MINOR | `src/widgets/bluetooth/BluetoothWidget.tsx:114-118` | FIX | C7 | FIXED | Set error state in `handleToggleDevice` catch block, surfacing WinRT disconnection errors to user | pending | `src/test/bluetooth.test.tsx` |
+| M5-09 | MINOR | `src/widgets/bluetooth/BluetoothWidget.tsx:82-120` | FIX | C7 | FIXED | Added `isMountedRef` lifecycle guards around async completions and timer cleanup | pending | `src/test/bluetooth.test.tsx` |
+| X-ipc-concurrency-04 | MAJOR | `src/widgets/quick-settings/QuickSettingsWidget.tsx:142-156` | FIX | C7 | FIXED | Eliminated competing writes by using atomic `update_quick_settings_instance` and optimistic React override | pending | `src/test/quickSettings.test.tsx` |
+| X-fluent-ux-security-06 | MAJOR | `src/widgets/quick-settings/QuickSettingsWidget.tsx:320-360`, `src/widgets/bluetooth/BluetoothWidget.tsx:160-185`, `src/components/layout/WidgetContainer.tsx:55-67` | DEFER | C7 | DEFERRED | Cross-cutting architectural layout decision across C1/C5/C7/C8; options documented in findings | N/A | N/A |
 
 ## Deferred — Decisions Needed
+| ID | Sev | Summary | Details & Options |
+|---|---|---|---|
+| X-fluent-ux-security-06 | MAJOR | Stacked redundant headers in 240px windows | Cross-cutting layout contract across C1/C5/C7/C8. Removing HeaderBar breaks dragging/lock controls; removing internal headers removes widget action buttons. Option A: add HeaderBar actions slot. Option B: increase registered defaultHeight from 240 to 280px. Recommendation: Option B. |
 
 ## Final Gate
 build/lint/typecheck/test: pending | follow-up review suggested: pending

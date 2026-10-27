@@ -91,6 +91,13 @@ export function getChargingBadgeInfo(
       variant: "success",
     };
   }
+  if (isPluggedIn && !isCharging) {
+    return {
+      label: "Netzbetrieb ⚡",
+      type: "charging",
+      variant: "accent",
+    };
+  }
   if (isCharging) {
     return {
       label: "Wird geladen ⚡",

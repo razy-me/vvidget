@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import type { FC, KeyboardEvent } from "react";
 import {
   Volume2,
@@ -114,8 +114,11 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
 }) => {
   const { config, updateConfig } = useConfig();
 
-  // Load instance configuration from config
+  const [instanceOverride, setInstanceOverride] = useState<QuickSettingsInstance | null>(null);
+
+  // Load instance configuration from config or optimistic override
   const instanceConfig = useMemo<QuickSettingsInstance>(() => {
+    if (instanceOverride) return instanceOverride;
     return (
       config.quick_settings_instances?.[instanceId] ?? {
         id: instanceId,
@@ -123,13 +126,22 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
         pinned_actions: DEFAULT_PINNED_ACTIONS,
       }
     );
-  }, [config.quick_settings_instances, instanceId]);
+  }, [config.quick_settings_instances, instanceId, instanceOverride]);
 
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(instanceConfig.title);
   const [isCustomizing, setIsCustomizing] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState<string | null>(null);
   const [customInput, setCustomInput] = useState("");
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (feedbackTimerRef.current) {
+        clearTimeout(feedbackTimerRef.current);
+      }
+    };
+  }, []);
 
   const pinnedActionIds = useMemo(() => {
     return instanceConfig.pinned_actions && instanceConfig.pinned_actions.length > 0
@@ -140,19 +152,20 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
   // Persists updated instance configuration both locally and to backend IPC
   const saveInstance = useCallback(
     async (updated: QuickSettingsInstance) => {
-      await updateConfig((prev) => ({
-        ...prev,
-        quick_settings_instances: {
-          ...prev.quick_settings_instances,
-          [instanceId]: updated,
-        },
-      }));
+      setInstanceOverride(updated);
 
       try {
         const { invoke } = await import("@tauri-apps/api/core");
         await invoke("update_quick_settings_instance", { instance: updated });
       } catch {
         // Safe fallback in web or test environment
+        await updateConfig((prev) => ({
+          ...prev,
+          quick_settings_instances: {
+            ...prev.quick_settings_instances,
+            [instanceId]: updated,
+          },
+        }));
       }
     },
     [instanceId, updateConfig],
@@ -198,8 +211,6 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
 
   // Execute quick action trigger
   const handleActionClick = async (actionId: string) => {
-    setActiveFeedback(actionId);
-
     try {
       let realAction = actionId;
       let customTarget: string | undefined = undefined;
@@ -219,12 +230,16 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
         customTarget,
         custom_target: customTarget,
       });
-    } catch {
-      // Safe fallback in web/test environment
-    } finally {
-      setTimeout(() => {
+
+      setActiveFeedback(actionId);
+      if (feedbackTimerRef.current) {
+        clearTimeout(feedbackTimerRef.current);
+      }
+      feedbackTimerRef.current = setTimeout(() => {
         setActiveFeedback((prev) => (prev === actionId ? null : prev));
       }, 700);
+    } catch {
+      // Safe fallback: do not trigger false positive active feedback if action fails
     }
   };
 
