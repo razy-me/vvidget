@@ -22,12 +22,15 @@ pub fn add_note_to_map(
     } else {
         let mut new_note = note;
         if new_note.id.trim().is_empty() {
+            static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let count = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             new_note.id = format!(
-                "note_{}",
+                "note_{}_{}",
                 std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
-                    .as_millis()
+                    .as_nanos(),
+                count
             );
         }
         notes.push(new_note);
@@ -41,10 +44,11 @@ pub fn remove_note_from_map(
     date: &str,
     note_id: &str,
 ) {
-    if let Some(notes) = events.get_mut(date) {
+    let date_trimmed = date.trim();
+    if let Some(notes) = events.get_mut(date_trimmed) {
         notes.retain(|n| n.id != note_id);
         if notes.is_empty() {
-            events.remove(date);
+            events.remove(date_trimmed);
         }
     }
 }
@@ -55,7 +59,7 @@ pub fn toggle_note_in_map(
     date: &str,
     note_id: &str,
 ) {
-    if let Some(notes) = events.get_mut(date) {
+    if let Some(notes) = events.get_mut(date.trim()) {
         if let Some(note) = notes.iter_mut().find(|n| n.id == note_id) {
             note.completed = Some(!note.completed.unwrap_or(false));
         }
@@ -195,5 +199,51 @@ mod tests {
         let res_date = add_note_to_map(&mut map, "  ", valid_note);
         assert!(res_date.is_err());
         assert_eq!(res_date.unwrap_err(), "Date cannot be empty");
+    }
+
+    #[test]
+    fn test_whitespace_date_lookup_divergence_fix() {
+        let mut map = HashMap::new();
+        let note = CalendarNote {
+            id: "n_ws".to_string(),
+            text: "Whitespace date note".to_string(),
+            completed: Some(false),
+        };
+
+        // Added with date that gets trimmed internally
+        add_note_to_map(&mut map, "  2026-10-27  ", note).unwrap();
+        assert!(map.contains_key("2026-10-27"));
+
+        // Toggle with untrimmed date
+        toggle_note_in_map(&mut map, " 2026-10-27 ", "n_ws");
+        assert_eq!(map.get("2026-10-27").unwrap()[0].completed, Some(true));
+
+        // Remove with untrimmed date
+        remove_note_from_map(&mut map, "   2026-10-27\t", "n_ws");
+        assert!(!map.contains_key("2026-10-27"));
+    }
+
+    #[test]
+    fn test_calendar_note_id_collision_prevention() {
+        let mut map = HashMap::new();
+        let count = 50;
+
+        for i in 0..count {
+            let note = CalendarNote {
+                id: "".to_string(), // Empty ID to force auto-generation
+                text: format!("Rapid note {}", i),
+                completed: Some(false),
+            };
+            add_note_to_map(&mut map, "2026-10-27", note).unwrap();
+        }
+
+        let notes = map.get("2026-10-27").unwrap();
+        assert_eq!(notes.len(), count);
+
+        // Verify every generated ID is strictly unique
+        let mut ids = std::collections::HashSet::new();
+        for n in notes {
+            assert!(ids.insert(n.id.clone()), "Duplicate note ID detected: {}", n.id);
+        }
     }
 }

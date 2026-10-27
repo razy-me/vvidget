@@ -67,18 +67,24 @@ pub async fn set_widgets_locked<R: Runtime>(
     app: AppHandle<R>,
     locked: bool,
 ) -> Result<(), String> {
-    let mut config = if let Some(manager) = app.try_state::<ConfigManager>() {
-        manager.get_config().await
-    } else {
-        load_or_recover_config(&resolve_config_path()).0
-    };
-
     if let Some(win_mgr) = app.try_state::<crate::window::WindowManager>() {
         win_mgr.set_locked(locked);
     }
 
-    config.lock_positions = locked;
-    save_config_immediate(app, config).await
+    if let Some(manager) = app.try_state::<ConfigManager>() {
+        let snapshot = manager
+            .update_config(|config| {
+                config.lock_positions = locked;
+                Ok(config.clone())
+            })
+            .await?;
+        let _ = app.emit("config-changed", &snapshot);
+        Ok(())
+    } else {
+        let mut config = load_or_recover_config(&resolve_config_path()).0;
+        config.lock_positions = locked;
+        save_config_immediate(app, config).await
+    }
 }
 
 /// Queries current Windows autostart status from the operating system.
@@ -107,12 +113,13 @@ pub async fn set_autostart<R: Runtime>(app: AppHandle<R>, enabled: bool) -> Resu
 
     // Update config in state as well
     if let Some(manager) = app.try_state::<ConfigManager>() {
-        let mut config = manager.get_config().await;
-        if config.auto_start != enabled {
-            config.auto_start = enabled;
-            let _ = manager.save_immediate(config.clone()).await;
-            let _ = app.emit("config-changed", &config);
-        }
+        let snapshot = manager
+            .update_config(|config| {
+                config.auto_start = enabled;
+                Ok(config.clone())
+            })
+            .await?;
+        let _ = app.emit("config-changed", &snapshot);
     }
 
     Ok(())

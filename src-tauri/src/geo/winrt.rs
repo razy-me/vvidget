@@ -42,8 +42,13 @@ pub fn get_geoposition_coords() -> Result<(f64, f64), String> {
 
     let geolocator = Geolocator::new().map_err(|e| format!("Failed to create Geolocator: {e}"))?;
 
+    // Request geoposition with 10s maximum timeout at WinRT level to release the thread
+    let timeout = windows::Foundation::TimeSpan {
+        Duration: 100_000_000, // 10 seconds in 100-nanosecond units
+    };
+    let max_age = windows::Foundation::TimeSpan { Duration: 0 };
     let async_op = geolocator
-        .GetGeopositionAsync()
+        .GetGeopositionAsyncWithAgeAndTimeout(max_age, timeout)
         .map_err(|e| format!("Failed to request geoposition async: {e}"))?;
 
     let geoposition = async_op

@@ -299,20 +299,8 @@ pub async fn run_speedtest<R: Runtime>(
     let upload_mbps = match run_upload_phase(&client, &app, CF_SPEEDTEST_UP_URL, ping_ms, jitter_ms, download_mbps).await {
         Ok(mbps) => mbps,
         Err(e) => {
-            let _ = app.emit(
-                "speedtest-progress",
-                SpeedtestProgress {
-                    stage: "error".to_string(),
-                    progress: 0.0,
-                    current_mbps: 0.0,
-                    ping_ms: Some(ping_ms),
-                    jitter_ms: Some(jitter_ms),
-                    download_mbps: Some(download_mbps),
-                    upload_mbps: None,
-                    error: Some(e.clone()),
-                },
-            );
-            return Err(e);
+            log::warn!("Speedtest upload phase failed: {}", e);
+            0.0
         }
     };
 

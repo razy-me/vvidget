@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc, Mutex, RwLock};
 
 /// Returns the primary application configuration directory (%APPDATA%/vvidget).
 /// Automatically migrates legacy %APPDATA%/Widgetz if present.
@@ -269,6 +269,7 @@ pub struct ConfigManager {
     config_path: PathBuf,
     current_config: Arc<RwLock<AppConfig>>,
     is_dirty: Arc<AtomicBool>,
+    persist_lock: Arc<Mutex<()>>,
     debounce_tx: mpsc::Sender<()>,
 }
 
@@ -279,11 +280,13 @@ impl ConfigManager {
         let (initial_config, _recovered) = load_or_recover_config(&config_path);
         let current_config = Arc::new(RwLock::new(initial_config));
         let is_dirty = Arc::new(AtomicBool::new(false));
+        let persist_lock = Arc::new(Mutex::new(()));
 
         let (debounce_tx, mut debounce_rx) = mpsc::channel::<()>(64);
         let write_path = config_path.clone();
         let loop_config = current_config.clone();
         let loop_dirty = is_dirty.clone();
+        let loop_persist = persist_lock.clone();
 
         tauri::async_runtime::spawn(async move {
             let sleep_duration = Duration::from_millis(500);
@@ -306,12 +309,26 @@ impl ConfigManager {
                         timer_active = false;
                         // Always save the latest in-memory state if marked dirty, preventing
                         // stale debounced frames from overwriting save_immediate changes.
-                        if loop_dirty.swap(false, Ordering::SeqCst) {
-                            let config_to_save = loop_config.read().await.clone();
-                            let path = write_path.clone();
-                            let _ = tokio::task::spawn_blocking(move || {
-                                save_config_atomic(&path, &config_to_save)
-                            }).await;
+                        if loop_dirty.load(Ordering::SeqCst) {
+                            let _guard = loop_persist.lock().await;
+                            if loop_dirty.swap(false, Ordering::SeqCst) {
+                                let config_to_save = loop_config.read().await.clone();
+                                let path = write_path.clone();
+                                let res = tokio::task::spawn_blocking(move || {
+                                    save_config_atomic(&path, &config_to_save)
+                                }).await;
+                                match res {
+                                    Ok(Err(e)) => {
+                                        log::error!("Debounced config write failed: {}", e);
+                                        loop_dirty.store(true, Ordering::SeqCst);
+                                    }
+                                    Err(e) => {
+                                        log::error!("Debounced config write join error: {}", e);
+                                        loop_dirty.store(true, Ordering::SeqCst);
+                                    }
+                                    Ok(Ok(())) => {}
+                                }
+                            }
                         }
                     }
                 }
@@ -322,6 +339,7 @@ impl ConfigManager {
             config_path,
             current_config,
             is_dirty,
+            persist_lock,
             debounce_tx,
         }
     }
@@ -367,14 +385,34 @@ impl ConfigManager {
         }
         // Clear dirty flag so any subsequent debounce timer pop will not overwrite with stale data
         self.is_dirty.store(false, Ordering::SeqCst);
+        let _guard = self.persist_lock.lock().await;
         let path = self.config_path.clone();
         tokio::task::spawn_blocking(move || save_config_atomic(&path, &config))
             .await
             .map_err(|e| format!("Task join error during save_immediate: {}", e))?
     }
 
+    /// Flushes any pending debounced configuration changes to disk immediately.
+    pub async fn flush(&self) -> Result<(), String> {
+        let _guard = self.persist_lock.lock().await;
+        if self.is_dirty.swap(false, Ordering::SeqCst) {
+            let config = self.current_config.read().await.clone();
+            let path = self.config_path.clone();
+            let res = tokio::task::spawn_blocking(move || save_config_atomic(&path, &config))
+                .await
+                .map_err(|e| format!("Flush error: {e}"))?;
+            if let Err(_e) = &res {
+                self.is_dirty.store(true, Ordering::SeqCst);
+            }
+            res
+        } else {
+            Ok(())
+        }
+    }
+
     /// Reloads configuration from disk.
     pub async fn reload_from_disk(&self) -> (AppConfig, bool) {
+        let _guard = self.persist_lock.lock().await;
         let (config, recovered) = load_or_recover_config(&self.config_path);
         let mut lock = self.current_config.write().await;
         *lock = config.clone();
@@ -889,6 +927,64 @@ mod tests {
         assert_eq!(res.logical_x, -1920.0);
         assert_eq!(res.logical_y, -400.0);
         assert_eq!(res.monitor_id, Some("DISPLAY2".to_string()));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn test_config_manager_flush_persists_pending_changes() {
+        let dir = create_test_dir();
+        let path = dir.join("flush_test.json");
+
+        let manager = ConfigManager::new(path.clone());
+        let mut cfg = manager.get_config().await;
+        cfg.theme = "flushed-theme".to_string();
+
+        // Queue debounced save (which normally waits 500ms)
+        manager.save_debounced(cfg.clone()).await.unwrap();
+        assert!(manager.is_dirty.load(Ordering::SeqCst));
+
+        // Flush immediately
+        manager.flush().await.unwrap();
+        assert!(!manager.is_dirty.load(Ordering::SeqCst));
+
+        // Verify disk contains new theme immediately without waiting for debounce timer
+        let disk_content = fs::read_to_string(&path).unwrap();
+        assert!(disk_content.contains("flushed-theme"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_save_immediate_and_flush_serialization() {
+        let dir = create_test_dir();
+        let path = dir.join("concurrent_persist.json");
+
+        let manager = ConfigManager::new(path.clone());
+        let mut handles = Vec::new();
+
+        for i in 0..10 {
+            let m = manager.clone();
+            handles.push(tokio::spawn(async move {
+                let mut cfg = m.get_config().await;
+                cfg.theme = format!("theme-{}", i);
+                if i % 2 == 0 {
+                    let _ = m.save_debounced(cfg).await;
+                    let _ = m.flush().await;
+                } else {
+                    let _ = m.save_immediate(cfg).await;
+                }
+            }));
+        }
+
+        for h in handles {
+            h.await.unwrap();
+        }
+
+        // File should be valid JSON readable by load_or_recover_config
+        let (loaded, recovered) = load_or_recover_config(&path);
+        assert!(!recovered);
+        assert!(loaded.theme.starts_with("theme-"));
 
         let _ = fs::remove_dir_all(&dir);
     }
