@@ -153,4 +153,75 @@ describe("useMasterVolume Hook (regression M5-05)", () => {
 
     expect(mockInvoke).toHaveBeenCalledWith("toggle_master_mute", undefined);
   });
+
+  it("rapid volume adjustments while muted only invoke toggle_master_mute once (regression M5-03)", async () => {
+    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+      invoke: mockInvoke,
+    };
+
+    mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "get_master_volume") return Promise.resolve(0.1);
+      if (cmd === "get_master_mute") return Promise.resolve(true);
+      if (cmd === "toggle_master_mute") return Promise.resolve(false);
+      if (cmd === "set_master_volume") return Promise.resolve();
+      return Promise.resolve();
+    });
+
+    const { result } = renderHook(() => useMasterVolume(0.1, true));
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    mockInvoke.mockClear();
+
+    // Fire multiple setVolume calls rapidly in the same tick
+    await act(async () => {
+      const p1 = result.current.setVolume(0.2);
+      const p2 = result.current.setVolume(0.3);
+      const p3 = result.current.setVolume(0.4);
+      await Promise.all([p1, p2, p3]);
+    });
+
+    // toggle_master_mute should be called exactly once
+    const toggleCalls = mockInvoke.mock.calls.filter((call) => call[0] === "toggle_master_mute");
+    expect(toggleCalls).toHaveLength(1);
+    expect(result.current.isMuted).toBe(false);
+  });
+
+  it("periodically refreshes volume and mute state every 3000ms (regression M5-05)", async () => {
+    vi.useFakeTimers();
+    try {
+      (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+        invoke: mockInvoke,
+      };
+
+      let currentVolume = 0.4;
+      mockInvoke.mockImplementation((cmd: string) => {
+        if (cmd === "get_master_volume") return Promise.resolve(currentVolume);
+        if (cmd === "get_master_mute") return Promise.resolve(false);
+        return Promise.resolve();
+      });
+
+      const { result } = renderHook(() => useMasterVolume(0.4, false));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10);
+      });
+      expect(mockInvoke).toHaveBeenCalledWith("get_master_volume", undefined);
+
+      mockInvoke.mockClear();
+      currentVolume = 0.8;
+
+      // Advance 3000ms for polling tick
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3000);
+      });
+
+      expect(mockInvoke).toHaveBeenCalledWith("get_master_volume", undefined);
+      expect(result.current.volume).toBe(0.8);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

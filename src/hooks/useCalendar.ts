@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CalendarNote } from "@/types/config";
 import { useConfig } from "@/hooks/useConfig";
 import {
@@ -63,6 +63,15 @@ export function useCalendar(options?: UseCalendarOptions): UseCalendarReturn {
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isMountedRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Sync with config if initialEvents was not explicitly passed
   useEffect(() => {
@@ -152,8 +161,19 @@ export function useCalendar(options?: UseCalendarOptions): UseCalendarReturn {
           date: selectedDateKey,
           note: newNote,
         });
-      } catch {
-        // Ignored in non-Tauri / mock environments
+      } catch (err) {
+        if (isTauri()) {
+          if (isMountedRef.current) {
+            setError(err instanceof Error ? err.message : String(err));
+          }
+          void safeInvoke<Record<string, CalendarNote[]>>("get_calendar_events")
+            .then((res) => {
+              if (isMountedRef.current && res) {
+                setEvents(res);
+              }
+            })
+            .catch(() => {});
+        }
       }
     },
     [selectedDateKey]
@@ -178,8 +198,19 @@ export function useCalendar(options?: UseCalendarOptions): UseCalendarReturn {
           date: selectedDateKey,
           noteId,
         });
-      } catch {
-        // Ignored in non-Tauri / mock environments
+      } catch (err) {
+        if (isTauri()) {
+          if (isMountedRef.current) {
+            setError(err instanceof Error ? err.message : String(err));
+          }
+          void safeInvoke<Record<string, CalendarNote[]>>("get_calendar_events")
+            .then((res) => {
+              if (isMountedRef.current && res) {
+                setEvents(res);
+              }
+            })
+            .catch(() => {});
+        }
       }
     },
     [selectedDateKey]
@@ -203,8 +234,19 @@ export function useCalendar(options?: UseCalendarOptions): UseCalendarReturn {
           date: selectedDateKey,
           noteId,
         });
-      } catch {
-        // Ignored in non-Tauri / mock environments
+      } catch (err) {
+        if (isTauri()) {
+          if (isMountedRef.current) {
+            setError(err instanceof Error ? err.message : String(err));
+          }
+          void safeInvoke<Record<string, CalendarNote[]>>("get_calendar_events")
+            .then((res) => {
+              if (isMountedRef.current && res) {
+                setEvents(res);
+              }
+            })
+            .catch(() => {});
+        }
       }
     },
     [selectedDateKey]

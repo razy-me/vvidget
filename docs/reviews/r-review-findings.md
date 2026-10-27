@@ -810,8 +810,8 @@
 
 ---
 
-### [MAJOR] [OPEN] M5-03 Rapid volume adjustments while muted cause duplicate mute toggles and re-mute audio
-- **Status**: OPEN
+### [MAJOR] [FIXED] M5-03 Rapid volume adjustments while muted cause duplicate mute toggles and re-mute audio
+- **Status**: FIXED
 - **Where**: `src/hooks/useMasterVolume.ts:75-96`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -841,8 +841,8 @@
 
 ---
 
-### [MAJOR] [OPEN] M6-01 Stopwatch Reset While Running Overwritten by Effect Cleanup
-- **Status**: OPEN
+### [MAJOR] [FIXED] M6-01 Stopwatch Reset While Running Overwritten by Effect Cleanup
+- **Status**: FIXED
 - **Where**: `src/widgets/clock/ClockWidget.tsx:167-169`, `src/widgets/clock/ClockWidget.tsx:189-196`
 - **Source**: `r-review` (Tier 2/3) (2026-10-27)
 - **Confidence**: HIGH
@@ -1134,8 +1134,8 @@
 
 ---
 
-### [MAJOR] [OPEN] X-ipc-concurrency-03 Permanent Tauri event listener leak on unmount during asynchronous listener setup in `useSpeedtest`
-- **Status**: OPEN
+### [MAJOR] [FIXED] X-ipc-concurrency-03 Permanent Tauri event listener leak on unmount during asynchronous listener setup in `useSpeedtest`
+- **Status**: FIXED
 - **Where**: `src/hooks/useSpeedtest.ts:132-180`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -1886,8 +1886,8 @@
 
 ---
 
-### [MINOR] [OPEN] M5-05 Missing volume poll interval or OS event listener leaves slider permanently out of sync
-- **Status**: OPEN
+### [MINOR] [FIXED] M5-05 Missing volume poll interval or OS event listener leaves slider permanently out of sync
+- **Status**: FIXED
 - **Where**: `src/hooks/useMasterVolume.ts:38-73`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -2122,8 +2122,8 @@
 
 ---
 
-### [MINOR] [OPEN] X-ipc-concurrency-07 Swallowed backend IPC errors and optimistic state desynchronization in `useCalendar` and `QuickSettingsWidget`
-- **Status**: OPEN
+### [MINOR] [FIXED] X-ipc-concurrency-07 Swallowed backend IPC errors and optimistic state desynchronization in `useCalendar` and `QuickSettingsWidget`
+- **Status**: FIXED
 - **Where**: `src/hooks/useCalendar.ts:150-209`, `src/widgets/quick-settings/QuickSettingsWidget.tsx:200-228`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH

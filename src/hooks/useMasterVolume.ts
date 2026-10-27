@@ -34,12 +34,19 @@ export function useMasterVolume(initialVolume = 0.5, initialMuted = false): UseM
   const [error, setError] = useState<string | null>(null);
 
   const isMountedRef = useRef(true);
+  const isMutedRef = useRef<boolean>(initialMuted);
 
-  const refresh = useCallback(async () => {
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
+
+  const refresh = useCallback(async (silent = false) => {
     if (!isTauri()) {
       return;
     }
-    setIsLoading(true);
+    if (!silent) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const [vol, muted] = await Promise.all([
@@ -49,6 +56,7 @@ export function useMasterVolume(initialVolume = 0.5, initialMuted = false): UseM
       if (isMountedRef.current) {
         setVolumeState(Math.max(0, Math.min(1, vol)));
         setIsMutedState(muted);
+        isMutedRef.current = muted;
       }
     } catch (err) {
       if (isMountedRef.current) {
@@ -56,7 +64,7 @@ export function useMasterVolume(initialVolume = 0.5, initialMuted = false): UseM
         setError(msg);
       }
     } finally {
-      if (isMountedRef.current) {
+      if (isMountedRef.current && !silent) {
         setIsLoading(false);
       }
     }
@@ -64,19 +72,27 @@ export function useMasterVolume(initialVolume = 0.5, initialMuted = false): UseM
 
   useEffect(() => {
     isMountedRef.current = true;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (isTauri()) {
       void refresh();
+      interval = setInterval(() => {
+        void refresh(true);
+      }, 3000);
     }
     return () => {
       isMountedRef.current = false;
+      if (interval) {
+        clearInterval(interval);
+      }
     };
   }, [refresh]);
 
   const setVolume = useCallback(async (level: number) => {
     const clamped = Math.max(0, Math.min(1, level));
     setVolumeState(clamped);
-    const wasMuted = isMuted;
+    const wasMuted = isMutedRef.current;
     if (wasMuted && clamped > 0) {
+      isMutedRef.current = false;
       setIsMutedState(false);
     }
     if (!isTauri()) return;
@@ -92,15 +108,17 @@ export function useMasterVolume(initialVolume = 0.5, initialMuted = false): UseM
         setError(msg);
       }
     }
-  }, [isMuted]);
+  }, []);
 
   const toggleMute = useCallback(async () => {
+    isMutedRef.current = !isMutedRef.current;
     setIsMutedState((prev) => !prev);
     if (!isTauri()) return;
 
     try {
       const newMute = await safeInvoke<boolean>("toggle_master_mute");
       if (isMountedRef.current) {
+        isMutedRef.current = newMute;
         setIsMutedState(newMute);
       }
     } catch (err) {

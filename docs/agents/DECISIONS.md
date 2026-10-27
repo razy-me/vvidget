@@ -227,6 +227,14 @@
   3. *Calling ShellExecuteW synchronously on async worker threads*: Freezes Tokio reactor for seconds when SmartScreen, Defender, or sleeping drives delay execution.
 - **Reason / trade-offs**: Provides complete isolation against remote credential leaks and command execution exploits while keeping async IPC responsiveness high and supporting custom Steam installations across any drive.
 
+## D-032 Concurrency Guards & Error Recovery in Core Hooks (Fixer C6)
+- **Decision**: In `useMasterVolume`, introduce `isMutedRef` updated synchronously on drag to guard against duplicate `toggle_master_mute` calls during rapid volume adjustments while muted, and add a periodic 3000ms background polling interval to stay synchronized with external hardware volume changes. In `useSpeedtest`, add an `isDisposed` cancellation pattern to immediately invoke unlisten callbacks if the component unmounts while asynchronous listener registrations are in flight. In `useCalendar`, catch IPC errors in `addNote`, `removeNote`, and `toggleNote`, set error state, and roll back local optimistic state by re-fetching the canonical snapshot from `get_calendar_events`.
+- **Alternatives considered**:
+  1. *Relying on React state for mute toggling*: Causes multiple rapid slider events in the same render tick to fire duplicate `toggle_master_mute` calls that immediately re-mute audio.
+  2. *Ignoring unmount during async event listener import/listen*: Permanently leaks Tauri event listeners in the event manager when components mount and unmount rapidly.
+  3. *Swallowing IPC errors silently in calendar hook*: Causes optimistic UI desynchronization where notes appear created or deleted in the frontend despite failing backend persistence.
+- **Reason / trade-offs**: Eliminates race conditions in volume unmuting, prevents memory leaks on component unmount, and guarantees eventual consistency and actionable error feedback for calendar operations.
+
 
 
 

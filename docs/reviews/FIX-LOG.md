@@ -4,7 +4,7 @@ Base Commit: `f15c976ba0af577e608d060e0cc3a6a819041011`
 
 | FIXED | REJECTED | STALE | INVALID | DEFERRED |
 |---|---|---|---|---|
-| 33 | 0 | 0 | 0 | 0 |
+| 37 | 0 | 0 | 0 | 0 |
 
 ## Clusters
 | Cluster | Findings | Files | Order | Parallel group |
@@ -54,6 +54,10 @@ Base Commit: `f15c976ba0af577e608d060e0cc3a6a819041011`
 | M3-10 | MINOR | `src-tauri/src/sysinfo/collector.rs:28-30` | FIX | C4 | FIXED | Removed synchronous 200ms startup sleep from `MetricsCollector::new()` eliminating cold startup delay | 6ff3831 | `test_collector_network_and_top_process` |
 | M3-11 | MINOR | `src-tauri/src/sysinfo/mod.rs:48-55` | FIX | C4 | FIXED | Cached configuration in sysinfo worker with 5-second refresh interval eliminating 500ms `block_on` churn | 6ff3831 | `test_metrics_collector_collects_valid_data` |
 | M3-12 | MINOR | `src-tauri/src/audio/mod.rs:10-23` | FIX | C4 | FIXED | Implemented `with_endpoint_volume` caching endpoint volume with 2s TTL across rapid slider ticks | 6ff3831 | `test_endpoint_volume_caching_and_reuse` |
+| M5-03 | MAJOR | `src/hooks/useMasterVolume.ts:75-96` | FIX | C6 | FIXED | Added `isMutedRef` updated synchronously on drag to guard against duplicate `toggle_master_mute` calls | pending | `src/test/useMasterVolume.test.ts` |
+| M5-05 | MINOR | `src/hooks/useMasterVolume.ts:38-73` | FIX | C6 | FIXED | Added 3000ms periodic background polling interval in `useMasterVolume` for external volume sync | pending | `src/test/useMasterVolume.test.ts` |
+| X-ipc-concurrency-03 | MAJOR | `src/hooks/useSpeedtest.ts:132-180` | FIX | C6 | FIXED | Added `isDisposed` cancellation guard preventing Tauri listener leak during async setup | pending | `src/test/useSpeedtest.test.ts` |
+| X-ipc-concurrency-07 | MINOR | `src/hooks/useCalendar.ts:150-209` | FIX | C6 | FIXED | Caught safeInvoke errors, set error state, and rolled back local calendar state from backend snapshot | pending | `src/test/useCalendar.test.ts` |
 
 ## Deferred — Decisions Needed
 

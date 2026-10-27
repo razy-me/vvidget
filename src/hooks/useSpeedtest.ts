@@ -122,6 +122,7 @@ export function useSpeedtest(options?: {
   // Listen to Tauri progress and config events
   useEffect(() => {
     isMountedRef.current = true;
+    let isDisposed = false;
     let unlistenProgress: (() => void) | undefined;
     let unlistenConfig: (() => void) | undefined;
 
@@ -130,8 +131,9 @@ export function useSpeedtest(options?: {
 
       try {
         const { listen } = await import("@tauri-apps/api/event");
+        if (isDisposed) return;
 
-        unlistenProgress = await listen<SpeedtestProgress>("speedtest-progress", (evt) => {
+        const up = await listen<SpeedtestProgress>("speedtest-progress", (evt) => {
           if (!isMountedRef.current) return;
           const p = evt.payload;
           const stg = p.stage as SpeedtestStage;
@@ -156,7 +158,13 @@ export function useSpeedtest(options?: {
           }
         });
 
-        unlistenConfig = await listen<{ speedtest_history?: SpeedtestResult[] }>(
+        if (isDisposed) {
+          up();
+          return;
+        }
+        unlistenProgress = up;
+
+        const uc = await listen<{ speedtest_history?: SpeedtestResult[] }>(
           "config-changed",
           (evt) => {
             if (!isMountedRef.current) return;
@@ -165,6 +173,12 @@ export function useSpeedtest(options?: {
             }
           }
         );
+
+        if (isDisposed) {
+          uc();
+          return;
+        }
+        unlistenConfig = uc;
       } catch (e) {
         console.error("Failed to setup speedtest listeners:", e);
       }
@@ -174,6 +188,7 @@ export function useSpeedtest(options?: {
     void refreshHistory();
 
     return () => {
+      isDisposed = true;
       isMountedRef.current = false;
       if (unlistenProgress) unlistenProgress();
       if (unlistenConfig) unlistenConfig();
