@@ -56,8 +56,8 @@
 
 ---
 
-### [CRITICAL] [OPEN] M3-01 Unsafe WinRT COM iterator missing null pointer guards causing process crash
-- **Status**: OPEN
+### [CRITICAL] [FIXED] M3-01 Unsafe WinRT COM iterator missing null pointer guards causing process crash
+- **Status**: FIXED
 - **Where**: `src-tauri/src/bluetooth/mod.rs:207`, `src-tauri/src/bluetooth/mod.rs:352`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -148,8 +148,8 @@
 
 ---
 
-### [MAJOR] [OPEN] M1-02 Race Condition in `hide_window` Causes Shell Subclass to Veto Programmatic Hide
-- **Status**: OPEN
+### [MAJOR] [FIXED] M1-02 Race Condition in `hide_window` Causes Shell Subclass to Veto Programmatic Hide
+- **Status**: FIXED
 - **Where**: `src-tauri/src/window/win32.rs:119-130`, `src-tauri/src/window/win32.rs:456-462`
 - **Source**: `r-review` (Tier 3) (2026-10-27)
 - **Confidence**: HIGH
@@ -191,8 +191,8 @@
 
 ---
 
-### [MAJOR] [OPEN] M1-03 Dragged Non-Starter Widgets Silently Drop Position Persistence in Config
-- **Status**: OPEN
+### [MAJOR] [FIXED] M1-03 Dragged Non-Starter Widgets Silently Drop Position Persistence in Config
+- **Status**: FIXED
 - **Where**: `src-tauri/src/window/manager.rs:177-185`, `src-tauri/src/lib.rs:133-143`
 - **Source**: `r-review` (Tier 3) (2026-10-27)
 - **Confidence**: HIGH
@@ -258,8 +258,8 @@
 
 ---
 
-### [MAJOR] [OPEN] M1-04 WindowManager Stale Scale Factor Inflates Logical Bounds Across Monitor DPI Boundaries
-- **Status**: OPEN
+### [MAJOR] [FIXED] M1-04 WindowManager Stale Scale Factor Inflates Logical Bounds Across Monitor DPI Boundaries
+- **Status**: FIXED
 - **Where**: `src-tauri/src/window/manager.rs:165-171`, `src-tauri/src/window/win32.rs:483-540`
 - **Source**: `r-review` (Tier 3) (2026-10-27)
 - **Confidence**: HIGH
@@ -288,8 +288,8 @@
 
 ---
 
-### [MAJOR] [OPEN] M1-05 WindowManager Lock State Disconnected from Win32 Subclass Allowing Drag When Locked
-- **Status**: OPEN
+### [MAJOR] [FIXED] M1-05 WindowManager Lock State Disconnected from Win32 Subclass Allowing Drag When Locked
+- **Status**: FIXED
 - **Where**: `src-tauri/src/window/manager.rs:88-90`, `src-tauri/src/window/win32.rs:472-540`
 - **Source**: `r-review` (Tier 3) (2026-10-27)
 - **Confidence**: HIGH
@@ -1033,8 +1033,8 @@
 
 ---
 
-### [MAJOR] [OPEN] X-ipc-concurrency-01 Systemic Read-Modify-Write (RMW) race conditions across Tauri commands bypassing `ConfigManager::update_config`
-- **Status**: OPEN
+### [MAJOR] [FIXED] X-ipc-concurrency-01 Systemic Read-Modify-Write (RMW) race conditions across Tauri commands bypassing `ConfigManager::update_config`
+- **Status**: FIXED
 - **Where**: `src-tauri/src/lib.rs:131-146`, `src-tauri/src/lib.rs:349-387`, `src-tauri/src/lib.rs:403-412`, `src-tauri/src/launcher/mod.rs:591-604`, `src-tauri/src/actions/mod.rs:141-152`, `src-tauri/src/config/mod.rs:70-82`, `src-tauri/src/tray/mod.rs:252-326`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -1102,8 +1102,8 @@
 
 ---
 
-### [MAJOR] [OPEN] X-ipc-concurrency-02 Unsynchronized concurrent window creation and destruction in `sync_widget_windows` triggered by un-debounced `config-changed` cascades
-- **Status**: OPEN
+### [MAJOR] [FIXED] X-ipc-concurrency-02 Unsynchronized concurrent window creation and destruction in `sync_widget_windows` triggered by un-debounced `config-changed` cascades
+- **Status**: FIXED
 - **Where**: `src-tauri/src/lib.rs:579-588`, `src-tauri/src/lib.rs:174-233`, `src-tauri/src/lib.rs:48-99`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -1420,8 +1420,8 @@
 
 ---
 
-### [MINOR] [OPEN] M1-06 System Tray Menu CheckMenuItems Never Update Checked State on Toggle
-- **Status**: OPEN
+### [MINOR] [FIXED] M1-06 System Tray Menu CheckMenuItems Never Update Checked State on Toggle
+- **Status**: FIXED
 - **Where**: `src-tauri/src/tray/mod.rs:250-310`
 - **Source**: `r-review` (Tier 3) (2026-10-27)
 - **Confidence**: HIGH
@@ -1444,8 +1444,8 @@
 
 ---
 
-### [MINOR] [OPEN] M1-07 `open_widget_window` Disables `no_activate` Allowing Desktop Widgets to Steal Focus
-- **Status**: OPEN
+### [MINOR] [FIXED] M1-07 `open_widget_window` Disables `no_activate` Allowing Desktop Widgets to Steal Focus
+- **Status**: FIXED
 - **Where**: `src-tauri/src/lib.rs:107`
 - **Source**: `r-review` (Tier 3) (2026-10-27)
 - **Confidence**: HIGH
