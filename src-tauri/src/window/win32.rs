@@ -8,7 +8,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     ShowWindow,
     WM_WINDOWPOSCHANGING, WM_MOVING, WM_SYSCOMMAND, WM_NCDESTROY, WM_EXITSIZEMOVE, WM_SHOWWINDOW,
     WM_NCHITTEST, HTTRANSPARENT,
-    SC_MINIMIZE, WINDOWPOS, GetWindowRect, HWND_BOTTOM,
+    SC_MINIMIZE, SC_MOVE, WINDOWPOS, GetWindowRect, HWND_BOTTOM,
 };
 #[cfg(windows)]
 use windows::Win32::Graphics::Gdi::{
@@ -116,17 +116,54 @@ pub fn is_window_allow_hide(hwnd: isize) -> bool {
     false
 }
 
+static POSITIONS_LOCKED: AtomicBool = AtomicBool::new(false);
+
+pub fn set_positions_locked(locked: bool) {
+    POSITIONS_LOCKED.store(locked, Ordering::SeqCst);
+}
+
+pub fn is_positions_locked() -> bool {
+    POSITIONS_LOCKED.load(Ordering::SeqCst)
+}
+
+#[cfg(windows)]
+pub fn get_window_dpi(hwnd: isize) -> u32 {
+    unsafe {
+        use windows::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
+        use windows::core::s;
+        if let Ok(module) = GetModuleHandleA(s!("user32.dll")) {
+            if let Some(proc) = GetProcAddress(module, s!("GetDpiForWindow")) {
+                let func: unsafe extern "system" fn(HWND) -> u32 = core::mem::transmute(proc);
+                let dpi = func(HWND(hwnd as *mut _));
+                if dpi > 0 {
+                    return dpi;
+                }
+            }
+        }
+        96
+    }
+}
+
+#[cfg(not(windows))]
+pub fn get_window_dpi(_hwnd: isize) -> u32 {
+    96
+}
+
+pub fn get_window_scale(hwnd: isize) -> f64 {
+    let dpi = get_window_dpi(hwnd);
+    if dpi > 0 {
+        (dpi as f64) / 96.0
+    } else {
+        1.0
+    }
+}
+
 pub fn hide_window<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>) -> Result<(), tauri::Error> {
     #[cfg(windows)]
     if let Ok(hwnd) = window.hwnd() {
         set_window_allow_hide(hwnd.0 as isize, true);
     }
-    let res = window.hide();
-    #[cfg(windows)]
-    if let Ok(hwnd) = window.hwnd() {
-        set_window_allow_hide(hwnd.0 as isize, false);
-    }
-    res
+    window.hide()
 }
 
 pub fn set_snap_to_edges(enabled: bool) {
@@ -454,22 +491,29 @@ unsafe extern "system" fn widget_subclass_proc(
         }
         // Programmatic hides are explicitly scoped in hide_window(); veto OS ShowWindow(SW_HIDE) during Win+D
         WM_SHOWWINDOW => {
-            if wparam.0 == 0 && !is_window_allow_hide(hwnd.0 as isize) {
-                // Veto the hide request from the Windows Shell on Win+D / Show Desktop
-                return LRESULT(0);
+            if wparam.0 == 0 {
+                if is_window_allow_hide(hwnd.0 as isize) {
+                    set_window_allow_hide(hwnd.0 as isize, false);
+                } else {
+                    // Veto the hide request from the Windows Shell on Win+D / Show Desktop
+                    return LRESULT(0);
+                }
             }
             DefSubclassProc(hwnd, umsg, wparam, lparam)
         }
-        // Suppress standard minimize commands
+        // Suppress standard minimize commands and prevent window drag/move when locked
         WM_SYSCOMMAND => {
             let cmd = (wparam.0 as u32) & 0xFFF0;
-            if cmd == SC_MINIMIZE {
+            if cmd == SC_MINIMIZE || (cmd == SC_MOVE && is_positions_locked()) {
                 return LRESULT(0);
             }
             DefSubclassProc(hwnd, umsg, wparam, lparam)
         }
         // Magnetic edge and widget-to-widget snapping directly in OS memory
         WM_MOVING => {
+            if is_positions_locked() {
+                return LRESULT(1);
+            }
             let p_rect = lparam.0 as *mut RECT;
             if !p_rect.is_null() {
                 on_wm_moving(hwnd, &mut *p_rect);
@@ -480,6 +524,9 @@ unsafe extern "system" fn widget_subclass_proc(
         }
         // Persist final dragged widget position on mouse release with guaranteed non-overlapping grid snapping
         WM_EXITSIZEMOVE => {
+            if is_positions_locked() {
+                return DefSubclassProc(hwnd, umsg, wparam, lparam);
+            }
             let mut rect = RECT::default();
             if GetWindowRect(hwnd, &mut rect).is_ok() {
                 let metrics = get_desktop_grid_metrics();

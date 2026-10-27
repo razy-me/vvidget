@@ -46,9 +46,15 @@ pub fn start_metrics_worker<R: Runtime>(
             let mut last_disk_check = std::time::Instant::now();
 
             log::info!("System metrics background worker started");
+            let mut config = tauri::async_runtime::block_on(config_manager.get_config());
+            let mut last_config_check = std::time::Instant::now();
 
             loop {
-                let config = tauri::async_runtime::block_on(config_manager.get_config());
+                if last_config_check.elapsed() >= Duration::from_secs(5) {
+                    config = tauri::async_runtime::block_on(config_manager.get_config());
+                    last_config_check = std::time::Instant::now();
+                }
+
                 let cpu_ram_interval = Duration::from_millis(
                     config.polling_rates.resources_cpu_ram_ms.max(500),
                 );

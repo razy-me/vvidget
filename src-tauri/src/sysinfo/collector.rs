@@ -25,8 +25,6 @@ impl MetricsCollector {
             .with_memory(MemoryRefreshKind::everything());
         let mut system = System::new_with_specifics(refresh_kind);
 
-        // Initial 200ms sleep before first CPU sample to eliminate 0.0% artifacts
-        std::thread::sleep(Duration::from_millis(200));
         system.refresh_cpu_all();
         system.refresh_processes_specifics(
             ProcessesToUpdate::All,

@@ -104,7 +104,7 @@ pub mod integration {
                 WindowSetupOptions {
                     id: widget_id.clone(),
                     is_widget: true,
-                    no_activate: false,
+                    no_activate: true,
                     dark_mode: config.theme != "light",
                     target_x: Some(placement.logical_x),
                     target_y: Some(placement.logical_y),
@@ -128,21 +128,35 @@ pub mod integration {
         logical_x: f64,
         logical_y: f64,
     ) -> Result<(), String> {
+        if let Some(wm) = app.try_state::<WindowManager>() {
+            if wm.is_locked() {
+                return Ok(());
+            }
+        }
         if let Some(cm) = app.try_state::<ConfigManager>() {
-            let mut config = cm.get_config().await;
-            let (w, h) = if let Some(placement) = config.widgets.get_mut(&widget_id) {
-                placement.logical_x = logical_x;
-                placement.logical_y = logical_y;
-                (placement.logical_width, placement.logical_height)
-            } else {
-                (320.0, 240.0)
-            };
+            let (w, h, snapshot) = cm
+                .update_config(|config| {
+                    let placement = config.widgets.entry(widget_id.clone()).or_insert_with(|| crate::config::WidgetPlacement {
+                        id: widget_id.clone(),
+                        visible: true,
+                        logical_x,
+                        logical_y,
+                        logical_width: 320.0,
+                        logical_height: 240.0,
+                        scale_factor: 1.0,
+                        monitor_id: None,
+                    });
+                    placement.logical_x = logical_x;
+                    placement.logical_y = logical_y;
+                    let (w, h) = (placement.logical_width, placement.logical_height);
+                    Ok((w, h, config.clone()))
+                })
+                .await?;
             if let Some(wm) = app.try_state::<WindowManager>() {
                 wm.update_window_position(&widget_id, logical_x, logical_y, w, h);
             }
-            cm.save_immediate(config.clone()).await.map_err(|e| e.to_string())?;
             use tauri::Emitter;
-            let _ = app.emit("config-changed", &config);
+            let _ = app.emit("config-changed", &snapshot);
         }
         Ok(())
     }
@@ -172,6 +186,11 @@ pub mod integration {
     #[tauri::command]
     #[specta::specta]
     pub async fn sync_widget_windows<R: Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
+        let _guard = if let Some(wm) = app.try_state::<WindowManager>() {
+            Some(wm.sync_lock().lock().await)
+        } else {
+            None
+        };
         let config = load_config(app.clone()).await?;
         if config.layout_mode == "docked" {
             // Docked mode: ensure single unified desktop dock window is visible
@@ -347,43 +366,45 @@ pub mod integration {
         let new_id = format!("quick_settings_{}", millis);
 
         if let Some(cm) = app.try_state::<ConfigManager>() {
-            let mut config = cm.get_config().await;
+            let created_id = new_id.clone();
+            let snapshot = cm
+                .update_config(|config| {
+                    let src_key = source_id.as_deref().unwrap_or("quick_settings");
+                    let mut placement = config
+                        .widgets
+                        .get(src_key)
+                        .cloned()
+                        .unwrap_or(crate::config::WidgetPlacement {
+                            id: created_id.clone(),
+                            visible: true,
+                            logical_x: 160.0,
+                            logical_y: 120.0,
+                            logical_width: 320.0,
+                            logical_height: 240.0,
+                            scale_factor: 1.0,
+                            monitor_id: None,
+                        });
 
-            let src_key = source_id.as_deref().unwrap_or("quick_settings");
-            let mut placement = config
-                .widgets
-                .get(src_key)
-                .cloned()
-                .unwrap_or(crate::config::WidgetPlacement {
-                    id: new_id.clone(),
-                    visible: true,
-                    logical_x: 160.0,
-                    logical_y: 120.0,
-                    logical_width: 320.0,
-                    logical_height: 240.0,
-                    scale_factor: 1.0,
-                    monitor_id: None,
-                });
+                    placement.id = created_id.clone();
+                    placement.visible = true;
+                    placement.logical_x += 40.0;
+                    placement.logical_y += 40.0;
+                    config.widgets.insert(created_id.clone(), placement);
 
-            placement.id = new_id.clone();
-            placement.visible = true;
-            placement.logical_x += 40.0;
-            placement.logical_y += 40.0;
-            config.widgets.insert(new_id.clone(), placement);
-
-            let mut instance = if let Some(ref src) = source_id {
-                config.quick_settings_instances.get(src).cloned().unwrap_or_default()
-            } else if let Some(existing) = config.quick_settings_instances.get("quick_settings") {
-                existing.clone()
-            } else {
-                crate::config::QuickSettingsInstance::default()
-            };
-            instance.id = new_id.clone();
-            config.quick_settings_instances.insert(new_id.clone(), instance);
-
-            cm.save_immediate(config.clone()).await.map_err(|e| e.to_string())?;
+                    let mut instance = if let Some(ref src) = source_id {
+                        config.quick_settings_instances.get(src).cloned().unwrap_or_default()
+                    } else if let Some(existing) = config.quick_settings_instances.get("quick_settings") {
+                        existing.clone()
+                    } else {
+                        crate::config::QuickSettingsInstance::default()
+                    };
+                    instance.id = created_id.clone();
+                    config.quick_settings_instances.insert(created_id.clone(), instance);
+                    Ok(config.clone())
+                })
+                .await?;
             use tauri::Emitter;
-            let _ = app.emit("config-changed", &config);
+            let _ = app.emit("config-changed", &snapshot);
 
             Ok(new_id)
         } else {
@@ -401,13 +422,15 @@ pub mod integration {
         let _ = close_widget_window(app.clone(), widget_id.clone()).await;
 
         if let Some(cm) = app.try_state::<ConfigManager>() {
-            let mut config = cm.get_config().await;
-            config.widgets.remove(&widget_id);
-            config.quick_settings_instances.remove(&widget_id);
-
-            cm.save_immediate(config.clone()).await.map_err(|e| e.to_string())?;
+            let snapshot = cm
+                .update_config(|config| {
+                    config.widgets.remove(&widget_id);
+                    config.quick_settings_instances.remove(&widget_id);
+                    Ok(config.clone())
+                })
+                .await?;
             use tauri::Emitter;
-            let _ = app.emit("config-changed", &config);
+            let _ = app.emit("config-changed", &snapshot);
         }
         Ok(())
     }

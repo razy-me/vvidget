@@ -108,6 +108,7 @@ mod windows_impl {
     use windows::Foundation::Collections::{IIterable, IIterable_Vtbl, IIterator, IIterator_Vtbl};
 
     const S_OK: HRESULT = HRESULT(0);
+    const E_POINTER: HRESULT = HRESULT(-2147467261);
     const E_NOINTERFACE: HRESULT = HRESULT(-2147467262);
     const E_BOUNDS: HRESULT = HRESULT(-2147483637);
 
@@ -208,6 +209,9 @@ mod windows_impl {
         this: *mut c_void,
         result: *mut core::mem::MaybeUninit<HSTRING>,
     ) -> HRESULT {
+        if result.is_null() {
+            return E_POINTER;
+        }
         let obj = &*(this as *mut CustomIterator);
         let idx = obj.index.load(Ordering::SeqCst);
         if idx < obj.items.len() {
@@ -353,6 +357,9 @@ mod windows_impl {
         this: *mut c_void,
         result: *mut *mut c_void,
     ) -> HRESULT {
+        if result.is_null() {
+            return E_POINTER;
+        }
         let obj = &*(this as *mut CustomIterable);
         let iterator = Box::new(CustomIterator {
             vtable: &ITERATOR_VTBL,
@@ -515,11 +522,9 @@ mod windows_impl {
     pub fn toggle_device(_device_id: &str, connect: bool) -> Result<bool, String> {
         let _guard = ComGuard::new();
         if !connect {
-            // WinRT BluetoothDevice does not support disconnecting paired devices via IClosable.
             return Err("Bluetooth device disconnection is not supported directly via WinRT; please use Windows Settings".to_string());
         }
-        // WinRT does not provide a direct public ConnectAsync on BluetoothDevice without pairing or RFCOMM/GATT channel initiation.
-        Ok(connect)
+        Err("Direct Bluetooth device connection is not supported without pairing or GATT channel initiation; please use Windows Settings".to_string())
     }
 }
 
@@ -557,18 +562,47 @@ mod tests {
     #[test]
     fn test_toggle_bluetooth_device_fallback() {
         let res_connect = toggle_device_internal("sample-device-id".to_string(), true);
-        assert!(res_connect.is_ok());
-
         let res_disconnect = toggle_device_internal("sample-device-id".to_string(), false);
         #[cfg(target_os = "windows")]
         {
+            assert!(res_connect.is_err(), "Connect should return Err directing to settings");
+            let err_c = res_connect.unwrap_err();
+            assert!(err_c.contains("Direct Bluetooth device connection is not supported"));
+
             assert!(res_disconnect.is_err());
-            let err = res_disconnect.unwrap_err();
-            assert!(err.contains("disconnection is not supported directly via WinRT"));
+            let err_d = res_disconnect.unwrap_err();
+            assert!(err_d.contains("disconnection is not supported directly via WinRT"));
         }
         #[cfg(not(target_os = "windows"))]
         {
+            assert!(res_connect.is_ok());
             assert!(res_disconnect.is_ok());
+        }
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_com_iterator_and_iterable_null_pointer_guards() {
+        use windows::core::HSTRING;
+        use windows::core::Interface;
+        use windows::Foundation::Collections::{IIterable_Vtbl, IIterator_Vtbl};
+        let props = vec![HSTRING::from("Test.Property")];
+        let iter = windows_impl::create_hstring_iterable(props);
+
+        // M3-01: Verify null pointer guard on iterable First
+        unsafe {
+            let vtbl = *(iter.as_raw() as *mut *mut IIterable_Vtbl<HSTRING>);
+            let hr_null_first = ((*vtbl).First)(iter.as_raw(), std::ptr::null_mut());
+            assert_eq!(hr_null_first.0, -2147467261, "Expected E_POINTER for null result in First");
+        }
+
+        // M3-01: Verify null pointer guard on iterator Current
+        let iterator = iter.First().expect("First iterator");
+        unsafe {
+            let iter_raw = iterator.as_raw();
+            let vtbl = *(iter_raw as *mut *mut IIterator_Vtbl<HSTRING>);
+            let hr_null_curr = ((*vtbl).Current)(iter_raw, std::ptr::null_mut());
+            assert_eq!(hr_null_curr.0, -2147467261, "Expected E_POINTER for null result in Current");
         }
     }
 

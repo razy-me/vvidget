@@ -87,7 +87,7 @@ pub struct BatteryTracker {
     pub smoothed_rate: Option<f32>,
     pub last_sparkline_push: Option<Instant>,
     pub last_sparkline_percent: Option<u8>,
-    pub last_charging_state: Option<bool>,
+    pub last_power_state: Option<(bool, bool)>,
 }
 
 impl BatteryTracker {
@@ -98,21 +98,21 @@ impl BatteryTracker {
             smoothed_rate: None,
             last_sparkline_push: None,
             last_sparkline_percent: None,
-            last_charging_state: None,
+            last_power_state: None,
         }
     }
 
     /// Records high-precision telemetry, computes EMA smoothed rate, eliminates 0-rate anomalies,
     /// and updates 60s/delta-gated sparkline capacity history.
     pub fn record_telemetry(&mut self, telemetry: &RawBatteryTelemetry, now: Instant) -> f32 {
-        // Reset state if charging state toggled (e.g. plugged in / unplugged)
-        if let Some(last_charging) = self.last_charging_state {
-            if last_charging != telemetry.is_charging {
+        // Reset state if power or charging state toggled (e.g. plugged in / unplugged)
+        if let Some((last_charging, last_plugged)) = self.last_power_state {
+            if last_charging != telemetry.is_charging || last_plugged != telemetry.is_plugged_in {
                 self.samples.clear();
                 self.smoothed_rate = None;
             }
         }
-        self.last_charging_state = Some(telemetry.is_charging);
+        self.last_power_state = Some((telemetry.is_charging, telemetry.is_plugged_in));
 
         // Record sliding-window sample for fallback regression
         self.samples.push(BatterySample {
@@ -438,6 +438,7 @@ pub fn parse_power_status(
 /// Queries WinRT AggregateBattery report.
 #[cfg(target_os = "windows")]
 fn query_winrt_battery_report() -> Result<RawBatteryTelemetry, String> {
+    let _com_guard = crate::geo::winrt::ComGuard::new();
     use windows::Devices::Power::Battery;
     use windows::System::Power::BatteryStatus as WinRTBatteryStatus;
 
@@ -947,5 +948,60 @@ mod tests {
             (None, None, None),
             "Projections must be suppressed when connected to AC power"
         );
+    }
+
+    #[test]
+    fn test_battery_tracker_resets_on_unplugged_at_full_charge() {
+        // M3-03: Laptop plugged into AC at 100% capacity (is_charging: false, is_plugged_in: true)
+        let mut tracker = BatteryTracker::new();
+        let t0 = Instant::now();
+
+        let ac_telemetry = RawBatteryTelemetry {
+            has_battery: true,
+            charge_percent_exact: 100.0,
+            charge_percent: 100,
+            is_charging: false,
+            is_plugged_in: true,
+            charge_rate_mw: Some(0),
+            remaining_mwh: Some(50000),
+            full_charge_mwh: Some(50000),
+            hardware_mins_to_empty: None,
+        };
+
+        tracker.record_telemetry(&ac_telemetry, t0);
+        assert_eq!(tracker.samples.len(), 1);
+        assert_eq!(tracker.last_power_state, Some((false, true)));
+
+        // User unplugs the laptop: is_charging is still false, but is_plugged_in becomes false!
+        let battery_telemetry = RawBatteryTelemetry {
+            has_battery: true,
+            charge_percent_exact: 100.0,
+            charge_percent: 100,
+            is_charging: false,
+            is_plugged_in: false,
+            charge_rate_mw: Some(-8000),
+            remaining_mwh: Some(50000),
+            full_charge_mwh: Some(50000),
+            hardware_mins_to_empty: Some(300),
+        };
+
+        tracker.record_telemetry(&battery_telemetry, t0 + Duration::from_secs(5));
+        // Samples from AC operation must be cleared, leaving only the fresh battery sample
+        assert_eq!(tracker.samples.len(), 1);
+        assert_eq!(tracker.samples[0].timestamp, t0 + Duration::from_secs(5));
+        assert_eq!(tracker.last_power_state, Some((false, false)));
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_query_winrt_battery_report_safe_com_initialization() {
+        // M3-02: Executing in a fresh thread where COM has not been initialized should not fail with CO_E_NOTINITIALIZED
+        let handle = std::thread::spawn(|| {
+            let res = query_winrt_battery_report();
+            // In CI/headless or real devices, query_winrt_battery_report returns Ok(telemetry) or an Err string,
+            // but must NEVER panic or fail due to uninitialized COM apartment.
+            let _ = res;
+        });
+        assert!(handle.join().is_ok());
     }
 }

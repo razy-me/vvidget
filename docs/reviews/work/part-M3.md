@@ -1,11 +1,41 @@
-﻿### [MAJOR] [OPEN] M3-01 WinRT Battery report query lacks COM apartment initialization
+### [CRITICAL] [OPEN] M3-01 Unsafe WinRT COM iterator missing null pointer guards causing process crash
+- **Status**: OPEN
+- **Where**: `src-tauri/src/bluetooth/mod.rs:207`, `src-tauri/src/bluetooth/mod.rs:352`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: robustness [lens: F1b]
+- **Scenario**: When Windows Runtime internal collection marshaling or external COM callers invoke `IIterator<HSTRING>::Current` or `IIterable<HSTRING>::First`, a null output pointer (`result.is_null()`) is passed during query probing or invalid calls. `iterator_current` executes `result.write(core::mem::MaybeUninit::new(hstring))` and `iterable_first` executes `*result = Box::into_raw(iterator)...` without verifying that `result` is non-null. The process suffers an immediate access violation segfault (`0xC0000005`), crashing the Tauri backend.
+- **Why**: Windows COM ABI requires all out-pointer parameters (`[out, retval]`) to be validated for null before dereferencing, returning `E_POINTER` (`0x80004003`) on null pointers. The custom COM vtable implementations omitted null pointer guards.
+- **Fix**:
+```diff
+--- a/src-tauri/src/bluetooth/mod.rs
++++ b/src-tauri/src/bluetooth/mod.rs
+@@ -110,2 +110,3 @@ mod windows_impl {
+     const S_OK: HRESULT = HRESULT(0);
++    const E_POINTER: HRESULT = HRESULT(-2147467261);
+     const E_NOINTERFACE: HRESULT = HRESULT(-2147467262);
+@@ -210,2 +211,5 @@ mod windows_impl {
+     ) -> HRESULT {
++        if result.is_null() {
++            return E_POINTER;
++        }
+         let obj = &*(this as *mut CustomIterator);
+@@ -354,2 +358,5 @@ mod windows_impl {
+     ) -> HRESULT {
++        if result.is_null() {
++            return E_POINTER;
++        }
+         let obj = &*(this as *mut CustomIterable);
+```
+
+### [MAJOR] [OPEN] M3-02 WinRT Battery report query lacks COM apartment initialization
 - **Status**: OPEN
 - **Where**: `src-tauri/src/battery/mod.rs:440`
-- **Source**: `r-review` (2026-10-26)
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: bug [lens: F1b]
-- **Scenario**: The frontend battery widget calls `get_battery_status`. Tauri dispatches this synchronous command on a worker threadpool thread where COM has not been initialized. `Battery::AggregateBattery()` fails immediately with `0x800401F0 (CO_E_NOTINITIALIZED)`. The error is discarded, and the system falls back to `GetSystemPowerStatus`, causing the widget to permanently lose exact floating-point battery percentages, discharge rates in mW, and remaining mWh capacities.
-- **Why**: WinRT APIs require the calling thread to enter a COM apartment via `RoInitialize` or `CoInitializeEx`. While other WinRT modules in the project use `ComGuard`, `battery/mod.rs` omitted COM initialization entirely.
+- **Scenario**: The frontend battery widget calls synchronous command `get_battery_status`. Tauri dispatches this command on a Tokio worker threadpool thread where COM has not been initialized. `Battery::AggregateBattery()` fails immediately with `0x800401F0 (CO_E_NOTINITIALIZED)`. The error is caught by `if let Ok(telemetry) = query_winrt_battery_report()`, which fails silently and falls back to `GetSystemPowerStatus`. The widget permanently loses exact floating-point battery percentages, discharge/charge rates in milliwatts, and remaining mWh capacity data.
+- **Why**: WinRT APIs require the calling thread to enter a COM apartment via `CoInitializeEx` or `RoInitialize`. While other WinRT modules in vvidget use `ComGuard`, `battery/mod.rs` omitted COM initialization entirely.
 - **Fix**:
 ```diff
 --- a/src-tauri/src/battery/mod.rs
@@ -16,203 +46,202 @@
      use windows::System::Power::BatteryStatus as WinRTBatteryStatus;
 ```
 
-### [MAJOR] [OPEN] M3-02 Battery projection calculates time to empty while plugged into AC power
+### [MAJOR] [OPEN] M3-03 Battery tracker fails to reset discharge baseline when unplugged at full charge
 - **Status**: OPEN
-- **Where**: `src-tauri/src/battery/mod.rs:313`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/battery/mod.rs:109-115`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: bug
-- **Scenario**: A laptop is connected to AC wall power, with the battery resting at 80% (under a battery health threshold or limiter) or 100% idle. Here, `is_charging` is `false`, but `is_plugged_in` is `true`. Because line 313 only checks `if telemetry.is_charging`, the function proceeds to calculate projections, displaying a misleading "Estimated time to empty: 240 mins" while the device is actively running on AC power.
-- **Why**: The projection check only tests `telemetry.is_charging` and fails to check `telemetry.is_plugged_in`. When connected to AC power, the battery is not discharging, so remaining battery depletion estimates must be suppressed.
+- **Scenario**: A laptop rests plugged into AC power at 100% capacity (or at an 80% battery health threshold). Because charging is idle/stopped, `is_charging` is `false`. When the user unplugs the AC adapter, the power source switches to battery (`is_plugged_in` becomes `false`), but `is_charging` remains `false`. Line 110 tests `if last_charging != telemetry.is_charging`, which evaluates to `false != false` (no change). `self.samples` is NOT cleared and `smoothed_rate` is NOT reset. The tracker retains stale samples collected during AC operation, distorting drain rate calculations and time-to-empty estimates.
+- **Why**: `BatteryTracker` only tracks `last_charging_state: Option<bool>` and ignores `telemetry.is_plugged_in`. Transitioning between AC power and battery power when charging is inactive fails to trigger the state reset.
 - **Fix**:
 ```diff
 --- a/src-tauri/src/battery/mod.rs
 +++ b/src-tauri/src/battery/mod.rs
-@@ -313,3 +313,3 @@ pub fn calculate_projections(
- ) -> (Option<u32>, Option<u32>, Option<u32>) {
--    if telemetry.is_charging {
-+    if telemetry.is_charging || telemetry.is_plugged_in {
-         return (None, None, None);
+@@ -89,3 +89,3 @@ pub struct BatteryTracker {
+     pub last_sparkline_percent: Option<u8>,
+-    pub last_charging_state: Option<bool>,
++    pub last_power_state: Option<(bool, bool)>,
+ }
+@@ -108,7 +108,7 @@ impl BatteryTracker {
+-        // Reset state if charging state toggled (e.g. plugged in / unplugged)
+-        if let Some(last_charging) = self.last_charging_state {
+-            if last_charging != telemetry.is_charging {
++        // Reset state if power or charging state toggled (e.g. plugged in / unplugged)
++        if let Some((last_charging, last_plugged)) = self.last_power_state {
++            if last_charging != telemetry.is_charging || last_plugged != telemetry.is_plugged_in {
+                 self.samples.clear();
+                 self.smoothed_rate = None;
+             }
+         }
+-        self.last_charging_state = Some(telemetry.is_charging);
++        self.last_power_state = Some((telemetry.is_charging, telemetry.is_plugged_in));
 ```
 
-### [CRITICAL] [OPEN] M3-03 Bluetooth device enumeration sequentially blocks on remote device resolution and fails to load battery levels
+### [MAJOR] [OPEN] M3-04 Bluetooth device connection returns false success without initiating connection
 - **Status**: OPEN
-- **Where**: `src-tauri/src/bluetooth/mod.rs:135-201`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: performance [lens: F1b]
-- **Scenario**: When a user opens the Bluetooth widget with several paired devices (some turned off or out of range), `enumerate_devices` calls `BluetoothDevice::FromIdAsync(&id)?.get()` inside a sequential loop for every device. For offline devices, `.get()` blocks for several seconds awaiting radio connection timeout, freezing the task for 10-30 seconds. Additionally, `DeviceInformation::FindAllAsyncAqsFilter(&aqs)` does not request the `System.Devices.Aep.BatteryLevel` property, leaving `dev.Properties()` empty and causing all devices to report `battery_level: None`.
-- **Why**: `BluetoothDevice::FromIdAsync` performs a synchronous WinRT blocking resolution over Bluetooth radio for each device sequentially. Properties such as `IsConnected` and `BatteryLevel` are already available on `DeviceInformation` without resolving the full `BluetoothDevice` object if requested via `FindAllAsyncAqsFilterAndAdditionalProperties`.
-- **Fix**:
-```diff
---- a/src-tauri/src/bluetooth/mod.rs
-+++ b/src-tauri/src/bluetooth/mod.rs
-@@ -134,5 +134,13 @@ mod windows_impl {
-             Err(_) => return Ok(vec![]),
-         };
--        let devices = match DeviceInformation::FindAllAsyncAqsFilter(&aqs) {
-+        use windows::core::HSTRING;
-+        let props = windows::Foundation::Collections::PropertySet::new().unwrap();
-+        let additional_props = [
-+            HSTRING::from("System.Devices.Aep.IsConnected"),
-+            HSTRING::from("System.Devices.Aep.BatteryLevel"),
-+            HSTRING::from("System.Devices.Aep.Bluetooth.Cod.Major"),
-+        ];
-+        let iter = windows::Foundation::Collections::IIterable::<HSTRING>::try_from(additional_props.to_vec()).ok();
-+        let devices = match DeviceInformation::FindAllAsyncAqsFilterAndAdditionalProperties(&aqs, iter.as_ref()) {
-             Ok(op) => match op.get() {
-```
-
-### [MAJOR] [OPEN] M3-04 Bluetooth device disconnection fakes state using `IClosable::Close`
-- **Status**: OPEN
-- **Where**: `src-tauri/src/bluetooth/mod.rs:226-238`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/bluetooth/mod.rs:515-523`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: contract [lens: F1b]
-- **Scenario**: User toggles the connection switch to disconnect a connected Bluetooth headset. The backend executes `toggle_device`, casts `bt_dev` to `IClosable`, calls `closable.Close()`, and returns `Ok(false)`. The frontend UI marks the device as disconnected, but the physical Bluetooth headset remains connected and continues playing audio because `IClosable::Close()` in WinRT only disposes the process-local COM projection object without altering OS Bluetooth connectivity.
-- **Why**: WinRT's `BluetoothDevice` API does not support programmatic disconnection via `IClosable::Close()`. The function simulates disconnection by disposing its local WinRT wrapper and returning fabricated boolean states.
+- **Scenario**: When the user clicks "Connect" on a paired Bluetooth device in the Bluetooth widget, the frontend invokes `toggle_bluetooth_device(device_id, true)`. `toggle_device` executes `Ok(connect)` without making any WinRT API call or initiating any connection attempt. The frontend receives `true`, displays a success notification, and toggles the UI button to "Connected", while the device physically remains disconnected.
+- **Why**: WinRT does not provide a single parameterless `ConnectAsync` method on `BluetoothDevice` without RFCOMM or GATT channel initialization. Instead of propagating an actionable error directing the user to Windows Settings, the function returns simulated success (`Ok(connect)`).
 - **Fix**:
 ```diff
 --- a/src-tauri/src/bluetooth/mod.rs
 +++ b/src-tauri/src/bluetooth/mod.rs
-@@ -226,7 +226,6 @@ mod windows_impl {
-                 if !connect {
--                    if let Ok(closable) = bt_dev.cast::<windows::Foundation::IClosable>() {
--                        let _ = closable.Close();
--                    }
--                    return Ok(false);
-+                    // WinRT BluetoothDevice does not support disconnecting paired devices via IClosable.
-+                    return Err("Bluetooth device disconnection is not supported directly via WinRT; please use Windows Settings".to_string());
-                 }
-```
-
-### [MAJOR] [OPEN] M3-05 GSMTC polling creates high memory churn by re-encoding thumbnails to base64 on every 500ms cycle
-- **Status**: OPEN
-- **Where**: `src-tauri/src/media/gsmtc.rs:180-205`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: performance [lens: F1b]
-- **Scenario**: When any media is playing, `start_media_monitor` polls `get_current_media_session()` every 500ms. In `read_session_data`, even when the track has not changed and thumbnail bytes are cached, lines 181-184 clone `art.bytes` and execute `STANDARD.encode(&art.bytes)` into a multi-megabyte base64 string. 500ms later, line 67 finds `has_changed` is false, and discards the string, producing several megabytes per second of heap churn and CPU utilization.
-- **Why**: The backend already implements and registers a dedicated custom URI protocol `vvidget://album-art?t=<track_id>` in `protocol.rs` and `lib.rs`, but `read_session_data` bypasses it in favor of generating base64 data URLs inside the polling loop.
-- **Fix**:
-```diff
---- a/src-tauri/src/media/gsmtc.rs
-+++ b/src-tauri/src/media/gsmtc.rs
-@@ -180,8 +180,6 @@ mod win {
-         let mut album_art_url = None;
--        if let Some(art) = get_cached_album_art(&track_id) {
--            use base64::{engine::general_purpose::STANDARD, Engine as _};
--            let b64 = STANDARD.encode(&art.bytes);
--            album_art_url = Some(format!("data:{};base64,{}", art.mime_type, b64));
-+        if get_cached_album_art(&track_id).is_some() {
-+            album_art_url = Some(format!("vvidget://album-art?t={}", track_id));
-         } else if let Ok(thumb_ref) = media_props.Thumbnail() {
-@@ -199,6 +197,5 @@ mod win {
-                                             .unwrap_or_else(|_| "image/jpeg".to_string());
--                                        use base64::{engine::general_purpose::STANDARD, Engine as _};
--                                        let b64 = STANDARD.encode(&bytes);
--                                        album_art_url = Some(format!("data:{};base64,{}", mime_type, b64));
-+                                        album_art_url = Some(format!("vvidget://album-art?t={}", track_id));
-                                         set_cached_album_art(&track_id, bytes, mime_type);
-```
-
-### [MAJOR] [OPEN] M3-06 GSMTC background monitor repeatedly requests new SessionManager COM instances instead of subscribing to events
-- **Status**: OPEN
-- **Where**: `src-tauri/src/media/gsmtc.rs:30-35,247`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: robustness [lens: F1b]
-- **Scenario**: Throughout application execution, the `media-monitor` background thread repeatedly executes `GlobalSystemMediaTransportControlsSessionManager::RequestAsync()?.get()` every 500ms (7,200 times per hour), creating continuous COM activation requests and query overhead on the Windows media control subsystem while idle.
-- **Why**: WinRT GSMTC exposes event notifications (`CurrentSessionChanged`, `SessionsChanged`, `PlaybackInfoChanged`, `MediaPropertiesChanged`), but the codebase relies entirely on continuous polling and instantiates a new `GlobalSystemMediaTransportControlsSessionManager` on every poll.
-- **Fix**:
-```diff
---- a/src-tauri/src/media/gsmtc.rs
-+++ b/src-tauri/src/media/gsmtc.rs
-@@ -30,6 +30,12 @@ mod win {
-+    use std::sync::OnceLock;
-+    static SESSION_MGR: OnceLock<GlobalSystemMediaTransportControlsSessionManager> = OnceLock::new();
-+
-     fn get_session_manager() -> Result<GlobalSystemMediaTransportControlsSessionManager, String> {
-+        if let Some(mgr) = SESSION_MGR.get() {
-+            return Ok(mgr.clone());
-+        }
-         GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
-             .map_err(|e| format!("Failed to request GSMTC session manager: {}", e))?
-             .get()
-+            .map(|mgr| { let _ = SESSION_MGR.set(mgr.clone()); mgr })
-             .map_err(|e| format!("Failed to await GSMTC session manager: {}", e))
+@@ -515,9 +515,5 @@ mod windows_impl {
+     pub fn toggle_device(_device_id: &str, connect: bool) -> Result<bool, String> {
+         let _guard = ComGuard::new();
+         if !connect {
+-            // WinRT BluetoothDevice does not support disconnecting paired devices via IClosable.
+             return Err("Bluetooth device disconnection is not supported directly via WinRT; please use Windows Settings".to_string());
+         }
+-        // WinRT does not provide a direct public ConnectAsync on BluetoothDevice without pairing or RFCOMM/GATT channel initiation.
+-        Ok(connect)
++        Err("Direct Bluetooth device connection is not supported without pairing or GATT channel initiation; please use Windows Settings".to_string())
      }
 ```
 
-### [MAJOR] [OPEN] M3-07 `launch_app_or_uri` spawns processes with null `lpDirectory`, causing relative file access crashes
+### [MAJOR] [OPEN] M3-05 GSMTC session selector prioritizes paused Spotify over actively playing media
 - **Status**: OPEN
-- **Where**: `src-tauri/src/launcher/mod.rs:518-526`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/media/gsmtc.rs:71-95`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
-- **Category**: bug [lens: F1b]
-- **Scenario**: A user launches an application or game (e.g. `C:\Games\Doom\doom.exe` or a portable app) from the launcher widget. `ShellExecuteW` is called with `lpDirectory` set to `PCWSTR::null()`. The new process inherits vvidget's working directory (`C:\Program Files\vvidget`). When the launched executable tries to read relative configuration files, game assets, or dependency DLLs in its own folder, it fails and crashes immediately on launch.
-- **Why**: `ShellExecuteW` defaults to the caller process's current directory when `lpDirectory` is null. For executable targets, `lpDirectory` must explicitly specify the target file's parent folder.
+- **Category**: bug
+- **Scenario**: A user keeps the Spotify desktop application running in the background while paused. The user then plays a YouTube video in Google Chrome or music in Apple Music / VLC. When `find_target_session` runs, loop 1 finds no playing Spotify session. Loop 2 ("Look for any Spotify session, e.g. paused") immediately matches the inactive Spotify session and returns it. Loop 3 (`manager.GetCurrentSession()`) and Loop 4 ("Look for any active playing session") are never evaluated. The media widget displays paused Spotify and ignores the actively playing audio.
+- **Why**: `find_target_session` placed paused Spotify sessions ahead of system-current and non-Spotify actively playing sessions in the fallback hierarchy.
 - **Fix**:
 ```diff
---- a/src-tauri/src/launcher/mod.rs
-+++ b/src-tauri/src/launcher/mod.rs
-@@ -512,4 +512,12 @@ pub async fn launch_app_or_uri(target: String) -> Result<(), String> {
-         let wide_target: Vec<u16> = std::ffi::OsStr::new(&target)
-             .encode_wide()
-             .chain(std::iter::once(0))
-             .collect();
-+        let parent_dir = std::path::Path::new(&target).parent().map(|p| {
-+            std::ffi::OsStr::new(p).encode_wide().chain(std::iter::once(0)).collect::<Vec<u16>>()
-+        });
-+        let wide_dir_ptr = match &parent_dir {
-+            Some(d) => windows::core::PCWSTR(d.as_ptr()),
-+            None => windows::core::PCWSTR::null(),
-+        };
+--- a/src-tauri/src/media/gsmtc.rs
++++ b/src-tauri/src/media/gsmtc.rs
+@@ -70,8 +70,8 @@ mod win {
+             }
  
-         unsafe {
-             let res = ShellExecuteW(
-@@ -522,3 +530,3 @@ pub async fn launch_app_or_uri(target: String) -> Result<(), String> {
-                 windows::core::PCWSTR(wide_target.as_ptr()),
-                 windows::core::PCWSTR::null(),
--                windows::core::PCWSTR::null(),
-+                wide_dir_ptr,
-                 windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL,
+-            // 2. Look for any Spotify session (e.g. paused)
++            // 2. Fall back to any active playing session
+             for s in &all_sessions {
+-                if let Ok(app_id) = s.SourceAppUserModelId() {
+-                    if app_id.to_string().to_lowercase().contains("spotify") {
++                if let Ok(info) = s.GetPlaybackInfo() {
++                    if let Ok(status) = info.PlaybackStatus() {
++                        if status == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing {
+                             return Some(s.clone());
++                        }
+                     }
+                 }
+@@ -83,9 +83,9 @@ mod win {
+             }
+ 
+-            // 4. Fall back to any active playing session
++            // 4. Fall back to any Spotify session (e.g. paused)
+             for s in &all_sessions {
+-                if let Ok(info) = s.GetPlaybackInfo() {
+-                    if let Ok(status) = info.PlaybackStatus() {
+-                        if status == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing {
+-                            return Some(s.clone());
+-                        }
++                if let Ok(app_id) = s.SourceAppUserModelId() {
++                    if app_id.to_string().to_lowercase().contains("spotify") {
++                        return Some(s.clone());
+                     }
+                 }
 ```
 
-### [MAJOR] [OPEN] M3-08 `validate_launch_target` falsely blocks valid Windows paths containing `'&'` or `'\''`
+### [MAJOR] [OPEN] M3-06 Media monitor event loop ignores timeline seeking and scrubbing
 - **Status**: OPEN
-- **Where**: `src-tauri/src/launcher/mod.rs:444-453`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/media/mod.rs:58-69`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
-- **Category**: bug [lens: F1b]
-- **Scenario**: A user attempts to add or launch an installed game located in paths like `D:\Games\Command & Conquer\game.exe`, `C:\Program Files\Rockstar Games & Media\app.exe`, or under a Windows user directory with an apostrophe (e.g. `C:\Users\O'Connor\AppData\...`). `validate_launch_target` rejects the target with `"Launch target contains forbidden shell character: '&'"`, preventing users from launching valid games and applications.
-- **Why**: The validation logic treats `'&'` and `'\''` as command injection risks. However, `ShellExecuteW` does not execute commands through a shell interpreter, and `validate_launch_target` already verifies that the path is an absolute, existing `.exe`, `.lnk`, or `.url` file on the filesystem.
+- **Category**: bug
+- **Scenario**: During song playback, a user scrubs the timeline in Spotify or YouTube (e.g. jumping from 0:15 to 2:45). In `start_media_monitor`, `has_changed` compares `is_active`, `is_playing`, `title`, `artist`, `album`, `track_id`, and `duration_ms`. None of these fields changed, and `position_ms` is omitted from the comparison. `has_changed` evaluates to `false`, and no `media-metadata-update` event is emitted. The frontend widget continues extrapolating time from the pre-seek timestamp, showing the wrong playback position until the track ends or pauses.
+- **Why**: Continuous position updates are intentionally omitted to avoid 500ms event spam, but discrete jumps caused by manual seeks (`abs(delta) > 3000ms`) are not detected.
+- **Fix**:
+```diff
+--- a/src-tauri/src/media/mod.rs
++++ b/src-tauri/src/media/mod.rs
+@@ -58,8 +58,12 @@ pub fn start_media_monitor(app_handle: tauri::AppHandle) {
+             loop {
+                 let current = gsmtc::get_current_media_session().unwrap_or_default();
++                let pos_jump = (current.timeline.position_ms as i64 - last_session.timeline.position_ms as i64).abs() > 3000;
+                 let has_changed = current.is_active != last_session.is_active
+                     || current.is_playing != last_session.is_playing
+                     || current.title != last_session.title
+                     || current.artist != last_session.artist
+                     || current.album != last_session.album
+                     || current.track_id != last_session.track_id
++                    || pos_jump
+                     || (current.is_playing && current.timeline.duration_ms != last_session.timeline.duration_ms);
+```
+
+### [MAJOR] [OPEN] M3-07 `launch_app_or_uri` blocks Tokio async worker threads with synchronous `ShellExecuteW`
+- **Status**: OPEN
+- **Where**: `src-tauri/src/launcher/mod.rs:505-558`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: performance [lens: F1b]
+- **Scenario**: When launching an executable or shortcut from the launcher widget, `launch_app_or_uri` executes `ShellExecuteW` directly on Tokio's async worker thread without offloading to `spawn_blocking`. If Windows SmartScreen, Windows Defender real-time scanning, or a UAC prompt intercepts the launch, `ShellExecuteW` blocks synchronously for 2 to 10 seconds, stalling the Tokio async runtime thread and delaying concurrent IPC commands.
+- **Why**: `launch_app_or_uri` is declared `async fn`, but executes blocking Win32 shell I/O directly in the async task context rather than delegating to `tokio::task::spawn_blocking`.
 - **Fix**:
 ```diff
 --- a/src-tauri/src/launcher/mod.rs
 +++ b/src-tauri/src/launcher/mod.rs
-@@ -443,6 +443,6 @@ pub fn validate_launch_target(target: &str) -> Result<(), String> {
-     // Disallow shell operators and chaining characters in paths
--    let dangerous_path_chars = ['&', '|', ';', '>', '<', '"', '\'', '`', '$', '%'];
-+    let dangerous_path_chars = ['|', ';', '>', '<', '"', '`'];
-     for dc in dangerous_path_chars {
-         if trimmed.contains(dc) {
-             return Err(format!(
+@@ -505,4 +505,5 @@ pub async fn launch_app_or_uri(target: String) -> Result<(), String> {
+     validate_launch_target(&target)?;
+ 
++    tokio::task::spawn_blocking(move || {
+     #[cfg(windows)]
+     {
+@@ -557,3 +558,5 @@ pub async fn launch_app_or_uri(target: String) -> Result<(), String> {
+         Ok(())
+     }
++    })
++    .await
++    .map_err(|e| format!("Launch task join failed: {}", e))?
 ```
 
-### [MINOR] [OPEN] M3-09 `validate_launch_target` rejects standard gaming and desktop app URI schemes
+### [MINOR] [OPEN] M3-08 GSMTC thumbnail extraction repeatedly queries COM for media without artwork
+- **Status**: OPEN
+- **Where**: `src-tauri/src/media/gsmtc.rs:188-214`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: performance [lens: F1b]
+- **Scenario**: A user plays browser audio, podcasts, or music without embedded cover art. `get_cached_album_art(&track_id)` returns `None`. Every 500ms polling tick, `read_session_data` requests `media_props.Thumbnail()`, executes `thumb_ref.OpenReadAsync()?.get()`, and attempts to read stream bytes. Because no image data is produced, the cache is never populated with a sentinel. The thread incurs repeated COM stream allocation and blocking `.get()` waits twice per second indefinitely.
+- **Why**: The cache only records successful thumbnail extractions. Negative lookups (tracks without thumbnails) are not cached, bypassing the cache check on every 500ms cycle.
+- **Fix**:
+```diff
+--- a/src-tauri/src/media/gsmtc.rs
++++ b/src-tauri/src/media/gsmtc.rs
+@@ -188,4 +188,6 @@ mod win {
+         // Thumbnail extraction: check in-memory cache first to prevent redundant COM I/O & allocations
+         let mut album_art_url = None;
+-        if get_cached_album_art(&track_id).is_some() {
++        if let Some(art) = get_cached_album_art(&track_id) {
++            if !art.bytes.is_empty() {
++                album_art_url = Some(format!("vvidget://album-art?t={}", track_id));
++            }
++        } else if let Ok(thumb_ref) = media_props.Thumbnail() {
+@@ -211,2 +213,4 @@ mod win {
+                                 }
+                             }
++                        } else {
++                            set_cached_album_art(&track_id, Vec::new(), String::new());
++                        }
+```
+
+### [MINOR] [OPEN] M3-09 `validate_launch_target` rejects standard desktop gaming launcher URI schemes
 - **Status**: OPEN
 - **Where**: `src-tauri/src/launcher/mod.rs:416-427`
-- **Source**: `r-review` (2026-10-26)
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: contract
-- **Scenario**: A user configures a custom launcher item for a game or tool using its standard URI scheme (e.g. `goggalaxy://`, `battlenet://`, `ea://`, `xbox://`, `discord://`, `spotify:`). `validate_launch_target` rejects the entry because only `steam://`, `com.epicgames.launcher://`, and `http(s)://` are allowed.
-- **Why**: The URI scheme allowlist is overly strict and omits common gaming launcher protocols and popular desktop application protocols.
+- **Scenario**: A user creates a custom launcher item targeting another gaming client or desktop application (e.g. `goggalaxy://`, `battlenet://`, `ea://`, `xbox://`, `discord://`, `spotify:`). `validate_launch_target` rejects the configuration with `"Target must be an allowlisted URI scheme or an absolute file path"`.
+- **Why**: The URI allowlist is restricted to Steam and Epic Games, omitting established gaming and productivity desktop protocols.
 - **Fix**:
 ```diff
 --- a/src-tauri/src/launcher/mod.rs
 +++ b/src-tauri/src/launcher/mod.rs
-@@ -421,4 +421,11 @@ pub fn validate_launch_target(target: &str) -> Result<(), String> {
+@@ -421,4 +421,10 @@ pub fn validate_launch_target(target: &str) -> Result<(), String> {
          "com.epicgames.launcher:",
 +        "goggalaxy://",
 +        "battlenet://",
@@ -225,34 +254,14 @@
      ];
 ```
 
-### [MINOR] [OPEN] M3-10 Steam desktop shortcut icon resolution fails by matching numeric `appid` against hash filenames
+### [MINOR] [OPEN] M3-10 Cold startup delay from synchronous 200ms sleep in `MetricsCollector::new()`
 - **Status**: OPEN
-- **Where**: `src-tauri/src/launcher/mod.rs:77-84,162-195`
-- **Source**: `r-review` (2026-10-26)
-- **Confidence**: HIGH
-- **Category**: bug
-- **Scenario**: Steam creates game icons in `<SteamRoot>/steam/games/<hash>.ico`. `find_steam_icon_url` checks if the `.ico` filename starts with the numeric `appid`. Because Steam names these files using a 40-character SHA-1 hash from the manifest's `"clienticon"` field, the comparison never matches, and games without librarycache artwork appear without icons.
-- **Why**: `parse_appmanifest_acf` only extracts `(appid, name, installdir)` and ignores the `"clienticon"` field containing the actual icon filename hash.
-- **Fix**:
-```diff
---- a/src-tauri/src/launcher/mod.rs
-+++ b/src-tauri/src/launcher/mod.rs
-@@ -77,4 +77,4 @@ pub fn find_steam_icon_url(appid: &str, steam_roots: &[PathBuf]) -> Option<Str
-                             let stem = p.file_stem().and_then(|s| s.to_str()).unwrap_or("");
--                            if stem.starts_with(appid) || stem == appid {
-+                            if stem.starts_with(appid) || stem == appid || stem.len() == 40 {
-                                 if let Some(url) = file_to_data_url(&p) {
-                                     return Some(url);
-```
-
-### [MINOR] [OPEN] M3-11 `MetricsCollector::new()` delays cold application startup by sleeping synchronously on the main thread
-- **Status**: OPEN
-- **Where**: `src-tauri/src/sysinfo/collector.rs:29` & `src-tauri/src/lib.rs:424`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/sysinfo/collector.rs:28-30`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: performance
-- **Scenario**: During cold application start, `lib.rs::run()` calls `MetricsCollector::new()` before creating windows or the tray icon. Line 29 performs a 200ms synchronous sleep (`std::thread::sleep(Duration::from_millis(200))`), adding unnecessary latency to application startup.
-- **Why**: The 200ms pause was introduced to let sysinfo calculate an initial CPU delta, but executing it synchronously during constructor creation on the main bootstrap thread blocks initialization.
+- **Scenario**: During cold application start, `lib.rs::run()` instantiates `MetricsCollector::new()` on the main thread before creating windows or mounting the tray. Line 29 performs a 200ms sleep (`std::thread::sleep(Duration::from_millis(200))`), adding 200ms of latency before the user sees the desktop dock.
+- **Why**: The 200ms sleep was added to establish a baseline CPU delta, but running it synchronously on the main application thread unnecessarily delays application launch.
 - **Fix**:
 ```diff
 --- a/src-tauri/src/sysinfo/collector.rs
@@ -260,27 +269,50 @@
 @@ -28,3 +28,2 @@ impl MetricsCollector {
 -        // Initial 200ms sleep before first CPU sample to eliminate 0.0% artifacts
 -        std::thread::sleep(Duration::from_millis(200));
-+        // Initial CPU sample without blocking startup thread
          system.refresh_cpu_all();
 ```
 
-### [MINOR] [OPEN] M3-12 Sysinfo background worker runs `tauri::async_runtime::block_on` in an inner loop every 500ms
+### [MINOR] [OPEN] M3-11 Sysinfo background worker executes `block_on` in an inner loop every 500ms
 - **Status**: OPEN
-- **Where**: `src-tauri/src/sysinfo/mod.rs:47`
-- **Source**: `r-review` (2026-10-26)
+- **Where**: `src-tauri/src/sysinfo/mod.rs:48-55`
+- **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
 - **Category**: performance
-- **Scenario**: The sysinfo worker runs on a dedicated OS thread. Every 500ms, it calls `tauri::async_runtime::block_on(config_manager.get_config())` to read polling rate settings. Incurring Tokio `block_on` runtime synchronization every 500ms in an infinite loop introduces unnecessary CPU overhead and context switching.
-- **Why**: `ConfigManager::get_config()` is an async method protecting an in-memory struct with a Tokio `RwLock`. The background thread only needs the polling rates, which can be cached and refreshed reactively on `config-changed`.
+- **Scenario**: The sysinfo worker runs on a dedicated OS thread. Every 500ms, line 51 calls `tauri::async_runtime::block_on(config_manager.get_config())` to read polling rate durations. Invoking Tokio `block_on` runtime synchronization on every loop iteration produces continuous scheduling overhead and unnecessary lock contention.
+- **Why**: Polling rates change infrequently. Caching the configuration and refreshing it periodically (or reactively upon `config-changed`) avoids entering the Tokio runtime on every iteration.
 - **Fix**:
 ```diff
 --- a/src-tauri/src/sysinfo/mod.rs
 +++ b/src-tauri/src/sysinfo/mod.rs
-@@ -43,4 +43,5 @@ pub fn start_metrics_worker<R: Runtime>(
-             let mut last_disk_check = std::time::Instant::now();
-+            let mut cached_config = tauri::async_runtime::block_on(config_manager.get_config());
+@@ -48,4 +48,6 @@ pub fn start_metrics_worker<R: Runtime>(
+             log::info!("System metrics background worker started");
++            let mut config = tauri::async_runtime::block_on(config_manager.get_config());
++            let mut last_config_check = std::time::Instant::now();
  
              loop {
 -                let config = tauri::async_runtime::block_on(config_manager.get_config());
-+                let config = &cached_config;
++                if last_config_check.elapsed() >= Duration::from_secs(5) {
++                    config = tauri::async_runtime::block_on(config_manager.get_config());
++                    last_config_check = std::time::Instant::now();
++                }
+```
+
+### [MINOR] [OPEN] M3-12 Core Audio commands recreate device enumerator and endpoint volume on every slider tick
+- **Status**: OPEN
+- **Where**: `src-tauri/src/audio/mod.rs:10-23`
+- **Source**: `r-review` (2026-10-27)
+- **Confidence**: HIGH
+- **Category**: performance [lens: F1b]
+- **Scenario**: When a user drags the master volume slider, `set_master_volume` is invoked on each input event (~60 times per second). Every invocation calls `get_endpoint_volume()`, which executes `CoCreateInstance` to build `MMDeviceEnumerator`, queries `GetDefaultAudioEndpoint`, and calls `device.Activate` for `IAudioEndpointVolume`. This produces continuous COM allocation, interface querying, and release churn across Tokio blocking threads during slider interaction.
+- **Why**: `get_endpoint_volume()` instantiates and disposes the entire Core Audio COM pipeline on every call rather than caching or batching the endpoint volume interface.
+- **Fix**:
+```diff
+--- a/src-tauri/src/audio/mod.rs
++++ b/src-tauri/src/audio/mod.rs
+@@ -10,3 +10,4 @@ mod win {
+-    pub fn get_endpoint_volume() -> Result<IAudioEndpointVolume, String> {
++    // Caching or reusing the endpoint volume avoids repetitive CoCreateInstance on high-frequency slider events
++    pub fn with_endpoint_volume<T, F: FnOnce(&IAudioEndpointVolume) -> Result<T, String>>(f: F) -> Result<T, String> {
+         unsafe {
+             let enumerator: IMMDeviceEnumerator =
 ```

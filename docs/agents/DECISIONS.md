@@ -219,6 +219,15 @@
   4. *Unchecked synchronous SendMessageW per WM_MOVING*: Floods Windows Explorer message queues at 100+ calls/sec during drag.
 - **Reason / trade-offs**: Delivers seamless multi-monitor fluid movement, tear-free 60fps tracking without cross-process IPC bottlenecks, eliminates click teleportation race conditions, and maintains global config state coherence across all windows.
 
+## D-031 Strict Execution Security & Non-Blocking Win32 IPC (Fixer C2)
+- **Decision**: In `actions/mod.rs` and `launcher/mod.rs`, prohibit all UNC network paths (`\\`, `//`, `\??\`, `file:`, `smb:`, `dav:`) to prevent outbound SMB NetNTLM credential leaks. Disallow space-delimited argument injection for executable targets unless resolving to an existing absolute file on disk, reject dangerous script extensions (`.bat`, `.cmd`, `.vbs`, `.ps1`, `.url`), and query the Windows Registry (`HKCU\Software\Valve\Steam\SteamPath` and `HKLM\SOFTWARE\WOW6432Node\Valve\Steam\InstallPath`) directly via `advapi32` to discover Steam libraries on non-default drives. Offload blocking Win32 `ShellExecuteW` calls to `tokio::task::spawn_blocking` to prevent starving the async reactor thread.
+- **Alternatives considered**:
+  1. *Allowing .url files*: Risks arbitrary protocol handlers and script execution bypassing the URI scheme allowlist.
+  2. *Allowing unquoted paths with arbitrary command-line arguments*: Exposes Win32 ShellExecute parameter injection vulnerabilities.
+  3. *Calling ShellExecuteW synchronously on async worker threads*: Freezes Tokio reactor for seconds when SmartScreen, Defender, or sleeping drives delay execution.
+- **Reason / trade-offs**: Provides complete isolation against remote credential leaks and command execution exploits while keeping async IPC responsiveness high and supporting custom Steam installations across any drive.
+
+
 
 
 

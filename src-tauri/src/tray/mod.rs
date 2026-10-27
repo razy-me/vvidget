@@ -239,6 +239,18 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
     let quit_item = MenuItem::with_id(app, "quit", "Quit vvidget", true, None::<&str>)?;
     menu.append(&quit_item)?;
 
+    let item_resources = toggle_resources.clone();
+    let item_spotify = toggle_spotify.clone();
+    let item_weather = toggle_weather.clone();
+    let item_speedtest = toggle_speedtest.clone();
+    let item_launcher = toggle_launcher.clone();
+    let item_quick_settings = toggle_quick_settings.clone();
+    let item_calendar = toggle_calendar.clone();
+    let item_clock = toggle_clock.clone();
+    let item_bluetooth = toggle_bluetooth.clone();
+    let item_battery = toggle_battery.clone();
+    let item_lock = toggle_lock.clone();
+
     let tray = TrayIconBuilder::new()
         .icon(icon)
         .tooltip("vvidget - Windows 11 Desktop Widgets")
@@ -249,9 +261,26 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
             match id {
                 "toggle_lock" => {
                     let handle = app_handle.clone();
+                    let item = item_lock.clone();
                     tauri::async_runtime::spawn(async move {
-                        if let Ok(mut config) = load_config(handle.clone()).await {
+                        if let Some(cm) = handle.try_state::<crate::config::ConfigManager>() {
+                            if let Ok((new_val, snapshot)) = cm.update_config(|config| {
+                                config.lock_positions = !config.lock_positions;
+                                Ok((config.lock_positions, config.clone()))
+                            }).await {
+                                let _ = item.set_checked(new_val);
+                                if let Some(wm) = handle.try_state::<crate::window::WindowManager>() {
+                                    wm.set_locked(new_val);
+                                }
+                                use tauri::Emitter;
+                                let _ = handle.emit("config-changed", &snapshot);
+                            }
+                        } else if let Ok(mut config) = load_config(handle.clone()).await {
                             config.lock_positions = !config.lock_positions;
+                            let _ = item.set_checked(config.lock_positions);
+                            if let Some(wm) = handle.try_state::<crate::window::WindowManager>() {
+                                wm.set_locked(config.lock_positions);
+                            }
                             let _ = save_config_immediate(handle, config).await;
                         }
                     });
@@ -266,35 +295,59 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
                 | "toggle_clock"
                 | "toggle_bluetooth"
                 | "toggle_battery" => {
-                    let widget_key = match id {
-                        "toggle_resources" => "resources",
-                        "toggle_spotify" => "spotify",
-                        "toggle_weather" => "weather",
-                        "toggle_speedtest" => "speedtest",
-                        "toggle_launcher" => "launcher",
-                        "toggle_quick_settings" => "quick_settings",
-                        "toggle_calendar" => "calendar",
-                        "toggle_clock" => "clock",
-                        "toggle_bluetooth" => "bluetooth",
-                        "toggle_battery" => "battery",
-                        _ => "",
+                    let (widget_key, item) = match id {
+                        "toggle_resources" => ("resources", item_resources.clone()),
+                        "toggle_spotify" => ("spotify", item_spotify.clone()),
+                        "toggle_weather" => ("weather", item_weather.clone()),
+                        "toggle_speedtest" => ("speedtest", item_speedtest.clone()),
+                        "toggle_launcher" => ("launcher", item_launcher.clone()),
+                        "toggle_quick_settings" => ("quick_settings", item_quick_settings.clone()),
+                        "toggle_calendar" => ("calendar", item_calendar.clone()),
+                        "toggle_clock" => ("clock", item_clock.clone()),
+                        "toggle_bluetooth" => ("bluetooth", item_bluetooth.clone()),
+                        "toggle_battery" => ("battery", item_battery.clone()),
+                        _ => ("", item_resources.clone()),
                     };
+                    if widget_key.is_empty() {
+                        return;
+                    }
                     let handle = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
-                        if let Ok(mut config) = load_config(handle.clone()).await {
-                            let (w, h) = match widget_key {
-                                "resources" => (320.0, 360.0),
-                                "spotify" => (320.0, 240.0),
-                                "weather" => (320.0, 480.0),
-                                "speedtest" => (320.0, 240.0),
-                                "launcher" => (320.0, 360.0),
-                                "quick_settings" => (320.0, 240.0),
-                                "calendar" => (320.0, 360.0),
-                                "clock" => (320.0, 360.0),
-                                "bluetooth" => (320.0, 240.0),
-                                "battery" => (320.0, 360.0),
-                                _ => (320.0, 240.0),
-                            };
+                        let (w, h) = match widget_key {
+                            "resources" => (320.0, 360.0),
+                            "spotify" => (320.0, 240.0),
+                            "weather" => (320.0, 480.0),
+                            "speedtest" => (320.0, 240.0),
+                            "launcher" => (320.0, 360.0),
+                            "quick_settings" => (320.0, 240.0),
+                            "calendar" => (320.0, 360.0),
+                            "clock" => (320.0, 360.0),
+                            "bluetooth" => (320.0, 240.0),
+                            "battery" => (320.0, 360.0),
+                            _ => (320.0, 240.0),
+                        };
+                        if let Some(cm) = handle.try_state::<crate::config::ConfigManager>() {
+                            if let Ok((new_vis, snapshot)) = cm.update_config(|config| {
+                                let entry = config.widgets.entry(widget_key.to_string()).or_insert_with(|| {
+                                    crate::config::WidgetPlacement {
+                                        id: widget_key.to_string(),
+                                        visible: false,
+                                        logical_x: 160.0,
+                                        logical_y: 120.0,
+                                        logical_width: w,
+                                        logical_height: h,
+                                        scale_factor: 1.0,
+                                        monitor_id: None,
+                                    }
+                                });
+                                entry.visible = !entry.visible;
+                                Ok((entry.visible, config.clone()))
+                            }).await {
+                                let _ = item.set_checked(new_vis);
+                                use tauri::Emitter;
+                                let _ = handle.emit("config-changed", &snapshot);
+                            }
+                        } else if let Ok(mut config) = load_config(handle.clone()).await {
                             let entry = config.widgets.entry(widget_key.to_string()).or_insert_with(|| {
                                 crate::config::WidgetPlacement {
                                     id: widget_key.to_string(),
@@ -308,6 +361,7 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
                                 }
                             });
                             entry.visible = !entry.visible;
+                            let _ = item.set_checked(entry.visible);
                             let _ = save_config_immediate(handle, config).await;
                         }
                     });
@@ -319,7 +373,15 @@ pub fn setup_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn
                     let _ = layout_docked.set_checked(!is_ind);
                     let handle = app_handle.clone();
                     tauri::async_runtime::spawn(async move {
-                        if let Ok(mut config) = load_config(handle.clone()).await {
+                        if let Some(cm) = handle.try_state::<crate::config::ConfigManager>() {
+                            if let Ok(snapshot) = cm.update_config(|config| {
+                                config.layout_mode = mode.to_string();
+                                Ok(config.clone())
+                            }).await {
+                                use tauri::Emitter;
+                                let _ = handle.emit("config-changed", &snapshot);
+                            }
+                        } else if let Ok(mut config) = load_config(handle.clone()).await {
                             config.layout_mode = mode.to_string();
                             let _ = save_config_immediate(handle, config).await;
                         }

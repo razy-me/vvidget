@@ -63,6 +63,7 @@ pub struct WindowManager {
     locked: Arc<AtomicBool>,
     snap_config: Arc<RwLock<SnapConfig>>,
     config_manager: Arc<RwLock<Option<crate::config::ConfigManager>>>,
+    sync_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl Default for WindowManager {
@@ -78,7 +79,12 @@ impl WindowManager {
             locked: Arc::new(AtomicBool::new(false)),
             snap_config: Arc::new(RwLock::new(SnapConfig::default())),
             config_manager: Arc::new(RwLock::new(None)),
+            sync_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
+    }
+
+    pub fn sync_lock(&self) -> Arc<tokio::sync::Mutex<()>> {
+        self.sync_lock.clone()
     }
 
     pub fn is_locked(&self) -> bool {
@@ -87,6 +93,8 @@ impl WindowManager {
 
     pub fn set_locked(&self, locked: bool) {
         self.locked.store(locked, Ordering::SeqCst);
+        #[cfg(windows)]
+        super::win32::set_positions_locked(locked);
     }
 
     pub fn set_snapping(&self, enabled: bool, threshold: i32) {
@@ -162,12 +170,28 @@ impl WindowManager {
     }
 
     pub fn handle_window_moved(&self, hwnd: isize, rect: Rect) {
+        if self.is_locked() {
+            return;
+        }
         if let Some(info) = self.find_widget_by_hwnd(hwnd) {
-            let scale = if info.scale_factor > 0.0 { info.scale_factor } else { 1.0 };
+            #[cfg(windows)]
+            let current_scale = {
+                let s = super::win32::get_window_scale(hwnd);
+                if s > 0.0 { s } else { info.scale_factor }
+            };
+            #[cfg(not(windows))]
+            let current_scale = info.scale_factor;
+            let scale = if current_scale > 0.0 { current_scale } else { 1.0 };
             let logical_x = (rect.left as f64) / scale;
             let logical_y = (rect.top as f64) / scale;
             let logical_width = ((rect.right - rect.left) as f64) / scale;
             let logical_height = ((rect.bottom - rect.top) as f64) / scale;
+
+            if let Ok(mut map) = self.widgets.write() {
+                if let Some(w) = map.get_mut(&info.id) {
+                    w.scale_factor = scale;
+                }
+            }
 
             self.update_window_position(&info.id, logical_x, logical_y, logical_width, logical_height);
 
@@ -175,13 +199,21 @@ impl WindowManager {
                 let widget_id = info.id.clone();
                 tauri::async_runtime::spawn(async move {
                     let mut config = cm.get_config().await;
-                    if let Some(placement) = config.widgets.get_mut(&widget_id) {
-                        placement.logical_x = logical_x;
-                        placement.logical_y = logical_y;
-                        placement.logical_width = logical_width;
-                        placement.logical_height = logical_height;
-                        placement.scale_factor = scale;
-                    }
+                    let placement = config.widgets.entry(widget_id.clone()).or_insert_with(|| crate::config::WidgetPlacement {
+                        id: widget_id.clone(),
+                        visible: true,
+                        logical_x,
+                        logical_y,
+                        logical_width,
+                        logical_height,
+                        scale_factor: scale,
+                        monitor_id: None,
+                    });
+                    placement.logical_x = logical_x;
+                    placement.logical_y = logical_y;
+                    placement.logical_width = logical_width;
+                    placement.logical_height = logical_height;
+                    placement.scale_factor = scale;
                     if let Err(e) = cm.save_debounced(config).await {
                         log::error!("Failed to save debounced widget position: {}", e);
                     }

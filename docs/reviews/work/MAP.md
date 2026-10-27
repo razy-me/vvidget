@@ -20,7 +20,7 @@
 ## Modules & Partitioning
 - **M1 (Core Windows Native & Backend Host)**: `src-tauri/src/window/*`, `src-tauri/src/lib.rs`, `src-tauri/src/tray/*`, `src-tauri/src/actions/*`.
 - **M2 (Data Persistence & External Services)**: `src-tauri/src/config/*`, `src-tauri/src/speedtest/*`, `src-tauri/src/calendar/*`, `src-tauri/src/geo/*`.
-- **M3 (Hardware & System Telemetry Backend)**: `src-tauri/src/battery/*`, `src-tauri/src/bluetooth/*`, `src-tauri/src/sysinfo/*`, `src-tauri/src/media/*`, `src-tauri/src/launcher/*`.
+- **M3 (Hardware & System Telemetry Backend)**: `src-tauri/src/battery/*`, `src-tauri/src/bluetooth/*`, `src-tauri/src/sysinfo/*`, `src-tauri/src/media/*`, `src-tauri/src/launcher/*`, `src-tauri/src/audio/*`.
 - **M4 (Frontend Shell, Layout, Dragging & Design Tokens)**: `src/App.tsx`, `src/components/layout/*`, `src/components/docking/*`, `src/components/ui/*`, `src/hooks/useGridDrag.ts`, `src/utils/gridCollision.ts`, `src/styles/fluent.css`, `src/index.css`.
 - **M5 (System & Hardware Widgets & Hooks)**: `src/widgets/battery/*`, `src/widgets/bluetooth/*`, `src/widgets/resources/*`, `src/widgets/quick-settings/*`, `src/hooks/useBattery.ts`, `src/hooks/useSystemMetrics.ts`, `src/hooks/useMasterVolume.ts`.
-- **M6 (Productivity & Media Widgets, Weather Service & Settings)**: `src/widgets/clock/*`, `src/widgets/calendar/*`, `src/widgets/spotify/*`, `src/widgets/weather/*`, `src/widgets/launcher/*`, `src/widgets/speedtest/*`, `src/services/weather/*`, `src/pages/settings/*`, `src/hooks/*`.
+- **M6 (Productivity & Media Widgets, Weather Service & Settings)**: `src/widgets/clock/*`, `src/widgets/calendar/*`, `src/widgets/spotify/*`, `src/widgets/weather/*`, `src/widgets/launcher/*`, `src/widgets/speedtest/*`, `src/services/weather/*`, `src/pages/settings/*`.

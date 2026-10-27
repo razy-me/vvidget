@@ -227,6 +227,117 @@ pub fn parse_epic_manifest_item(content: &str) -> Option<LauncherItem> {
     })
 }
 
+#[cfg(windows)]
+pub(crate) mod reg {
+    use std::ffi::c_void;
+    use std::path::PathBuf;
+
+    const HKEY_CURRENT_USER: isize = -2147483647; // 0x80000001
+    const HKEY_LOCAL_MACHINE: isize = -2147483646; // 0x80000002
+    const KEY_READ: u32 = 0x20019;
+
+    #[link(name = "advapi32")]
+    extern "system" {
+        fn RegOpenKeyExW(
+            hKey: *mut c_void,
+            lpSubKey: *const u16,
+            ulOptions: u32,
+            samDesired: u32,
+            phkResult: *mut *mut c_void,
+        ) -> i32;
+
+        fn RegQueryValueExW(
+            hKey: *mut c_void,
+            lpValueName: *const u16,
+            lpReserved: *mut u32,
+            lpType: *mut u32,
+            lpData: *mut u8,
+            lpcbData: *mut u32,
+        ) -> i32;
+
+        fn RegCloseKey(hKey: *mut c_void) -> i32;
+    }
+
+    fn to_wide(s: &str) -> Vec<u16> {
+        s.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+
+    fn query_reg_string(root: isize, subkey: &str, value_name: &str) -> Option<String> {
+        unsafe {
+            let mut hkey: *mut c_void = std::ptr::null_mut();
+            let wide_subkey = to_wide(subkey);
+            let status = RegOpenKeyExW(
+                root as *mut c_void,
+                wide_subkey.as_ptr(),
+                0,
+                KEY_READ,
+                &mut hkey,
+            );
+            if status != 0 || hkey.is_null() {
+                return None;
+            }
+
+            let wide_val_name = to_wide(value_name);
+            let mut val_type: u32 = 0;
+            let mut buf = [0u8; 1024];
+            let mut buf_len: u32 = buf.len() as u32;
+
+            let query_status = RegQueryValueExW(
+                hkey,
+                wide_val_name.as_ptr(),
+                std::ptr::null_mut(),
+                &mut val_type,
+                buf.as_mut_ptr(),
+                &mut buf_len,
+            );
+
+            RegCloseKey(hkey);
+
+            if query_status != 0 || buf_len == 0 {
+                return None;
+            }
+
+            let u16_slice = std::slice::from_raw_parts(
+                buf.as_ptr() as *const u16,
+                (buf_len as usize) / 2,
+            );
+            let trimmed_slice = match u16_slice.iter().position(|&c| c == 0) {
+                Some(pos) => &u16_slice[..pos],
+                None => u16_slice,
+            };
+
+            String::from_utf16(trimmed_slice).ok()
+        }
+    }
+
+    pub fn query_steam_registry_roots() -> Vec<PathBuf> {
+        let mut roots = Vec::new();
+
+        if let Some(path_str) = query_reg_string(HKEY_CURRENT_USER, "Software\\Valve\\Steam", "SteamPath") {
+            let p = PathBuf::from(path_str.trim().replace('/', "\\"));
+            if p.exists() && p.is_dir() && !roots.contains(&p) {
+                roots.push(p);
+            }
+        }
+
+        if let Some(path_str) = query_reg_string(HKEY_LOCAL_MACHINE, "SOFTWARE\\WOW6432Node\\Valve\\Steam", "InstallPath") {
+            let p = PathBuf::from(path_str.trim().replace('/', "\\"));
+            if p.exists() && p.is_dir() && !roots.contains(&p) {
+                roots.push(p);
+            }
+        }
+
+        if let Some(path_str) = query_reg_string(HKEY_LOCAL_MACHINE, "SOFTWARE\\Valve\\Steam", "InstallPath") {
+            let p = PathBuf::from(path_str.trim().replace('/', "\\"));
+            if p.exists() && p.is_dir() && !roots.contains(&p) {
+                roots.push(p);
+            }
+        }
+
+        roots
+    }
+}
+
 /// Scans the local filesystem for installed Steam games across all libraries.
 pub fn scan_steam_games() -> Vec<LauncherItem> {
     let mut items = Vec::new();
@@ -234,6 +345,16 @@ pub fn scan_steam_games() -> Vec<LauncherItem> {
 
     // Check candidate Steam installation root directories
     let mut candidate_roots = Vec::new();
+
+    #[cfg(windows)]
+    {
+        for root in reg::query_steam_registry_roots() {
+            if !candidate_roots.contains(&root) {
+                candidate_roots.push(root);
+            }
+        }
+    }
+
     if let Ok(prog_x86) = std::env::var("ProgramFiles(x86)") {
         candidate_roots.push(PathBuf::from(prog_x86).join("Steam"));
     }
@@ -451,8 +572,32 @@ pub fn validate_launch_target(target: &str) -> Result<(), String> {
         }
     }
 
+    // Prohibit remote SMB / UNC network paths and dangerous schemes to prevent NetNTLM credential leaks
+    if lower.starts_with(r"\\")
+        || lower.starts_with("//")
+        || lower.starts_with(r"\??\")
+        || lower.starts_with("file:")
+        || lower.starts_with("smb:")
+        || lower.starts_with("dav:")
+    {
+        return Err("UNC network paths are prohibited".to_string());
+    }
+
     // If not a scheme, must be an absolute file path that exists on disk
     let path = Path::new(trimmed);
+    #[cfg(windows)]
+    {
+        use std::path::Component;
+        if let Some(Component::Prefix(prefix_comp)) = path.components().next() {
+            match prefix_comp.kind() {
+                std::path::Prefix::UNC(..) | std::path::Prefix::VerbatimUNC(..) => {
+                    return Err("UNC network paths are prohibited".to_string());
+                }
+                _ => {}
+            }
+        }
+    }
+
     if !path.is_absolute() {
         return Err("Target must be an allowlisted URI scheme or an absolute file path".to_string());
     }
@@ -471,7 +616,7 @@ pub fn validate_launch_target(target: &str) -> Result<(), String> {
         .unwrap_or("")
         .to_lowercase();
 
-    let allowed_extensions = ["exe", "lnk", "url"];
+    let allowed_extensions = ["exe", "lnk"];
     if !allowed_extensions.contains(&ext.as_str()) {
         return Err(format!(
             "File extension '{}' is not an allowed executable or shortcut",
@@ -505,56 +650,60 @@ pub async fn scan_installed_games() -> Result<Vec<LauncherItem>, String> {
 pub async fn launch_app_or_uri(target: String) -> Result<(), String> {
     validate_launch_target(&target)?;
 
-    #[cfg(windows)]
-    {
-        use std::os::windows::ffi::OsStrExt;
-        use windows::core::{w, PCWSTR};
-        use windows::Win32::Foundation::HWND;
-        use windows::Win32::UI::Shell::ShellExecuteW;
-        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    tokio::task::spawn_blocking(move || {
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStrExt;
+            use windows::core::{w, PCWSTR};
+            use windows::Win32::Foundation::HWND;
+            use windows::Win32::UI::Shell::ShellExecuteW;
+            use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 
-        let wide_target: Vec<u16> = std::ffi::OsStr::new(&target)
-            .encode_wide()
-            .chain(std::iter::once(0))
-            .collect();
+            let wide_target: Vec<u16> = std::ffi::OsStr::new(&target)
+                .encode_wide()
+                .chain(std::iter::once(0))
+                .collect();
 
-        let path = std::path::Path::new(&target);
-        let parent_dir = if path.is_file() {
-            path.parent().map(|p| {
-                std::ffi::OsStr::new(p)
-                    .encode_wide()
-                    .chain(std::iter::once(0))
-                    .collect::<Vec<u16>>()
-            })
-        } else {
-            None
-        };
-        let wide_dir_ptr = match &parent_dir {
-            Some(d) => PCWSTR(d.as_ptr()),
-            None => PCWSTR::null(),
-        };
+            let path = std::path::Path::new(&target);
+            let parent_dir = if path.is_file() {
+                path.parent().map(|p| {
+                    std::ffi::OsStr::new(p)
+                        .encode_wide()
+                        .chain(std::iter::once(0))
+                        .collect::<Vec<u16>>()
+                })
+            } else {
+                None
+            };
+            let wide_dir_ptr = match &parent_dir {
+                Some(d) => PCWSTR(d.as_ptr()),
+                None => PCWSTR::null(),
+            };
 
-        unsafe {
-            let res = ShellExecuteW(
-                HWND(core::ptr::null_mut()),
-                w!("open"),
-                PCWSTR(wide_target.as_ptr()),
-                PCWSTR::null(),
-                wide_dir_ptr,
-                SW_SHOWNORMAL,
-            );
-            let code = res.0 as usize;
-            if code <= 32 {
-                return Err(format!("ShellExecuteW failed with error code: {}", code));
+            unsafe {
+                let res = ShellExecuteW(
+                    HWND(core::ptr::null_mut()),
+                    w!("open"),
+                    PCWSTR(wide_target.as_ptr()),
+                    PCWSTR::null(),
+                    wide_dir_ptr,
+                    SW_SHOWNORMAL,
+                );
+                let code = res.0 as usize;
+                if code <= 32 {
+                    return Err(format!("ShellExecuteW failed with error code: {}", code));
+                }
             }
+            Ok(())
         }
-        Ok(())
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = target;
-        Ok(())
-    }
+        #[cfg(not(windows))]
+        {
+            let _ = target;
+            Ok(())
+        }
+    })
+    .await
+    .map_err(|e| format!("Launch task join failed: {}", e))?
 }
 
 /// Tauri command: adds or updates a custom launcher item in persistent AppConfig.
@@ -589,17 +738,20 @@ pub async fn add_custom_launcher_item<R: tauri::Runtime>(
     }
 
     if let Some(cm) = app.try_state::<crate::config::ConfigManager>() {
-        let mut config = cm.get_config().await;
-        if let Some(existing) = config.launcher_items.iter_mut().find(|i| i.id == item.id) {
-            *existing = item;
-        } else {
-            config.launcher_items.push(item);
-        }
-        cm.save_immediate(config.clone())
+        let snapshot = cm
+            .update_config(|config| {
+                if let Some(existing) = config.launcher_items.iter_mut().find(|i| i.id == item.id) {
+                    *existing = item;
+                } else {
+                    config.launcher_items.push(item);
+                }
+                Ok(config.clone())
+            })
             .await
             .map_err(|e| e.to_string())?;
+
         use tauri::Emitter;
-        let _ = app.emit("config-changed", &config);
+        let _ = app.emit("config-changed", &snapshot);
         Ok(())
     } else {
         Err("ConfigManager not available".to_string())
@@ -614,16 +766,19 @@ pub async fn remove_launcher_item<R: tauri::Runtime>(
     id: String,
 ) -> Result<(), String> {
     if let Some(cm) = app.try_state::<crate::config::ConfigManager>() {
-        let mut config = cm.get_config().await;
-        let initial_len = config.launcher_items.len();
-        config.launcher_items.retain(|i| i.id != id);
+        let snapshot = cm
+            .update_config(|config| {
+                let initial_len = config.launcher_items.len();
+                config.launcher_items.retain(|i| i.id != id);
+                let changed = config.launcher_items.len() != initial_len;
+                Ok((changed, config.clone()))
+            })
+            .await
+            .map_err(|e| e.to_string())?;
 
-        if config.launcher_items.len() != initial_len {
-            cm.save_immediate(config.clone())
-                .await
-                .map_err(|e| e.to_string())?;
+        if snapshot.0 {
             use tauri::Emitter;
-            let _ = app.emit("config-changed", &config);
+            let _ = app.emit("config-changed", &snapshot.1);
         }
         Ok(())
     } else {
@@ -835,5 +990,76 @@ mod tests {
     async fn test_scan_installed_games_async() {
         let res = scan_installed_games().await;
         assert!(res.is_ok(), "scan_installed_games should return Ok: {:?}", res);
+    }
+
+    #[test]
+    fn test_validate_launch_target_prohibits_unc_and_dangerous_schemes() {
+        let unc_targets = [
+            r"\\attacker-server\share\game.exe",
+            r"\\192.168.1.50\c$\game.exe",
+            "//evil.com/share/payload.exe",
+            "//localhost/share/poc.exe",
+            r"\??\UNC\evil.com\share\file.exe",
+            "file://attacker.com/share/poc.exe",
+            r"file:\\attacker.com\share\poc.exe",
+            "smb://attacker.com/share/game.exe",
+            "dav://attacker.com/share/game.exe",
+        ];
+
+        for target in unc_targets {
+            let res = validate_launch_target(target);
+            assert!(
+                res.is_err(),
+                "Target '{}' should have been prohibited as UNC",
+                target
+            );
+            assert!(
+                res.unwrap_err().contains("UNC network paths are prohibited"),
+                "Expected UNC prohibition error for '{}'",
+                target
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_launch_target_prohibits_url_shortcut_files() {
+        let temp_dir = std::env::temp_dir().join("vvidget_url_test");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let test_url = temp_dir.join("shortcut.url");
+        let _ = std::fs::write(&test_url, b"[InternetShortcut]\nURL=https://evil.com\n");
+
+        let target_str = test_url.to_string_lossy().to_string();
+        let res = validate_launch_target(&target_str);
+        assert!(
+            res.is_err(),
+            ".url file should be prohibited in launch target: {:?}",
+            res
+        );
+        let err_msg = res.unwrap_err();
+        assert!(
+            err_msg.contains("not an allowed executable or shortcut"),
+            "Expected not allowed executable error, got: {}",
+            err_msg
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_steam_registry_roots_query() {
+        // Query should safely return candidate roots without crashing
+        let roots = reg::query_steam_registry_roots();
+        for r in &roots {
+            assert!(r.exists(), "Discovered registry root must exist: {:?}", r);
+            assert!(r.is_dir(), "Discovered registry root must be a directory: {:?}", r);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_launch_app_or_uri_invalid_target_fails_fast() {
+        let res = launch_app_or_uri(r"\\evil-server\share\exploit.exe".to_string()).await;
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("UNC network paths are prohibited"));
     }
 }

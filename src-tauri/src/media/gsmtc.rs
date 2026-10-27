@@ -68,11 +68,13 @@ mod win {
                 }
             }
 
-            // 2. Look for any Spotify session (e.g. paused)
+            // 2. Fall back to any active playing session
             for s in &all_sessions {
-                if let Ok(app_id) = s.SourceAppUserModelId() {
-                    if app_id.to_string().to_lowercase().contains("spotify") {
-                        return Some(s.clone());
+                if let Ok(info) = s.GetPlaybackInfo() {
+                    if let Ok(status) = info.PlaybackStatus() {
+                        if status == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing {
+                            return Some(s.clone());
+                        }
                     }
                 }
             }
@@ -82,13 +84,11 @@ mod win {
                 return Some(current);
             }
 
-            // 4. Fall back to any active playing session
+            // 4. Fall back to any Spotify session (e.g. paused)
             for s in &all_sessions {
-                if let Ok(info) = s.GetPlaybackInfo() {
-                    if let Ok(status) = info.PlaybackStatus() {
-                        if status == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing {
-                            return Some(s.clone());
-                        }
+                if let Ok(app_id) = s.SourceAppUserModelId() {
+                    if app_id.to_string().to_lowercase().contains("spotify") {
+                        return Some(s.clone());
                     }
                 }
             }

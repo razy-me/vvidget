@@ -39,7 +39,8 @@ pub fn resolve_action_target(
     }
 }
 
-/// Validates that a custom action target string does not contain malicious metacharacters or control sequences.
+/// Validates that a custom action target string does not contain malicious metacharacters,
+/// UNC paths, dangerous protocols, or argument injection.
 fn validate_custom_target(target: &str) -> Result<(), String> {
     if target.contains('\0') || target.contains('\r') || target.contains('\n') {
         return Err("Target contains invalid control characters".to_string());
@@ -47,26 +48,100 @@ fn validate_custom_target(target: &str) -> Result<(), String> {
     if target.len() > 2048 {
         return Err("Target exceeds maximum allowed length (2048 chars)".to_string());
     }
-    // Prohibit remote SMB / UNC network paths to prevent NetNTLM credential leaks
-    if target.starts_with(r"\\") || target.starts_with("//") {
+
+    // Prohibit remote SMB / UNC network paths and dangerous schemes to prevent NetNTLM credential leaks
+    let lower = target.to_lowercase();
+    if lower.starts_with(r"\\")
+        || lower.starts_with("//")
+        || lower.starts_with(r"\??\")
+        || lower.starts_with("file:")
+        || lower.starts_with("ms-msdt:")
+        || lower.starts_with("search-ms:")
+        || lower.starts_with("search:")
+        || lower.starts_with("smb:")
+        || lower.starts_with("dav:")
+    {
         return Err("UNC network paths are prohibited".to_string());
     }
-    // Prohibit shell command chaining, pipe, and redirection attacks
-    if target.contains('&') || target.contains('|') || target.contains(';') || target.contains('`') {
+
+    // Prohibit shell command chaining, pipe, quotes, and redirection attacks
+    if target.contains('&')
+        || target.contains('|')
+        || target.contains(';')
+        || target.contains('`')
+        || target.contains('>')
+        || target.contains('<')
+        || target.contains('"')
+        || target.contains('\'')
+    {
         return Err("Target contains prohibited shell metacharacters".to_string());
     }
+
+    // If not a recognized safe URI scheme, validate as an executable target
+    if !is_uri_target(target) {
+        // Disallow dangerous shell interpreters and flags
+        let forbidden_patterns = [
+            "cmd.exe",
+            "powershell",
+            "pwsh",
+            "wscript",
+            "cscript",
+            "mshta",
+            "-enc",
+            "-encodedcommand",
+            "-command",
+            "/c",
+            "/k",
+        ];
+        for pat in forbidden_patterns {
+            if lower.contains(pat) {
+                return Err(format!("Command injection pattern detected: '{}'", pat));
+            }
+        }
+
+        // Prohibit argument injection: targets with spaces must resolve to an existing file
+        if target.contains(' ') && !std::path::Path::new(target).is_file() {
+            return Err("Custom executable paths cannot contain unquoted arguments".to_string());
+        }
+
+        // Prohibit dangerous script extensions
+        let path = std::path::Path::new(target);
+        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+            let ext_lower = ext.to_lowercase();
+            let dangerous_exts = [
+                "bat", "cmd", "vbs", "vbe", "js", "jse", "wsf", "wsh", "ps1", "psm1", "psd1",
+                "hta", "url",
+            ];
+            if dangerous_exts.contains(&ext_lower.as_str()) {
+                return Err(format!(
+                    "File extension '{}' is not an allowed executable",
+                    ext_lower
+                ));
+            }
+        }
+    }
+
     Ok(())
 }
 
-/// Returns true if the target looks like a URI scheme or shell URI.
+/// Returns true if the target looks like an allowlisted URI scheme or shell URI.
 fn is_uri_target(target: &str) -> bool {
-    target.starts_with("http://")
-        || target.starts_with("https://")
-        || target.starts_with("ms-")
-        || target.starts_with("shell:")
-        || target.starts_with("mailto:")
-        || target.starts_with("steam://")
-        || target.contains("://")
+    let lower = target.to_lowercase();
+    if lower.starts_with("file:")
+        || lower.starts_with("smb:")
+        || lower.starts_with("dav:")
+        || lower.starts_with("ms-msdt:")
+        || lower.starts_with("search-ms:")
+    {
+        return false;
+    }
+    lower.starts_with("http://")
+        || lower.starts_with("https://")
+        || lower.starts_with("ms-settings:")
+        || lower.starts_with("ms-")
+        || lower.starts_with("shell:")
+        || lower.starts_with("mailto:")
+        || lower.starts_with("steam://")
 }
 
 #[cfg(target_os = "windows")]
@@ -124,7 +199,9 @@ pub async fn execute_quick_action(
     custom_target: Option<String>,
 ) -> Result<(), String> {
     let resolved = resolve_action_target(&action_id, custom_target.as_deref())?;
-    execute_resolved_action(&resolved)
+    tokio::task::spawn_blocking(move || execute_resolved_action(&resolved))
+        .await
+        .map_err(|e| format!("Action task join failed: {}", e))?
 }
 
 /// Updates the dynamic instance configuration for a Quick Settings widget.
@@ -139,17 +216,18 @@ pub async fn update_quick_settings_instance<R: tauri::Runtime>(
     }
 
     if let Some(cm) = app.try_state::<crate::config::ConfigManager>() {
-        let mut config = cm.get_config().await;
-        config
-            .quick_settings_instances
-            .insert(instance.id.clone(), instance);
-
-        cm.save_immediate(config.clone())
+        let snapshot = cm
+            .update_config(|config| {
+                config
+                    .quick_settings_instances
+                    .insert(instance.id.clone(), instance);
+                Ok(config.clone())
+            })
             .await
             .map_err(|e| e.to_string())?;
 
         use tauri::Emitter;
-        let _ = app.emit("config-changed", &config);
+        let _ = app.emit("config-changed", &snapshot);
         Ok(())
     } else {
         Err("ConfigManager not available".to_string())
@@ -266,6 +344,15 @@ mod tests {
             r"\\10.0.0.1\c$\leak",
             "//evil.com/share",
             "//localhost/share",
+            r"\??\UNC\attacker.com\share",
+            "file://attacker.com/share/poc.exe",
+            r"file:\\attacker.com\share\poc.exe",
+            "file:///C:/Windows/System32/cmd.exe",
+            "ms-msdt:id%20PCWDiagnostic",
+            "search-ms:query=test&crumb=location:\\\\evil\\share",
+            "search:query=test",
+            "smb://attacker.com/share",
+            "dav://attacker.com/share",
         ];
         for target in unc_targets {
             let res = resolve_action_target("custom", Some(target));
@@ -274,7 +361,53 @@ mod tests {
                 "UNC target '{}' should have been prohibited",
                 target
             );
-            assert!(res.unwrap_err().contains("UNC network paths are prohibited"));
+            assert!(
+                res.unwrap_err().contains("UNC network paths are prohibited"),
+                "Expected UNC prohibition error for '{}'",
+                target
+            );
         }
+    }
+
+    #[test]
+    fn test_resolve_custom_action_prohibits_argument_injection() {
+        let bad_executables = [
+            "cmd.exe /c calc.exe",
+            "powershell.exe -WindowStyle Hidden -Command calc",
+            "pwsh -command calc",
+            "calc.exe --arg1 --arg2",
+            "notepad.exe \"C:\\secret.txt\"",
+            "notepad.exe 'C:\\secret.txt'",
+            "wscript.exe script.vbs",
+            "cscript.exe script.vbs",
+            "mshta.exe exploit.hta",
+            "script.bat",
+            "run.cmd",
+            "malicious.vbs",
+            "payload.ps1",
+            "shortcut.url",
+        ];
+
+        for bad in bad_executables {
+            let res = resolve_action_target("custom", Some(bad));
+            assert!(
+                res.is_err(),
+                "Target '{}' should have been rejected for security reasons",
+                bad
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_execute_quick_action_async_non_blocking() {
+        // Safe predefined action should resolve and execute via spawn_blocking
+        #[cfg(not(windows))]
+        {
+            let res = execute_quick_action("recyclebin".to_string(), None).await;
+            assert!(res.is_ok());
+        }
+        // Unknown action returns Err without spawning
+        let err = execute_quick_action("non_existent_action".to_string(), None).await;
+        assert!(err.is_err());
     }
 }
