@@ -186,10 +186,11 @@ pub mod integration {
     #[tauri::command]
     #[specta::specta]
     pub async fn sync_widget_windows<R: Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
-        let _guard = if let Some(wm) = app.try_state::<WindowManager>() {
-            Some(wm.sync_lock().lock().await)
-        } else {
-            None
+        let wm_opt = app.try_state::<WindowManager>();
+        let sync_lock = wm_opt.as_ref().map(|wm| wm.sync_lock());
+        let _guard = match sync_lock.as_ref() {
+            Some(lock) => Some(lock.lock().await),
+            None => None,
         };
         let config = load_config(app.clone()).await?;
         if config.layout_mode == "docked" {
@@ -599,10 +600,13 @@ pub fn run() {
 
             let app_handle = app.handle().clone();
             let wm_config_sync = window_manager_setup.clone();
+            let sync_mutex = wm_config_sync.sync_lock();
             app.listen("config-changed", move |_event| {
                 let handle = app_handle.clone();
                 let wm = wm_config_sync.clone();
+                let mutex = sync_mutex.clone();
                 tauri::async_runtime::spawn(async move {
+                    let _guard = mutex.lock().await;
                     if let Ok(cfg) = load_config(handle.clone()).await {
                         wm.set_snap_to_edges(cfg.snap_to_edges);
                     }
