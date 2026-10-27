@@ -554,4 +554,138 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
+
+    #[tokio::test]
+    async fn test_m1_03_non_starter_widget_persists_on_move() {
+        let temp_dir = std::env::temp_dir().join(format!("wm_test_m103_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let config_path = temp_dir.join("config.json");
+        let cm = crate::config::ConfigManager::new(config_path.clone());
+
+        // Initial config does not have speedtest
+        let initial_cfg = cm.get_config().await;
+        assert!(!initial_cfg.widgets.contains_key("speedtest"));
+
+        let wm = WindowManager::new();
+        wm.set_config_manager(cm.clone());
+
+        {
+            let mut map = wm.widgets.write().unwrap();
+            map.insert(
+                "speedtest".to_string(),
+                WidgetWindowInfo {
+                    id: "speedtest".to_string(),
+                    hwnd: 88888,
+                    rect: PhysicalRect { x: 0, y: 0, width: 320, height: 240 },
+                    logical_rect: LogicalRect { x: 0.0, y: 0.0, width: 320.0, height: 240.0 },
+                    scale_factor: 1.0,
+                },
+            );
+        }
+
+        // Simulate moving non-starter widget
+        wm.handle_window_moved(88888, Rect::new(200, 300, 520, 540));
+
+        // Memory should be updated immediately
+        {
+            let map = wm.widgets.read().unwrap();
+            let info = map.get("speedtest").unwrap();
+            assert_eq!(info.rect.x, 200);
+            assert_eq!(info.rect.y, 300);
+        }
+
+        // Config should have newly inserted entry with persisted coordinates
+        let mut updated = false;
+        for _ in 0..20 {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            let cfg = cm.get_config().await;
+            if let Some(p) = cfg.widgets.get("speedtest") {
+                if (p.logical_x - 200.0).abs() < 1e-3 && (p.logical_y - 300.0).abs() < 1e-3 {
+                    updated = true;
+                    break;
+                }
+            }
+        }
+        assert!(updated, "ConfigManager should have created and persisted non-starter widget placement");
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_m1_05_lock_state_prevents_drag_and_persistence() {
+        let temp_dir = std::env::temp_dir().join(format!("wm_test_m105_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let config_path = temp_dir.join("config.json");
+        let cm = crate::config::ConfigManager::new(config_path.clone());
+
+        let wm = WindowManager::new();
+        wm.set_config_manager(cm.clone());
+
+        {
+            let mut map = wm.widgets.write().unwrap();
+            map.insert(
+                "resources".to_string(),
+                WidgetWindowInfo {
+                    id: "resources".to_string(),
+                    hwnd: 99999,
+                    rect: PhysicalRect { x: 50, y: 50, width: 320, height: 180 },
+                    logical_rect: LogicalRect { x: 50.0, y: 50.0, width: 320.0, height: 180.0 },
+                    scale_factor: 1.0,
+                },
+            );
+        }
+
+        // Lock positions
+        wm.set_locked(true);
+        assert!(wm.is_locked());
+        assert!(win32::is_positions_locked());
+
+        // Attempt to move while locked
+        wm.handle_window_moved(99999, Rect::new(400, 500, 720, 680));
+
+        // In-memory rect should remain unchanged at (50, 50)
+        {
+            let map = wm.widgets.read().unwrap();
+            let info = map.get("resources").unwrap();
+            assert_eq!(info.rect.x, 50);
+            assert_eq!(info.rect.y, 50);
+        }
+
+        // Unlock
+        wm.set_locked(false);
+        assert!(!wm.is_locked());
+        assert!(!win32::is_positions_locked());
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[tokio::test]
+    async fn test_x_ipc_concurrency_02_sync_lock_mutual_exclusion() {
+        let wm = WindowManager::new();
+        let lock = wm.sync_lock();
+
+        let counter = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut tasks = Vec::new();
+
+        for _ in 0..5 {
+            let lock_clone = lock.clone();
+            let counter_clone = counter.clone();
+            tasks.push(tokio::spawn(async move {
+                let _guard = lock_clone.lock().await;
+                let val = counter_clone.load(Ordering::SeqCst);
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                counter_clone.store(val + 1, Ordering::SeqCst);
+            }));
+        }
+
+        for t in tasks {
+            t.await.unwrap();
+        }
+
+        assert_eq!(counter.load(Ordering::SeqCst), 5);
+    }
+
+    #[test]
+    fn test_m1_04_window_scale_lookup() {
+        let scale = win32::get_window_scale(0);
+        assert!(scale >= 1.0, "Scale should be at least 1.0");
+    }
 }

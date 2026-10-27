@@ -186,10 +186,9 @@ pub mod integration {
     #[tauri::command]
     #[specta::specta]
     pub async fn sync_widget_windows<R: Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
-        let wm_opt = app.try_state::<WindowManager>();
-        let sync_lock = wm_opt.as_ref().map(|wm| wm.sync_lock());
-        let _guard = match sync_lock.as_ref() {
-            Some(lock) => Some(lock.lock().await),
+        let sync_lock = app.try_state::<WindowManager>().map(|wm| wm.sync_lock());
+        let _guard = match sync_lock {
+            Some(ref lock) => Some(lock.lock().await),
             None => None,
         };
         let config = load_config(app.clone()).await?;
