@@ -453,8 +453,8 @@
                          }
 ```
 
-### [MAJOR] [OPEN] M3-02 WinRT Battery report query lacks COM apartment initialization
-- **Status**: OPEN
+### [MAJOR] [FIXED] M3-02 WinRT Battery report query lacks COM apartment initialization
+- **Status**: FIXED
 - **Where**: `src-tauri/src/battery/mod.rs:440`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -471,8 +471,8 @@
      use windows::System::Power::BatteryStatus as WinRTBatteryStatus;
 ```
 
-### [MAJOR] [OPEN] M3-03 Battery tracker fails to reset discharge baseline when unplugged at full charge
-- **Status**: OPEN
+### [MAJOR] [FIXED] M3-03 Battery tracker fails to reset discharge baseline when unplugged at full charge
+- **Status**: FIXED
 - **Where**: `src-tauri/src/battery/mod.rs:109-115`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -503,8 +503,8 @@
 +        self.last_power_state = Some((telemetry.is_charging, telemetry.is_plugged_in));
 ```
 
-### [MAJOR] [OPEN] M3-04 Bluetooth device connection returns false success without initiating connection
-- **Status**: OPEN
+### [MAJOR] [FIXED] M3-04 Bluetooth device connection returns false success without initiating connection
+- **Status**: FIXED
 - **Where**: `src-tauri/src/bluetooth/mod.rs:515-523`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -528,8 +528,8 @@
      }
 ```
 
-### [MAJOR] [OPEN] M3-05 GSMTC session selector prioritizes paused Spotify over actively playing media
-- **Status**: OPEN
+### [MAJOR] [FIXED] M3-05 GSMTC session selector prioritizes paused Spotify over actively playing media
+- **Status**: FIXED
 - **Where**: `src-tauri/src/media/gsmtc.rs:71-95`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -573,8 +573,8 @@
                  }
 ```
 
-### [MAJOR] [OPEN] M3-06 Media monitor event loop ignores timeline seeking and scrubbing
-- **Status**: OPEN
+### [MAJOR] [FIXED] M3-06 Media monitor event loop ignores timeline seeking and scrubbing
+- **Status**: FIXED
 - **Where**: `src-tauri/src/media/mod.rs:58-69`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -1689,8 +1689,8 @@
      ];
 ```
 
-### [MINOR] [OPEN] M3-10 Cold startup delay from synchronous 200ms sleep in `MetricsCollector::new()`
-- **Status**: OPEN
+### [MINOR] [FIXED] M3-10 Cold startup delay from synchronous 200ms sleep in `MetricsCollector::new()`
+- **Status**: FIXED
 - **Where**: `src-tauri/src/sysinfo/collector.rs:28-30`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -1707,8 +1707,8 @@
          system.refresh_cpu_all();
 ```
 
-### [MINOR] [OPEN] M3-11 Sysinfo background worker executes `block_on` in an inner loop every 500ms
-- **Status**: OPEN
+### [MINOR] [FIXED] M3-11 Sysinfo background worker executes `block_on` in an inner loop every 500ms
+- **Status**: FIXED
 - **Where**: `src-tauri/src/sysinfo/mod.rs:48-55`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH
@@ -1732,8 +1732,8 @@
 +                }
 ```
 
-### [MINOR] [OPEN] M3-12 Core Audio commands recreate device enumerator and endpoint volume on every slider tick
-- **Status**: OPEN
+### [MINOR] [FIXED] M3-12 Core Audio commands recreate device enumerator and endpoint volume on every slider tick
+- **Status**: FIXED
 - **Where**: `src-tauri/src/audio/mod.rs:10-23`
 - **Source**: `r-review` (2026-10-27)
 - **Confidence**: HIGH

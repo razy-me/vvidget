@@ -215,4 +215,22 @@ mod tests {
             assert!(mute == true || mute == false);
         }
     }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_endpoint_volume_caching_and_reuse() {
+        let _com_guard = crate::geo::winrt::ComGuard::new();
+        // M3-12: Verify with_endpoint_volume functions without error
+        let res1 = win::with_endpoint_volume(|endpoint| unsafe {
+            endpoint.GetMasterVolumeLevelScalar().map_err(|e| format!("{e}"))
+        });
+        if let Ok(vol1) = res1 {
+            // Second call within 2 seconds should reuse cached endpoint cleanly
+            let res2 = win::with_endpoint_volume(|endpoint| unsafe {
+                endpoint.GetMasterVolumeLevelScalar().map_err(|e| format!("{e}"))
+            });
+            assert!(res2.is_ok());
+            assert_eq!(vol1, res2.unwrap());
+        }
+    }
 }
