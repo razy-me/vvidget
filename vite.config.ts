@@ -34,6 +34,9 @@ export default defineConfig({
             }
             return "vendor";
           }
+          if (normalized.includes("src/components/ui/")) return "ui-primitives";
+          if (normalized.includes("src/hooks/") || normalized.includes("src/components/layout/")) return "ui-core";
+          if (normalized.includes("src/utils/") || normalized.includes("calendarUtils")) return "ui-utils";
           if (normalized.includes("src/widgets/registry")) return "widget-registry";
           if (normalized.includes("src/widgets/resources/")) return "widget-resources";
           if (normalized.includes("src/widgets/spotify/")) return "widget-spotify";

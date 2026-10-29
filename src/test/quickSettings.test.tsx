@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { QuickSettingsWidget, PREDEFINED_ACTIONS } from "@/widgets/quick-settings/QuickSettingsWidget";
 import { DEFAULT_CONFIG } from "@/types/config";
@@ -20,6 +20,13 @@ vi.mock("@tauri-apps/api/event", () => ({
 describe("QuickSettingsWidget Component", () => {
   beforeEach(() => {
     mockInvoke.mockClear();
+    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+      invoke: mockInvoke,
+    };
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
   });
 
   it("renders default title and all predefined quick action tiles", async () => {
@@ -261,6 +268,7 @@ describe("QuickSettingsWidget Component", () => {
 
   it("regression M5-07: does not display false positive 'Gestartet' feedback when quick action fails", async () => {
     mockInvoke.mockImplementation((cmd: string) => {
+      if (cmd === "load_config") return Promise.resolve(DEFAULT_CONFIG);
       if (cmd === "execute_quick_action") {
         return Promise.reject(new Error("Target executable not found"));
       }
@@ -284,6 +292,7 @@ describe("QuickSettingsWidget Component", () => {
   it("regression X-ipc-concurrency-04: updates instance title and pins atomically without competing IPC cascades", async () => {
     let capturedUpdatedInstance: unknown = null;
     mockInvoke.mockImplementation((cmd: string, args: unknown) => {
+      if (cmd === "load_config") return Promise.resolve(DEFAULT_CONFIG);
       if (cmd === "update_quick_settings_instance") {
         capturedUpdatedInstance = (args as { instance: unknown })?.instance;
         return Promise.resolve();

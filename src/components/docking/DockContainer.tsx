@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, type FC, type ReactNode } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { safeInvoke } from "@/utils/tauri";
 import {
   GripHorizontal,
   Lock,
@@ -57,8 +58,7 @@ export const DockContainer: FC<DockContainerProps> = ({
       return;
     }
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("open_settings");
+      await safeInvoke("open_settings");
     } catch {
       // In web browser or mock preview, open settings query param or log
       window.location.search = "?view=settings";

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { BluetoothWidget, getDeviceIcon } from "@/widgets/bluetooth/BluetoothWidget";
 import type { BluetoothDeviceInfo } from "@/types/bluetooth";
@@ -64,6 +64,13 @@ vi.mock("@tauri-apps/api/core", () => ({
 describe("BluetoothWidget Component", () => {
   beforeEach(() => {
     mockInvoke.mockClear();
+    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+      invoke: mockInvoke,
+    };
+  });
+
+  afterEach(() => {
+    delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
   });
 
   it("renders friendly empty state and 'Keine Geräte' badge when no devices are present", async () => {
@@ -122,7 +129,7 @@ describe("BluetoothWidget Component", () => {
     });
 
     await waitFor(() => {
-      expect(mockInvoke).toHaveBeenCalledWith("get_bluetooth_devices");
+      expect(mockInvoke).toHaveBeenCalledWith("get_bluetooth_devices", undefined);
     });
 
     expect(screen.getByTestId("bluetooth-status")).toHaveTextContent("Verbunden");
@@ -141,7 +148,7 @@ describe("BluetoothWidget Component", () => {
       fireEvent.click(refreshBtn);
     });
 
-    expect(mockInvoke).toHaveBeenCalledWith("get_bluetooth_devices");
+    expect(mockInvoke).toHaveBeenCalledWith("get_bluetooth_devices", undefined);
   });
 
   it("calls open_bluetooth_settings when settings quick action button is clicked", async () => {
@@ -156,7 +163,7 @@ describe("BluetoothWidget Component", () => {
       fireEvent.click(settingsBtn);
     });
 
-    expect(mockInvoke).toHaveBeenCalledWith("open_bluetooth_settings");
+    expect(mockInvoke).toHaveBeenCalledWith("open_bluetooth_settings", undefined);
   });
 
   it("calls toggle_bluetooth_device when quick action connect/disconnect button is clicked", async () => {

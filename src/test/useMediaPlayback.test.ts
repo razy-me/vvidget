@@ -4,6 +4,21 @@ import { useMediaPlayback } from "@/hooks/useMediaPlayback";
 import type { MediaSession } from "@/types/media";
 import { DEFAULT_MEDIA_SESSION } from "@/types/media";
 
+let activeMockInvoke = vi.fn();
+let activeEventCallback: ((e: { payload: MediaSession }) => void) | null = null;
+const mockUnlisten = vi.fn();
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => activeMockInvoke(...args),
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn().mockImplementation((_event: string, cb: (e: { payload: MediaSession }) => void) => {
+    activeEventCallback = cb;
+    return Promise.resolve(mockUnlisten);
+  }),
+}));
+
 describe("useMediaPlayback Hook", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -63,25 +78,16 @@ describe("useMediaPlayback Hook", () => {
     };
 
     // Mock Tauri environment
-    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {};
+    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+      invoke: activeMockInvoke,
+    };
 
-    let eventCallback: ((e: { payload: MediaSession }) => void) | null = null;
-    const mockUnlisten = vi.fn();
-    const mockInvoke = vi.fn().mockImplementation((cmd: string) => {
+    activeMockInvoke.mockReset();
+    activeMockInvoke.mockImplementation((cmd: string) => {
       if (cmd === "get_media_state") return Promise.resolve(mockTrack);
       if (cmd === "media_play_pause") return Promise.resolve();
       return Promise.resolve();
     });
-
-    vi.doMock("@tauri-apps/api/core", () => ({
-      invoke: mockInvoke,
-    }));
-    vi.doMock("@tauri-apps/api/event", () => ({
-      listen: vi.fn().mockImplementation((_event: string, cb: (e: { payload: MediaSession }) => void) => {
-        eventCallback = cb;
-        return Promise.resolve(mockUnlisten);
-      }),
-    }));
 
     const { result, unmount } = renderHook(() => useMediaPlayback());
 
@@ -101,12 +107,12 @@ describe("useMediaPlayback Hook", () => {
     // Should now be paused, and position should be at least 15000ms
     expect(result.current.session.is_playing).toBe(false);
     expect(result.current.session.timeline.position_ms).toBeGreaterThanOrEqual(15000);
-    expect(mockInvoke).toHaveBeenCalledWith("media_play_pause", undefined);
+    expect(activeMockInvoke).toHaveBeenCalledWith("media_play_pause", undefined);
 
     // Simulate backend media-metadata-update push event
-    if (eventCallback) {
+    if (activeEventCallback) {
       act(() => {
-        (eventCallback as (e: { payload: MediaSession }) => void)({
+        (activeEventCallback as (e: { payload: MediaSession }) => void)({
           payload: {
             ...mockTrack,
             title: "After Hours",
@@ -123,7 +129,9 @@ describe("useMediaPlayback Hook", () => {
   });
 
   it("rolls back optimistic playPause on backend failure", async () => {
-    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {};
+    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+      invoke: activeMockInvoke,
+    };
 
     const mockTrack: MediaSession = {
       is_active: true,
@@ -144,18 +152,12 @@ describe("useMediaPlayback Hook", () => {
       source_app: "Spotify",
     };
 
-    const mockInvoke = vi.fn().mockImplementation((cmd: string) => {
+    activeMockInvoke.mockReset();
+    activeMockInvoke.mockImplementation((cmd: string) => {
       if (cmd === "get_media_state") return Promise.resolve(mockTrack);
       if (cmd === "media_play_pause") return Promise.reject(new Error("GSMTC service unavailable"));
       return Promise.resolve();
     });
-
-    vi.doMock("@tauri-apps/api/core", () => ({
-      invoke: mockInvoke,
-    }));
-    vi.doMock("@tauri-apps/api/event", () => ({
-      listen: vi.fn().mockResolvedValue(vi.fn()),
-    }));
 
     const { result } = renderHook(() => useMediaPlayback());
 
@@ -176,15 +178,12 @@ describe("useMediaPlayback Hook", () => {
   });
 
   it("handles nextTrack and previousTrack error dispatch", async () => {
-    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {};
+    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+      invoke: activeMockInvoke,
+    };
 
-    const mockInvoke = vi.fn().mockRejectedValue(new Error("Device disconnected"));
-    vi.doMock("@tauri-apps/api/core", () => ({
-      invoke: mockInvoke,
-    }));
-    vi.doMock("@tauri-apps/api/event", () => ({
-      listen: vi.fn().mockResolvedValue(vi.fn()),
-    }));
+    activeMockInvoke.mockReset();
+    activeMockInvoke.mockRejectedValue(new Error("Device disconnected"));
 
     const { result } = renderHook(() => useMediaPlayback());
 

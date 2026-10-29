@@ -31,6 +31,12 @@ const mockWeatherData: WeatherData = {
   lastUpdated: new Date().toISOString(),
 };
 
+const mockInvoke = vi.fn();
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
+
 describe("useWeather Hook", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -45,14 +51,14 @@ describe("useWeather Hook", () => {
   it("resolves coordinates via Windows Geolocation when enabled", async () => {
     mockConfig.weather_settings.use_windows_location = true;
 
-    const mockInvoke = vi.fn().mockImplementation((cmd: string) => {
+    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+      invoke: mockInvoke,
+    };
+    mockInvoke.mockReset();
+    mockInvoke.mockImplementation((cmd: string) => {
       if (cmd === "get_windows_location") return Promise.resolve([48.8566, 2.3522]);
       return Promise.resolve();
     });
-
-    vi.doMock("@tauri-apps/api/core", () => ({
-      invoke: mockInvoke,
-    }));
 
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -158,8 +164,10 @@ describe("useWeather Hook", () => {
   it("reuses cached coordinates within 24h TTL without invoking native geolocation", async () => {
     mockConfig.weather_settings.use_windows_location = true;
 
-    const mockInvoke = vi.fn();
-    vi.doMock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
+    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+      invoke: mockInvoke,
+    };
+    mockInvoke.mockReset();
 
     localStorage.setItem(
       "vvidget_geo_coords_cache",

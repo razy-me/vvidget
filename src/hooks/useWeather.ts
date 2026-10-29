@@ -3,7 +3,7 @@ import type { WeatherData } from "@/types/weather";
 import { fetchWeather, getCachedWeather } from "@/services/weather/openMeteo";
 import { searchCity } from "@/services/weather/geocoding";
 import { useConfig } from "./useConfig";
-import { isTauri, safeInvoke } from "@/utils/tauri";
+import { safeInvoke } from "@/utils/tauri";
 
 export interface UseWeatherReturn {
   weather: WeatherData | null;
@@ -80,13 +80,7 @@ export function useWeather(): UseWeatherReturn {
             }
           }
 
-          let coords: [number, number];
-          if (isTauri()) {
-            coords = await safeInvoke<[number, number]>("get_windows_location");
-          } else {
-            const { invoke } = await import("@tauri-apps/api/core");
-            coords = await invoke<[number, number]>("get_windows_location");
-          }
+          const coords = await safeInvoke<[number, number]>("get_windows_location");
           const [lat, lon] = coords;
 
           if (typeof localStorage !== "undefined") {

@@ -13,6 +13,7 @@ import {
 import { Card } from "@/components/ui/Card";
 import type { BluetoothDeviceInfo } from "@/types/bluetooth";
 import { cn } from "@/utils/cn";
+import { safeInvoke } from "@/utils/tauri";
 
 export interface BluetoothWidgetProps {
   className?: string;
@@ -96,8 +97,7 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
     setIsLoading(true);
     setError(null);
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      const list = await invoke<BluetoothDeviceInfo[]>("get_bluetooth_devices");
+      const list = await safeInvoke<BluetoothDeviceInfo[]>("get_bluetooth_devices");
       if (isMountedRef.current) {
         setDevices(list || []);
       }
@@ -116,9 +116,8 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
   const handleToggleDevice = useCallback(async (device: BluetoothDeviceInfo) => {
     setTogglingId(device.id);
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
       const targetState = !device.connected;
-      const result = await invoke<boolean>("toggle_bluetooth_device", {
+      const result = await safeInvoke<boolean>("toggle_bluetooth_device", {
         deviceId: device.id,
         connect: targetState,
       });
@@ -141,8 +140,7 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
 
   const handleOpenSettings = useCallback(async () => {
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("open_bluetooth_settings");
+      await safeInvoke("open_bluetooth_settings");
     } catch (err) {
       console.error("Failed to open bluetooth settings:", err);
     }

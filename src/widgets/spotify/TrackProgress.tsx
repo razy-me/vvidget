@@ -35,6 +35,9 @@ export const TrackProgress: FC<TrackProgressProps> = ({
     }
 
     const updatePosition = () => {
+      if (typeof document !== "undefined" && document.hidden) {
+        return;
+      }
       const now = Date.now();
       const elapsed =
         last_updated_system_time_ms > 0 ? Math.max(0, now - last_updated_system_time_ms) : 0;
@@ -42,11 +45,43 @@ export const TrackProgress: FC<TrackProgressProps> = ({
       setCurrentMs(interpolated);
     };
 
-    updatePosition();
-    const timer = setInterval(updatePosition, 250);
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const startTimer = () => {
+      if (!timer) {
+        updatePosition();
+        timer = setInterval(updatePosition, 250);
+      }
+    };
+
+    const stopTimer = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.hidden) {
+        stopTimer();
+      } else {
+        startTimer();
+      }
+    };
+
+    if (typeof document === "undefined" || !document.hidden) {
+      startTimer();
+    }
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
 
     return () => {
-      clearInterval(timer);
+      stopTimer();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
     };
   }, [position_ms, duration_ms, last_updated_system_time_ms, isPlaying]);
 

@@ -23,6 +23,9 @@ const ClockFaceComponent: FC<ClockFaceProps> = ({ initialTime, className }) => {
     let isMounted = true;
 
     const scheduleNextTick = () => {
+      if (typeof document !== "undefined" && document.hidden) {
+        return;
+      }
       const now = Date.now();
       const delay = 1000 - (now % 1000);
       timerId = setTimeout(() => {

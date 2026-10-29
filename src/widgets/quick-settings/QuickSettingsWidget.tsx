@@ -23,6 +23,7 @@ import { Card } from "@/components/ui/Card";
 import { useConfig } from "@/hooks/useConfig";
 import type { QuickSettingsInstance } from "@/types/config";
 import { cn } from "@/utils/cn";
+import { safeInvoke } from "@/utils/tauri";
 
 export interface QuickSettingsWidgetProps {
   /** Identifier of this widget instance. Defaults to "quick_settings". */
@@ -155,8 +156,7 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
       setInstanceOverride(updated);
 
       try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        await invoke("update_quick_settings_instance", { instance: updated });
+        await safeInvoke("update_quick_settings_instance", { instance: updated });
       } catch {
         // Safe fallback in web or test environment
         await updateConfig((prev) => ({
@@ -199,8 +199,7 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
   // Duplicate widget trigger
   const handleDuplicate = async () => {
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("duplicate_quick_settings_widget", {
+      await safeInvoke("duplicate_quick_settings_widget", {
         sourceId: instanceId,
         source_id: instanceId,
       });
@@ -223,8 +222,7 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
         customTarget = "https://github.com";
       }
 
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("execute_quick_action", {
+      await safeInvoke("execute_quick_action", {
         actionId: realAction,
         action_id: realAction,
         customTarget,
