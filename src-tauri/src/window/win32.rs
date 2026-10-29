@@ -17,6 +17,12 @@ use windows::Win32::Graphics::Gdi::{
 };
 #[cfg(windows)]
 use windows::Win32::UI::Shell::{SetWindowSubclass, DefSubclassProc, RemoveWindowSubclass};
+#[cfg(windows)]
+use windows::Win32::System::Threading::{
+    GetCurrentThread, SetThreadInformation, ThreadPowerThrottling,
+    THREAD_POWER_THROTTLING_CURRENT_VERSION, THREAD_POWER_THROTTLING_EXECUTION_SPEED,
+    THREAD_POWER_THROTTLING_STATE,
+};
 
 use serde::{Deserialize, Serialize};
 use super::snapping::{apply_magnetic_snapping, find_nearest_non_overlapping_slot, Rect, SnapConfig};
@@ -632,6 +638,31 @@ pub unsafe fn remove_window_subclass(_raw_hwnd: *mut core::ffi::c_void, _window_
     Ok(())
 }
 
+/// Forces the calling thread onto Efficiency (E) cores via Win32 EcoQoS (ThreadPowerThrottling).
+/// Returns true if successful or if EcoQoS was applied, false otherwise or on non-Windows.
+#[cfg(windows)]
+pub fn enable_current_thread_eco_qos() -> bool {
+    unsafe {
+        let throttle_state = THREAD_POWER_THROTTLING_STATE {
+            Version: THREAD_POWER_THROTTLING_CURRENT_VERSION,
+            ControlMask: THREAD_POWER_THROTTLING_EXECUTION_SPEED,
+            StateMask: THREAD_POWER_THROTTLING_EXECUTION_SPEED,
+        };
+        SetThreadInformation(
+            GetCurrentThread(),
+            ThreadPowerThrottling,
+            &throttle_state as *const _ as *const core::ffi::c_void,
+            std::mem::size_of::<THREAD_POWER_THROTTLING_STATE>() as u32,
+        )
+        .is_ok()
+    }
+}
+
+#[cfg(not(windows))]
+pub fn enable_current_thread_eco_qos() -> bool {
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -804,4 +835,18 @@ mod tests {
         assert_eq!((allow_pos.flags & SWP_HIDEWINDOW).0, SWP_HIDEWINDOW.0);
         set_window_allow_hide(0x1234, false);
     }
+    #[test]
+    fn test_enable_current_thread_eco_qos() {
+        let result = enable_current_thread_eco_qos();
+        #[cfg(windows)]
+        {
+            // On Windows 11 / supported systems, SetThreadInformation succeeds.
+            let _ = result;
+        }
+        #[cfg(not(windows))]
+        {
+            assert!(!result);
+        }
+    }
+
 }

@@ -258,3 +258,11 @@
   2. *Leaving tokio with "full"*: Compiles unnecessary subsystems into the binary.
   3. *Per-window differing browser arguments*: Causes WebView2 process creation failure if windows sharing the same user data folder disagree on browser arguments.
 - **Reason / trade-offs**: Substantially reduces release binary footprint, compile times, and WebView2 background memory consumption while ensuring robust multi-window stability.
+
+## D-035 OS Power State & EcoQoS Engine (WP-02)
+- **Decision**: Implement enable_current_thread_eco_qos() utilizing Win32 SetThreadInformation with ThreadPowerThrottling (THREAD_POWER_THROTTLING_EXECUTION_SPEED) to force background workers onto Efficiency (E) cores. Create a dedicated background thread running an HWND_MESSAGE window registering for OS power notifications (GUID_CONSOLE_DISPLAY_STATE, GUID_ACDC_POWER_SOURCE, GUID_ENERGY_SAVER_STATUS) via RegisterPowerSettingNotification and session changes (WTSRegisterSessionNotification). Query SHQueryUserNotificationState on a 5-second timer (SetTimer) to detect D3D fullscreen apps or presentation mode. Expose thread-safe PowerState (atomic bools) and PowerManager in Tauri managed state, emitting power-state-changed events only on actual state transitions.
+- **Alternatives considered**:
+  1. *Polled WMI / PowerShell queries for power state*: Extremely heavy CPU overhead (>3–5% CPU) and latency.
+  2. *Async Tokio timer polling for display/session status*: Misses instantaneous OS power events and causes unnecessary C-state wakeups.
+  3. *Global process-level EcoQoS*: Degrades foreground UI responsiveness if applied indiscriminately to WebView2 render threads.
+- **Reason / trade-offs**: Native Win32 message-only window consumes zero CPU while idle in GetMessageW, responds instantly to lock/display-off/unplug events, and provides thread-level EcoQoS scheduling without impacting UI performance.

@@ -7,6 +7,7 @@ pub mod media;
 pub mod config;
 pub mod geo;
 pub mod launcher;
+pub mod power;
 pub mod speedtest;
 pub mod sysinfo;
 pub mod tray;

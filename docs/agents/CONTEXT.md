@@ -166,7 +166,11 @@ c:\vvidget\
 - `HeaderBar` & `WidgetContainer`: Visual elevation and focus styling (`border-[var(--fluent-accent)]`, elevated shadow, `cursor-grabbing`, `data-dragging="true"`).
 - **Gotchas**: Desktop listview handle can reside in `WorkerW` when wallpaper slideshows are active, requiring iteration across top-level WorkerW windows if `Progman` does not directly host `SHELLDLL_DefView`.
 
-
-
-
+## Module: OS Power State & EcoQoS Engine (src-tauri/src/power, src-tauri/src/window/win32.rs)
+- enable_current_thread_eco_qos() -> bool: Configures THREAD_POWER_THROTTLING_STATE on GetCurrentThread() with THREAD_POWER_THROTTLING_EXECUTION_SPEED forcing worker thread to Efficiency (E) cores (fallback false on non-Windows).
+- PowerState: Atomic thread-safe state tracking display_on, session_locked, energy_saver, on_battery, and ullscreen_active.
+  - should_sample(&self) -> bool: Suppresses polling when display is off, session is locked, or fullscreen app is active.
+  - interval_multiplier(&self) -> u32: Yields 1x for AC, 2x for Battery, 3x for Energy Saver.
+- start_power_monitor(app_handle, state): Spawns EcoQoS worker hosting an HWND_MESSAGE window listening to GUID_CONSOLE_DISPLAY_STATE, GUID_ACDC_POWER_SOURCE, GUID_ENERGY_SAVER_STATUS, WTSRegisterSessionNotification, and 5s SHQueryUserNotificationState timer. Emits power-state-changed event on state changes.
+- get_power_state(app): Tauri IPC command returning PowerStateSnapshot.
 

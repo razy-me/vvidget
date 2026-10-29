@@ -91,7 +91,7 @@ c:\vvidget\
   - Define uniform `const WEBVIEW_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,TranslateUI"` in `window/mod.rs` applied to all `WebviewWindowBuilder` calls.
 - **Acceptance**: `cargo check --manifest-path src-tauri/Cargo.toml` compiles cleanly.
 
-### WP-02 OS Power State & EcoQoS Engine [ ]
+### WP-02 OS Power State & EcoQoS Engine [x]
 - **Covers**: R1, R2
 - **Owns**: `src-tauri/src/power/mod.rs`, `src-tauri/src/window/win32.rs`, `src-tauri/src/lib.rs`
 - **Depends on**: WP-01
