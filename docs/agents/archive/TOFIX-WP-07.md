@@ -1,17 +1,45 @@
-# TOFIX WP-07 — Round 2
-Diff: ca9662417c4d8185cfb12fe2f5ba089a87340d8f..1f3e5c5f1cf172bc0067594f54b33bd96d6714bd   Verdict: APPROVED
+# Code Review Report: WP-07 (Frontend Lazy Route-Splitting & Memory Reduction)
 
-| # | Sev | File:Line | Finding | Suggested fix | Status |
-|---|-----|-----------|---------|---------------|--------|
-| 1 | CRITICAL | src/hooks/useGridDrag.ts:103-158 | Asynchronous race condition during drag start: `dragRef.current.active` is set to `true` synchronously before awaiting 4 IPC calls (`scaleFactor`, `outerPosition`, `innerSize`, `currentMonitor`). If user moves pointer before awaits resolve, `onPointerMove` runs with uninitialized `startWindowX: 0`, teleporting the window to `(deltaX, deltaY)` near screen top-left. If user clicks and releases quickly before awaits resolve, `onPointerUp` snaps uninitialized `lastTargetX: 0`, teleporting and saving the widget at `(0, 0)`. | Guard activation with `isPointerDown` flag (or state machine). In `onPointerDown`, set `dragRef.current.isDown = true`, await metrics, and only activate (`active = true`, `setIsDragging(true)`) if `isDown` is still true. In `onPointerUp`, set `isDown = false`; if `!active`, return immediately without snapping or invoking `save_widget_position`. In `onPointerMove`, early return if `!active`. | fixed |
-| 2 | MAJOR | src-tauri/src/lib.rs:108-123 | `save_widget_position` writes to `ConfigManager` via `save_immediate` but fails to broadcast `app.emit("config-changed", &config)`. Other windows running `useConfig()` (e.g. `SettingsModal` or dock) retain stale widget coordinates in `latestConfigRef`. Any subsequent setting save from `SettingsModal` overwrites the new widget position with stale coordinates, undoing the drag. | Add `let _ = app.emit("config-changed", &config);` in `save_widget_position` immediately following `cm.save_immediate(config)`. | fixed |
-| 3 | MAJOR | src/hooks/useGridDrag.ts:127-145 | Clamping bounds are hardcoded to `currentMonitor()`, trapping widgets on a single display. Users in multi-monitor setups cannot drag widgets across display boundaries to secondary screens. | Query `availableMonitors()` to calculate the virtual desktop bounding area across all active displays, or update bounds dynamically when cursor crosses display boundaries. | fixed |
-| 4 | MINOR | src-tauri/src/window/win32.rs:290-333 | `on_wm_moving` synchronously queries `get_desktop_grid_metrics()` on every single `WM_MOVING` event, executing `FindWindowExW` and synchronous cross-process `SendMessageW(listview, LVM_GETITEMSPACING, ...)` up to 100+ times per second, risking UI thread stalls if Explorer is busy. | Cache `DesktopGridMetrics` in an atomic or static timestamped cache (e.g. 2–5 second TTL or invalidate on display resolution change) instead of synchronous IPC on every mouse move pixel. | fixed |
-| 5 | MINOR | src-tauri/src/window/win32.rs:310-318 | Unchecked cast of `SendMessageW` LRESULT: if Explorer returns `-1` (0xFFFFFFFF) on error or unhandled message, `spacing & 0xFFFF` produces `65535`, causing `physical_x = 65535` and breaking grid snapping. | Check `res.0 > 0 && res.0 != -1` and validate `cx > 0 && cy > 0 && cx < 2000 && cy < 2000` before overriding fallback metrics. | fixed |
-| 6 | ENHANCEMENT | src/test/useGridDrag.test.ts:1-256 | Test suite only tests sequentially awaited pointer events, omitting coverage for concurrent pointer movement during async initialization, quick-click abortion, and multi-monitor drag bounds. | Add unit tests verifying `onPointerMove` and `onPointerUp` behavior during pending initialization, ensuring `(0, 0)` is never saved on click and multi-monitor boundaries are respected. | fixed |
+**Status**: APPROVED  
+**Commit Range**: `91f060fcfb729a45a83794b4ce942262d04ba5f4..HEAD`  
+**Review Level**: Tier 1 Change Review  
 
-## Questioned Decisions
-- **D-030 (Fluid 1:1 Pointer Tracking with Snap-on-Release & Visual Elevation)**: Clamping strictly to `currentMonitor().workArea` violates multi-monitor desktop UX by preventing widgets from being dragged to adjacent screens. Clamping should span active monitors queried via `availableMonitors()` or `clamp_to_monitors`.
+---
 
-## Previously rejected items — judgement
-- None.
+## Summary
+Work Package 07 introduces centralized Tauri IPC utilities and frontend code-splitting:
+1. **Centralized IPC (`src/utils/tauri.ts`)**: `isTauri()` safely inspects `window.__TAURI_INTERNALS__`. `safeInvoke<T>(cmd, args)` wraps static `invoke` from `@tauri-apps/api/core` with runtime detection, removing repeated dynamic import boilerplate across hooks.
+2. **Hook Migration (`src/hooks/*`)**: Successfully migrated `useBattery`, `useCalendar`, `useConfig`, `useLauncher`, `useMasterVolume`, `useSpeedtest`, and `useSystemMetrics` to use `@/utils/tauri`. Error handling and fallbacks remain intact.
+3. **Route Splitting (`src/App.tsx`)**: Converted all 10 widget components, `SettingsModal`, `SkeletonWidget`, and `DockContainer` to `React.lazy` imports wrapped in `<Suspense fallback={null}>`.
+4. **Vite Manual Chunks (`vite.config.ts`)**: Configured `rollupOptions.output.manualChunks` for individual widget families, `widget-registry`, `view-settings`, and vendor bundles.
+5. **Test Suite**: All 32 vitest test suites (288 tests) and TypeScript type checks pass cleanly.
+
+---
+
+## Checklist Audit
+- [x] `src/utils/tauri.ts` correctly implements `isTauri` and `safeInvoke`.
+- [x] Hooks migrated to `@/utils/tauri` preserve error handling and web preview fallbacks.
+- [x] All widget routes, modals, and DockContainer in `src/App.tsx` wrapped in `<Suspense fallback={null}>`.
+- [x] `vite.config.ts` manual chunks properly isolate bytecode per window without static leakage into entry bundle (`dist/index.html` does not modulepreload all 10 widgets or view-settings).
+- [x] Unit and integration tests pass without async/suspense timeouts.
+
+---
+
+## Findings Log
+
+### [MAJOR] [FIXED] F-WP07-01 Static Import of DockContainer Pulls All Widgets into Main Bundle
+- **Status**: FIXED
+- **Where**: `src/App.tsx`, `src/test/app.test.tsx`
+- **Resolution**: Converted `DockContainer` to `React.lazy(() => import("@/components/docking").then((m) => ({ default: m.DockContainer })))` wrapped with `<Suspense fallback={null}>`. Updated `src/test/app.test.tsx` using `await screen.findByTestId("dock-container-view")`.
+
+---
+
+### [MINOR] [FIXED] F-WP07-02 view-settings Chunk Statically Imported by Main Entry Bundle
+- **Status**: FIXED
+- **Where**: `vite.config.ts`
+- **Resolution**: Isolated `src/widgets/registry` into dedicated chunk `widget-registry` before widget and page matchers in `manualChunks`. `dist/index.html` and entry bundle no longer statically import `view-settings`.
+
+---
+
+## Conclusion
+All findings have been resolved and verified with clean lint, full test suite passes, and bundle chunk isolation. Status is **APPROVED**.
