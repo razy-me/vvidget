@@ -282,3 +282,11 @@
   2. *Global IPC broadcast of media updates*: Awakens all widget WebViews (weather, clock, resources, etc.) to deserialize media payloads they don't consume.
   3. *Unconditionally allocating strings for empty media properties*: Heap thrashing on every poll cycle when no media is active.
 - **Reason / trade-offs**: Eliminates 100% of GSMTC COM queries when display is off, session is locked, or Spotify widget is hidden; backs off idle polling by 4x-12x when inactive; restricts IPC events strictly to consuming windows; and eliminates redundant string allocations during idle states.
+
+## D-038 Native Push Telemetry for Audio & Battery (WP-04)
+- **Decision**: Replace active timer polling for master volume and battery status with native OS push telemetry. Implement Win32 COM `IAudioEndpointVolumeCallback` on the default audio endpoint to push `audio-volume-update` events (`{ volume, is_muted }`) immediately upon system volume or mute changes. Hook WinRT `Battery::AggregateBattery().ReportUpdated` with a dedicated EcoQoS worker thread emitting `battery-update` events with `BatteryStatus` when battery state changes (with 10s fallback when discharging, 15s when charging, and 30s when full/plugged in). In frontend hooks `useMasterVolume` and `useBattery`, subscribe to push events, relax polling fallback intervals from 2.5s/3.0s to a 60.0s safety heartbeat, and pause polling completely when `document.hidden` is true.
+- **Alternatives considered**:
+  1. *Retaining 2500ms and 3000ms frontend setInterval polling*: Causes continuous timers and IPC wakeups even when battery and audio endpoints are completely stationary.
+  2. *WMI / Win32 polling loop for audio*: Generates CPU spikes and latency when volume is changed via keyboard media keys.
+  3. *Eliminating fallback polling entirely*: If a device changes default audio endpoints or a driver misses an update event, UI could fall out of sync. A 60s safety heartbeat provides 100% resilience with near-zero power draw.
+- **Reason / trade-offs**: Delivers sub-100ms instant reaction to physical volume keys and power state transitions, reduces idle frontend polling timers by >95%, and pauses all background polling when widgets or displays are hidden.

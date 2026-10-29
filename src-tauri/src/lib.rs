@@ -14,8 +14,8 @@ pub mod tray;
 pub mod window;
 
 use actions::{execute_quick_action, update_quick_settings_instance};
-use audio::{get_master_mute, get_master_volume, set_master_volume, toggle_master_mute};
-use battery::{get_battery_status, open_power_settings};
+use audio::{get_master_mute, get_master_volume, notify::register_volume_notifier, set_master_volume, toggle_master_mute};
+use battery::{get_battery_status, open_power_settings, start_battery_monitor};
 use bluetooth::{get_bluetooth_devices, open_bluetooth_settings, toggle_bluetooth_device};
 use calendar::{add_calendar_note, get_calendar_events, remove_calendar_note, toggle_calendar_note};
 use config::{
@@ -545,6 +545,11 @@ pub fn run() {
             );
 
             start_media_monitor(app.handle().clone());
+            start_battery_monitor(app.handle().clone());
+
+            if let Ok(guard) = register_volume_notifier(app.handle()) {
+                app.manage(guard);
+            }
 
             if let Err(e) = setup_tray(app.handle()) {
                 log::error!("Failed to initialize system tray: {}", e);
@@ -737,6 +742,7 @@ mod tests {
             let _ = serde_json::from_str::<speedtest::SpeedtestProgress>(bad);
             let _ = serde_json::from_str::<config::SpeedtestResult>(bad);
             let _ = serde_json::from_str::<battery::BatteryStatus>(bad);
+            let _ = serde_json::from_str::<audio::notify::AudioVolumeUpdate>(bad);
             let _ = serde_json::from_str::<window::Rect>(bad);
             let _ = serde_json::from_str::<window::DesktopGridMetrics>(bad);
             let _ = serde_json::from_str::<power::PowerStateSnapshot>(bad);

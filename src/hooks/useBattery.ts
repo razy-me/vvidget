@@ -44,7 +44,7 @@ export interface UseBatteryReturn {
   refresh: () => Promise<void>;
 }
 
-export function useBattery(pollIntervalMs = 2500): UseBatteryReturn {
+export function useBattery(pollIntervalMs = 60000): UseBatteryReturn {
   const [battery, setBattery] = useState<BatteryStatus | null>(() =>
     isTauri() ? null : MOCK_BATTERY_STATUS
   );
@@ -82,13 +82,57 @@ export function useBattery(pollIntervalMs = 2500): UseBatteryReturn {
     isMountedRef.current = true;
     void fetchStatus();
 
+    let unlisten: (() => void) | undefined;
+    if (isTauri()) {
+      // Native push telemetry via WinRT Battery::AggregateBattery().ReportUpdated
+      void import("@tauri-apps/api/event")
+        .then(async ({ listen }) => {
+          if (!isMountedRef.current) return;
+          try {
+            const fn = await listen<BatteryStatus>("battery-update", (event) => {
+              if (!isMountedRef.current || !event.payload) return;
+              setBattery(event.payload);
+              setError(null);
+            });
+            if (!isMountedRef.current) {
+              fn();
+            } else {
+              unlisten = fn;
+            }
+          } catch {
+            // Gracefully ignore if event listening is unsupported or un-mocked
+          }
+        })
+        .catch(() => {});
+    }
+
+    // Low-frequency heartbeat fallback (60s); pauses completely when document is hidden
     const intervalId = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) {
+        return;
+      }
       void fetchStatus();
     }, pollIntervalMs);
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && !document.hidden && isTauri()) {
+        void fetchStatus();
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
 
     return () => {
       isMountedRef.current = false;
       clearInterval(intervalId);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+      if (unlisten) {
+        unlisten();
+      }
     };
   }, [fetchStatus, pollIntervalMs]);
 

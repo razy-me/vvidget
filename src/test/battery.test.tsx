@@ -13,9 +13,20 @@ import {
 } from "@/types/battery";
 
 const mockInvoke = vi.fn();
+const mockUnlisten = vi.fn();
+let batteryEventListener: ((e: { payload: BatteryStatus }) => void) | null = null;
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn().mockImplementation((event: string, cb: (e: { payload: BatteryStatus }) => void) => {
+    if (event === "battery-update") {
+      batteryEventListener = cb;
+    }
+    return Promise.resolve(mockUnlisten);
+  }),
 }));
 
 describe("Battery utility formatting & logic", () => {
@@ -383,6 +394,7 @@ describe("BatteryWidget component", () => {
 describe("useBattery hook", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    batteryEventListener = null;
   });
 
   afterEach(() => {
@@ -426,5 +438,70 @@ describe("useBattery hook", () => {
 
     expect(mockInvoke).toHaveBeenCalledWith("get_battery_status", undefined);
     expect(result.current.battery?.charge_percent).toBe(77);
+  });
+
+  it("updates battery status immediately upon battery-update event (WP-04)", async () => {
+    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+      invoke: (...args: unknown[]) => mockInvoke(...args),
+    };
+
+    const initialStatus: BatteryStatus = {
+      ...MOCK_BATTERY_STATUS,
+      charge_percent: 50,
+    };
+    mockInvoke.mockResolvedValue(initialStatus);
+
+    const { result } = renderHook(() => useBattery());
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(result.current.battery?.charge_percent).toBe(50);
+    expect(batteryEventListener).not.toBeNull();
+
+    const pushedStatus: BatteryStatus = {
+      ...initialStatus,
+      charge_percent: 88,
+      is_charging: true,
+      drain_rate_percent_per_min: 0.45,
+    };
+
+    act(() => {
+      batteryEventListener?.({ payload: pushedStatus });
+    });
+
+    expect(result.current.battery?.charge_percent).toBe(88);
+    expect(result.current.battery?.is_charging).toBe(true);
+  });
+
+  it("pauses battery polling when document is hidden (WP-04)", async () => {
+    vi.useFakeTimers();
+    try {
+      (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+        invoke: (...args: unknown[]) => mockInvoke(...args),
+      };
+
+      mockInvoke.mockResolvedValue(MOCK_BATTERY_STATUS);
+
+      renderHook(() => useBattery());
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10);
+      });
+      mockInvoke.mockClear();
+
+      Object.defineProperty(document, "hidden", { value: true, configurable: true });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60000);
+      });
+
+      expect(mockInvoke).not.toHaveBeenCalled();
+
+      Object.defineProperty(document, "hidden", { value: false, configurable: true });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

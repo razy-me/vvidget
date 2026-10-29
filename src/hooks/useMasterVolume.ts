@@ -17,6 +17,12 @@ async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promi
   return Promise.reject(new Error(`Tauri IPC not available for ${cmd}`));
 }
 
+export interface AudioVolumeUpdatePayload {
+  volume: number; // 0.0 to 1.0
+  is_muted?: boolean;
+  isMuted?: boolean;
+}
+
 export interface UseMasterVolumeReturn {
   volume: number; // 0.0 to 1.0
   isMuted: boolean;
@@ -27,7 +33,11 @@ export interface UseMasterVolumeReturn {
   refresh: () => Promise<void>;
 }
 
-export function useMasterVolume(initialVolume = 0.5, initialMuted = false): UseMasterVolumeReturn {
+export function useMasterVolume(
+  initialVolume = 0.5,
+  initialMuted = false,
+  pollIntervalMs = 60000
+): UseMasterVolumeReturn {
   const [volume, setVolumeState] = useState<number>(initialVolume);
   const [isMuted, setIsMutedState] = useState<boolean>(initialMuted);
   const [isLoading, setIsLoading] = useState<boolean>(isTauri());
@@ -73,19 +83,71 @@ export function useMasterVolume(initialVolume = 0.5, initialMuted = false): UseM
   useEffect(() => {
     isMountedRef.current = true;
     let interval: ReturnType<typeof setInterval> | undefined;
+    let unlisten: (() => void) | undefined;
+
     if (isTauri()) {
       void refresh();
+
+      // Native push telemetry via Win32 CoreAudio IAudioEndpointVolumeCallback
+      void import("@tauri-apps/api/event")
+        .then(async ({ listen }) => {
+          if (!isMountedRef.current) return;
+          try {
+            const fn = await listen<AudioVolumeUpdatePayload>("audio-volume-update", (event) => {
+              if (!isMountedRef.current || !event.payload) return;
+              const { volume: nextVol, is_muted, isMuted: camelMuted } = event.payload;
+              if (typeof nextVol === "number") {
+                setVolumeState(Math.max(0, Math.min(1, nextVol)));
+              }
+              const mutedVal = is_muted ?? camelMuted;
+              if (typeof mutedVal === "boolean") {
+                setIsMutedState(mutedVal);
+                isMutedRef.current = mutedVal;
+              }
+            });
+            if (!isMountedRef.current) {
+              fn();
+            } else {
+              unlisten = fn;
+            }
+          } catch {
+            // Gracefully ignore if event listening is unsupported or un-mocked
+          }
+        })
+        .catch(() => {});
+
+      // Low-frequency heartbeat fallback (60s); pauses completely when document is hidden
       interval = setInterval(() => {
+        if (typeof document !== "undefined" && document.hidden) {
+          return;
+        }
         void refresh(true);
-      }, 3000);
+      }, pollIntervalMs);
     }
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && !document.hidden && isTauri()) {
+        void refresh(true);
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+
     return () => {
       isMountedRef.current = false;
       if (interval) {
         clearInterval(interval);
       }
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+      if (unlisten) {
+        unlisten();
+      }
     };
-  }, [refresh]);
+  }, [refresh, pollIntervalMs]);
 
   const setVolume = useCallback(async (level: number) => {
     const clamped = Math.max(0, Math.min(1, level));

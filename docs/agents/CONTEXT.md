@@ -176,3 +176,9 @@ c:\vvidget\
 - start_power_monitor(app_handle, state): Spawns EcoQoS worker hosting an HWND_MESSAGE window listening to GUID_CONSOLE_DISPLAY_STATE, GUID_ACDC_POWER_SOURCE, GUID_ENERGY_SAVER_STATUS, WTSRegisterSessionNotification, and 5s SHQueryUserNotificationState timer. Emits power-state-changed event on state changes.
 - get_power_state(app): Tauri IPC command returning PowerStateSnapshot.
 
+## Module: Native Push Telemetry: Audio & Battery (src-tauri/src/audio/notify.rs, src-tauri/src/battery/mod.rs, src/hooks/useMasterVolume.ts, src/hooks/useBattery.ts)
+- register_volume_notifier(app) -> Result<VolumeNotifierGuard, String>: Registers Win32 COM IAudioEndpointVolumeCallback on default audio endpoint; emits audio-volume-update with { volume: f32, is_muted: bool }.
+- start_battery_monitor(app): Spawns EcoQoS worker thread hooking WinRT Battery::AggregateBattery().ReportUpdated with fallback timer (10s discharging, 15s charging, 30s full) emitting battery-update with BatteryStatus on state transitions.
+- useMasterVolume(): React hook listening to audio-volume-update event with 60s fallback heartbeat, pausing completely when document.hidden is true.
+- useBattery(): React hook listening to battery-update event with 60s fallback heartbeat, pausing completely when document.hidden is true.
+

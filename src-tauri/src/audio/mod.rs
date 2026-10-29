@@ -1,4 +1,6 @@
 #[cfg(windows)]
+pub mod notify;
+
 mod win {
     use std::sync::Mutex;
     use std::time::{Duration, Instant};

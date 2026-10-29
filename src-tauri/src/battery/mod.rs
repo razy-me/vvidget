@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::time::Instant;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 pub struct BatteryStatus {
@@ -579,6 +579,109 @@ pub fn get_battery_status<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Result
         capacity_history: tracker.capacity_history.clone(),
         top_process_name: top_process,
     })
+}
+
+/// Spawns background battery monitor on EcoQoS E-core thread with WinRT ReportUpdated event push.
+pub fn start_battery_monitor<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
+    std::thread::Builder::new()
+        .name("vvidget-battery-monitor".to_string())
+        .spawn(move || {
+            #[cfg(windows)]
+            let _ = crate::window::win32::enable_current_thread_eco_qos();
+
+            let _com_guard = crate::geo::winrt::ComGuard::new();
+
+            let notify_flag = std::sync::Arc::new((
+                std::sync::Mutex::new(false),
+                std::sync::Condvar::new(),
+            ));
+            let notify_clone = std::sync::Arc::clone(&notify_flag);
+
+            #[cfg(target_os = "windows")]
+            let _event_token = {
+                use windows::core::IInspectable;
+                use windows::Devices::Power::Battery;
+                use windows::Foundation::TypedEventHandler;
+
+                match Battery::AggregateBattery() {
+                    Ok(battery) => {
+                        let res = battery.ReportUpdated(&TypedEventHandler::<Battery, IInspectable>::new(
+                            move |_, _| {
+                                let (lock, cvar) = &*notify_clone;
+                                if let Ok(mut flag) = lock.lock() {
+                                    *flag = true;
+                                    cvar.notify_all();
+                                }
+                                Ok(())
+                            },
+                        ));
+                        match res {
+                            Ok(token) => {
+                                log::info!("Successfully hooked WinRT Battery::AggregateBattery().ReportUpdated");
+                                Some((battery, token))
+                            }
+                            Err(e) => {
+                                log::warn!("Failed to hook WinRT Battery ReportUpdated: {e}");
+                                None
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::debug!("WinRT AggregateBattery not available (desktop/headless): {e}");
+                        None
+                    }
+                }
+            };
+
+            let mut last_status: Option<BatteryStatus> = None;
+
+            loop {
+                match get_battery_status(app.clone()) {
+                    Ok(current) => {
+                        let should_emit = match &last_status {
+                            Some(prev) => prev != &current,
+                            None => true,
+                        };
+
+                        if should_emit {
+                            let _ = app.emit("battery-update", &current);
+                            let _ = app.emit_to("main", "battery-update", &current);
+                            let _ = app.emit_to("widget_battery", "battery-update", &current);
+                            last_status = Some(current.clone());
+                        }
+
+                        let timeout_secs = if !current.has_battery {
+                            60
+                        } else if !current.is_charging && !current.is_plugged_in {
+                            10
+                        } else if current.is_charging && current.charge_percent < 100 {
+                            15
+                        } else {
+                            30
+                        };
+
+                        let (lock, cvar) = &*notify_flag;
+                        if let Ok(guard) = lock.lock() {
+                            if !*guard {
+                                if let Ok((mut g, _)) = cvar.wait_timeout(guard, std::time::Duration::from_secs(timeout_secs)) {
+                                    *g = false;
+                                }
+                            } else {
+                                drop(guard);
+                                if let Ok(mut g) = lock.lock() {
+                                    *g = false;
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::trace!("Battery monitor error: {e}");
+                        std::thread::sleep(std::time::Duration::from_secs(30));
+                    }
+                }
+            }
+        })
+        .expect("Failed to spawn vvidget-battery-monitor thread");
 }
 
 /// Opens the Windows Power & Sleep Settings panel (`ms-settings:powersleep`).

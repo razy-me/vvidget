@@ -117,7 +117,7 @@ c:\vvidget\
   - Replace global broadcast with targeted `emit_to` targeting `main`, `widget_resources`, and `widget_battery`.
 - **Acceptance**: `cargo test sysinfo` passes; cached top process retained between scans; 0 samples collected when hidden.
 
-### WP-04 Native Push Telemetry (Audio & Battery) [ ]
+### WP-04 Native Push Telemetry (Audio & Battery) [x]
 - **Covers**: R4
 - **Owns**: `src-tauri/src/audio/*`, `src-tauri/src/battery/*`, `src/hooks/useMasterVolume.ts`, `src/hooks/useBattery.ts`
 - **Depends on**: WP-01

@@ -3,14 +3,26 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 import { useMasterVolume } from "@/hooks/useMasterVolume";
 
 const mockInvoke = vi.fn();
+const mockUnlisten = vi.fn();
+let volumeEventListener: ((e: { payload: { volume: number; is_muted?: boolean } }) => void) | null = null;
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
-describe("useMasterVolume Hook (regression M5-05)", () => {
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn().mockImplementation((event: string, cb: (e: { payload: { volume: number; is_muted?: boolean } }) => void) => {
+    if (event === "audio-volume-update") {
+      volumeEventListener = cb;
+    }
+    return Promise.resolve(mockUnlisten);
+  }),
+}));
+
+describe("useMasterVolume Hook (regression M5-05 & WP-04)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    volumeEventListener = null;
     mockInvoke.mockImplementation((cmd: string) => {
       if (cmd === "get_master_volume") return Promise.resolve(0.3);
       if (cmd === "get_master_mute") return Promise.resolve(true);
@@ -29,7 +41,6 @@ describe("useMasterVolume Hook (regression M5-05)", () => {
       invoke: mockInvoke,
     };
 
-    // Initialize with mock return for get_master_volume = 0.2 and get_master_mute = true
     mockInvoke.mockImplementation((cmd: string) => {
       if (cmd === "get_master_volume") return Promise.resolve(0.2);
       if (cmd === "get_master_mute") return Promise.resolve(true);
@@ -40,7 +51,6 @@ describe("useMasterVolume Hook (regression M5-05)", () => {
 
     const { result } = renderHook(() => useMasterVolume(0.2, true));
 
-    // Wait for initial refresh to finish
     await waitFor(() => {
       expect(result.current.isLoading).toBe(false);
     });
@@ -50,16 +60,13 @@ describe("useMasterVolume Hook (regression M5-05)", () => {
 
     mockInvoke.mockClear();
 
-    // User drags volume slider to 45% (0.45)
     await act(async () => {
       await result.current.setVolume(0.45);
     });
 
-    // React state reflects unmuted and updated volume
     expect(result.current.volume).toBe(0.45);
     expect(result.current.isMuted).toBe(false);
 
-    // Verify both toggle_master_mute and set_master_volume were called in order
     expect(mockInvoke).toHaveBeenCalledTimes(2);
     expect(mockInvoke).toHaveBeenNthCalledWith(1, "toggle_master_mute", undefined);
     expect(mockInvoke).toHaveBeenNthCalledWith(2, "set_master_volume", { level: 0.45 });
@@ -175,7 +182,6 @@ describe("useMasterVolume Hook (regression M5-05)", () => {
 
     mockInvoke.mockClear();
 
-    // Fire multiple setVolume calls rapidly in the same tick
     await act(async () => {
       const p1 = result.current.setVolume(0.2);
       const p2 = result.current.setVolume(0.3);
@@ -183,13 +189,12 @@ describe("useMasterVolume Hook (regression M5-05)", () => {
       await Promise.all([p1, p2, p3]);
     });
 
-    // toggle_master_mute should be called exactly once
     const toggleCalls = mockInvoke.mock.calls.filter((call) => call[0] === "toggle_master_mute");
     expect(toggleCalls).toHaveLength(1);
     expect(result.current.isMuted).toBe(false);
   });
 
-  it("periodically refreshes volume and mute state every 3000ms (regression M5-05)", async () => {
+  it("periodically refreshes volume and mute state via 60000ms heartbeat fallback (WP-04)", async () => {
     vi.useFakeTimers();
     try {
       (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
@@ -213,13 +218,68 @@ describe("useMasterVolume Hook (regression M5-05)", () => {
       mockInvoke.mockClear();
       currentVolume = 0.8;
 
-      // Advance 3000ms for polling tick
+      // 3000ms should NOT trigger polling tick (heartbeat changed to 60000ms)
       await act(async () => {
         await vi.advanceTimersByTimeAsync(3000);
+      });
+      expect(mockInvoke).not.toHaveBeenCalledWith("get_master_volume", undefined);
+
+      // Advance 57000ms more (total 60000ms) for fallback heartbeat
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(57000);
       });
 
       expect(mockInvoke).toHaveBeenCalledWith("get_master_volume", undefined);
       expect(result.current.volume).toBe(0.8);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("updates volume and mute state immediately upon audio-volume-update event (WP-04)", async () => {
+    (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+      invoke: mockInvoke,
+    };
+
+    const { result } = renderHook(() => useMasterVolume(0.5, false));
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    expect(volumeEventListener).not.toBeNull();
+
+    act(() => {
+      volumeEventListener?.({ payload: { volume: 0.95, is_muted: true } });
+    });
+
+    expect(result.current.volume).toBe(0.95);
+    expect(result.current.isMuted).toBe(true);
+  });
+
+  it("pauses polling when document is hidden (WP-04)", async () => {
+    vi.useFakeTimers();
+    try {
+      (window as unknown as { __TAURI_INTERNALS__: object }).__TAURI_INTERNALS__ = {
+        invoke: mockInvoke,
+      };
+
+      renderHook(() => useMasterVolume(0.4, false));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10);
+      });
+      mockInvoke.mockClear();
+
+      Object.defineProperty(document, "hidden", { value: true, configurable: true });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60000);
+      });
+
+      expect(mockInvoke).not.toHaveBeenCalled();
+
+      Object.defineProperty(document, "hidden", { value: false, configurable: true });
     } finally {
       vi.useRealTimers();
     }
