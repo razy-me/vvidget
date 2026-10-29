@@ -2,20 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AppConfig, AppTheme, LayoutMode, WidgetPlacement } from "@/types/config";
 import { DEFAULT_CONFIG } from "@/types/config";
 
-// Detect if running within Tauri desktop environment
-const isTauri = (): boolean => {
-  return typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__);
-};
-
-// Dynamically invoke Tauri command or fallback safely
-async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  if (isTauri()) {
-    const { invoke } = await import("@tauri-apps/api/core");
-    return invoke<T>(cmd, args);
-  }
-  // Safe in-memory mock for web preview and unit tests
-  return Promise.reject(new Error(`Tauri core IPC not available for ${cmd}`));
-}
+import { isTauri, safeInvoke } from "@/utils/tauri";
 
 export interface UseConfigReturn {
   config: AppConfig;

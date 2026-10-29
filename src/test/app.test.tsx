@@ -100,27 +100,27 @@ describe("App & AppContent Routing", () => {
     };
   });
 
-  it("routes to SettingsModal when ?view=settings is in query string", () => {
+  it("routes to SettingsModal when ?view=settings is in query string", async () => {
     window.location.search = "?view=settings";
     render(<AppContent />);
 
-    expect(screen.getByTestId("settings-modal-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("settings-modal-view")).toBeInTheDocument();
     expect(screen.queryByTestId("dock-container-view")).not.toBeInTheDocument();
   });
 
-  it("routes to SettingsModal when ?widget=settings is in query string", () => {
+  it("routes to SettingsModal when ?widget=settings is in query string", async () => {
     window.location.search = "?widget=settings";
     render(<AppContent />);
 
-    expect(screen.getByTestId("settings-modal-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("settings-modal-view")).toBeInTheDocument();
   });
 
-  it("routes to dedicated Resources widget window when ?widget=resources", () => {
+  it("routes to dedicated Resources widget window when ?widget=resources", async () => {
     window.location.search = "?widget=resources";
     render(<AppContent />);
 
     expect(screen.getByText("System Resources")).toBeInTheDocument();
-    expect(screen.getByTestId("resource-widget-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("resource-widget-view")).toBeInTheDocument();
     expect(screen.queryByTestId("dock-container-view")).not.toBeInTheDocument();
 
     // Verify interaction on WidgetContainer lock button
@@ -129,47 +129,47 @@ describe("App & AppContent Routing", () => {
     expect(mockSetWidgetsLocked).toHaveBeenCalledWith(true);
   });
 
-  it("routes to dedicated Spotify widget window when ?widget=spotify", () => {
+  it("routes to dedicated Spotify widget window when ?widget=spotify", async () => {
     window.location.search = "?widget=spotify";
     render(<AppContent />);
 
     expect(screen.getByText("Media Controls")).toBeInTheDocument();
-    expect(screen.getByTestId("spotify-widget-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("spotify-widget-view")).toBeInTheDocument();
   });
 
-  it("routes to dedicated Weather widget window when ?widget=weather", () => {
+  it("routes to dedicated Weather widget window when ?widget=weather", async () => {
     window.location.search = "?widget=weather";
     render(<AppContent />);
 
     expect(screen.getByText("Weather Forecast")).toBeInTheDocument();
-    expect(screen.getByTestId("weather-widget-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("weather-widget-view")).toBeInTheDocument();
   });
 
-  it("routes to dedicated Speedtest widget window when ?widget=speedtest", () => {
+  it("routes to dedicated Speedtest widget window when ?widget=speedtest", async () => {
     window.location.search = "?widget=speedtest";
     render(<AppContent />);
 
     expect(screen.getByText("Internet Speedtest")).toBeInTheDocument();
-    expect(screen.getByTestId("speedtest-widget-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("speedtest-widget-view")).toBeInTheDocument();
   });
 
-  it("routes to dedicated Game Launcher widget window when ?widget=launcher", () => {
+  it("routes to dedicated Game Launcher widget window when ?widget=launcher", async () => {
     window.location.search = "?widget=launcher";
     render(<AppContent />);
 
     expect(screen.getByText("Game & App Launcher")).toBeInTheDocument();
-    expect(screen.getByTestId("launcher-widget-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("launcher-widget-view")).toBeInTheDocument();
   });
 
-  it("routes to dedicated Quick Settings widget window when ?widget=quick_settings", () => {
+  it("routes to dedicated Quick Settings widget window when ?widget=quick_settings", async () => {
     window.location.search = "?widget=quick_settings";
     render(<AppContent />);
 
     expect(screen.getByText("Quick Settings")).toBeInTheDocument();
-    expect(screen.getByTestId("quick-settings-widget-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("quick-settings-widget-view")).toBeInTheDocument();
   });
 
-  it("routes to dynamic Quick Settings instance when ?widget=quick_settings_custom", () => {
+  it("routes to dynamic Quick Settings instance when ?widget=quick_settings_custom", async () => {
     window.location.search = "?widget=quick_settings_custom";
     mockConfig.quick_settings_instances = {
       quick_settings_custom: {
@@ -181,46 +181,46 @@ describe("App & AppContent Routing", () => {
     render(<AppContent />);
 
     expect(screen.getByText("Work Tools")).toBeInTheDocument();
-    expect(screen.getByTestId("quick-settings-widget-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("quick-settings-widget-view")).toBeInTheDocument();
   });
 
-  it("routes to dedicated Calendar widget window when ?widget=calendar", () => {
+  it("routes to dedicated Calendar widget window when ?widget=calendar", async () => {
     window.location.search = "?widget=calendar";
     render(<AppContent />);
 
     expect(screen.getByText("Calendar & Notes")).toBeInTheDocument();
-    expect(screen.getByTestId("calendar-widget-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("calendar-widget-view")).toBeInTheDocument();
   });
 
-  it("routes to dedicated Clock widget window when ?widget=clock", () => {
+  it("routes to dedicated Clock widget window when ?widget=clock", async () => {
     window.location.search = "?widget=clock";
     render(<AppContent />);
 
     expect(screen.getByText("Clock & Timers")).toBeInTheDocument();
-    expect(screen.getByTestId("clock-widget-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("clock-widget-view")).toBeInTheDocument();
   });
 
-  it("routes to dedicated Bluetooth widget window when ?widget=bluetooth", () => {
+  it("routes to dedicated Bluetooth widget window when ?widget=bluetooth", async () => {
     window.location.search = "?widget=bluetooth";
     render(<AppContent />);
 
     expect(screen.getByText("Bluetooth Devices")).toBeInTheDocument();
-    expect(screen.getByTestId("bluetooth-widget-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("bluetooth-widget-view")).toBeInTheDocument();
   });
 
-  it("routes to dedicated Battery widget window when ?widget=battery", () => {
+  it("routes to dedicated Battery widget window when ?widget=battery", async () => {
     window.location.search = "?widget=battery";
     render(<AppContent />);
 
     expect(screen.getByText("Battery & Power")).toBeInTheDocument();
-    expect(screen.getByTestId("battery-widget-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("battery-widget-view")).toBeInTheDocument();
   });
 
-  it("routes to skeleton window view when ?view=skeleton", () => {
+  it("routes to skeleton window view when ?view=skeleton", async () => {
     window.location.search = "?view=skeleton";
     render(<AppContent />);
 
-    expect(screen.getByTestId("skeleton-widget-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("skeleton-widget-view")).toBeInTheDocument();
   });
 
   it("renders DockContainer when layout_mode is 'docked'", () => {
@@ -231,14 +231,14 @@ describe("App & AppContent Routing", () => {
     expect(screen.getByTestId("dock-container-view")).toBeInTheDocument();
   });
 
-  it("renders multi-widget desktop surface when layout_mode is 'independent'", () => {
+  it("renders multi-widget desktop surface when layout_mode is 'independent'", async () => {
     window.location.search = "";
     mockConfig.layout_mode = "independent";
 
     render(<AppContent />);
 
     expect(screen.getByText("vvidget Desktop Surface")).toBeInTheDocument();
-    expect(screen.getByTestId("resource-widget-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("resource-widget-view")).toBeInTheDocument();
     expect(screen.getByText("Media Controls")).toBeInTheDocument();
     expect(screen.getByText("Weather Forecast")).toBeInTheDocument();
 

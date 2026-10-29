@@ -1,21 +1,43 @@
-# TOFIX WP-06 — Round 2
-Diff: 6f9d4d63b155ae033346f690d2dce5e7a6a9848a..4f36213cdad82cd99e3e98b301eb6dd232e3e66f   Verdict: APPROVED
+# Code Review Report: WP-06 (WebView2 Fullscreen & Display Suspension)
 
-| # | Sev | File:Line | Finding | Suggested fix | Status |
-|---|-----|-----------|---------|---------------|--------|
+**Status**: APPROVED  
+**Commit**: `91f060fcfb729a45a83794b4ce942262d04ba5f4`  
+**Review Level**: Tier 1 Change Review  
 
-## Verification of Round 1 Fixes
-- #1 (MAJOR docs/agents/CONTEXT.md:137): Weather module documentation restored and appended properly. (verified fixed)
-- #2 (MAJOR docs/agents/DECISIONS.md:190): Decision D-027 restored and D-028 appended. (verified fixed)
-- #3 (MAJOR src-tauri/src/lib.rs:121): `sync_widget_windows` hides `main` dock window in independent multi-window mode. (verified fixed)
-- #4 (MAJOR src-tauri/src/lib.rs:224): `sync_widget_windows` spawned asynchronously during app startup `.setup()` hook. (verified fixed)
-- #5 (MAJOR src/components/docking/DockItem.tsx:28): `useEffect` added to sync `isCollapsed` with `defaultCollapsed` prop; integration test added. (verified fixed)
-- #6 (MINOR src-tauri/src/lib.rs:76, 213): Theme-aware `dark_mode: config.theme != "light"` applied during widget & main window setup. (verified fixed)
-- #7 (MINOR src-tauri/src/lib.rs:212): `no_activate: true` applied to main dock window to prevent focus stealing. (verified fixed)
-- #8 (MINOR src-tauri/src/lib.rs:242): Leftover dummy test `test_skeleton` removed. (verified fixed)
+---
 
-## Questioned Decisions
-None. D-028 resolution verified.
+## Summary
+Work Package 06 implements automated WebView2 rendering suspension and resume:
+1. **Suspension Controller (`src-tauri/src/window/webview_power.rs`)**: Uses `ICoreWebView2Controller::SetIsVisible(!suspended)` across active widget windows. Halts Chromium frame compositing and DWM presentation during fullscreen gaming, display off, and session lock.
+2. **Settings & Modal Protection**: Whitelists suspendable windows via `is_suspendable_widget_window`, strictly exempting the `"settings"` modal and non-widget utility windows.
+3. **Power Event Wiring (`src-tauri/src/lib.rs`)**: Listens to `"power-state-changed"`, deduplicating transitions via atomic state tracking and managing initial suspension state.
+4. **Resume Snapshot Hydration**: Emits immediate cached `"metrics-update"`, fresh WinRT/Win32 `"battery-update"`, and spawned GSMTC `"media-metadata-update"` on resume.
+5. **Test Verification**: 186 Rust unit tests pass cleanly with 0 failures (`cargo test`).
 
-## Previously rejected items — judgement
-None.
+---
+
+## Checklist Audit
+- [x] Correctness of `webview_power.rs` and suspension state machine.
+- [x] Settings window and active modals are strictly protected from suspension.
+- [x] Proper COM / Win32 visibility handling and safe cross-platform fallback.
+- [x] Snapshot emit on resume (`metrics-update`, `media-metadata-update`, `battery-update`).
+- [x] Zero regressions on cargo test suite (186 passed).
+
+---
+
+## Findings Log
+
+### [MINOR] [OPEN] F-WP06-01 Redundant Dual Global and Targeted IPC Emission on Resume
+- **Status**: OPEN
+- **Where**: `src-tauri/src/window/webview_power.rs:91-113`
+- **Source**: `r-review` (WP-06 Change Review)
+- **Confidence**: HIGH
+- **Category**: performance
+- **Scenario**: `trigger_resume_refresh` broadcasts telemetry snapshots globally via `app.emit(...)` and then redundantly via `app.emit_to(...)` for specific windows.
+- **Why**: Windows listening on global event channels receive the payload twice upon resume. Frontends handle this idempotently, but dual serialization creates minor CPU overhead.
+- **Fix**: Standardize on either global broadcast or targeted window emission for resume snapshots.
+
+---
+
+## Conclusion
+Zero CRITICAL and zero MAJOR issues. Status is **APPROVED**.

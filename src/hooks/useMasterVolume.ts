@@ -1,21 +1,7 @@
+import { isTauri, safeInvoke } from "@/utils/tauri";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// Detect if running within Tauri desktop environment
-const isTauri = (): boolean => {
-  return (
-    typeof window !== "undefined" &&
-    Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__)
-  );
-};
 
-// Safe Tauri IPC invoke wrapper
-async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  if (isTauri()) {
-    const { invoke } = await import("@tauri-apps/api/core");
-    return invoke<T>(cmd, args);
-  }
-  return Promise.reject(new Error(`Tauri IPC not available for ${cmd}`));
-}
 
 export interface AudioVolumeUpdatePayload {
   volume: number; // 0.0 to 1.0

@@ -299,3 +299,10 @@
   3. *Unconditionally polling for fullscreen state in JS frontend*: Inefficient, wastes CPU, and cannot reliably query Win32 D3D fullscreen state.
 - **Reason / trade-offs**: `ICoreWebView2Controller::SetIsVisible(false)` is the official Microsoft API to suspend WebView2 compositing without destroying DOM or state, reducing GPU/CPU compositing overhead to 0% during 3D gaming or display sleep, while resuming instantaneously with fresh telemetry snapshots upon return.
 
+
+## D-040 Frontend Lazy Route-Splitting & Memory Reduction (WP-07)
+- **Decision**: Centralize `isTauri()` runtime detection and `safeInvoke<T>(cmd, args)` in `src/utils/tauri.ts` using static imports from `@tauri-apps/api/core`, replacing duplicated dynamic import promises in hooks across the codebase (`useConfig`, `useLauncher`, `useCalendar`, `useSpeedtest`, `useSystemMetrics`, `useBattery`, `useMasterVolume`). In `src/App.tsx`, convert all widget components, `SettingsModal`, and `SkeletonWidget` to dynamic `React.lazy` imports wrapped in `<Suspense fallback={null}>`. In `vite.config.ts`, configure `rollupOptions.output.manualChunks` to split individual widget families (`widget-resources`, `widget-spotify`, `widget-weather`, `widget-speedtest`, `widget-launcher`, `widget-bluetooth`, `widget-battery`, `widget-calendar`, `widget-clock`, `widget-quick-settings`, `view-settings`) and vendor libraries into dedicated chunks.
+- **Alternatives considered**:
+  1. *Keeping monolithic single frontend bundle*: Every independent WebView window loads and compiles JavaScript bytecode for all 10 widgets simultaneously, wasting ~40–60 MB RAM per window.
+  2. *Retaining dynamic imports inside every individual hook*: Duplicates promise allocation and runtime resolution across multiple hooks without type or mock isolation.
+- **Reason / trade-offs**: Independent widget windows only load, parse, and evaluate the minimal JavaScript bytecode required for that specific widget, significantly reducing initial memory working set per window while standardizing IPC invocation across all hooks.

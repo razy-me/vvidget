@@ -1,22 +1,8 @@
+import { isTauri, safeInvoke } from "@/utils/tauri";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SystemMetrics } from "@/types/resources";
 
-// Check if running in Tauri desktop webview
-const isTauri = (): boolean => {
-  return (
-    typeof window !== "undefined" &&
-    Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__)
-  );
-};
 
-// Safe invoke wrapper
-async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  if (isTauri()) {
-    const { invoke } = await import("@tauri-apps/api/core");
-    return invoke<T>(cmd, args);
-  }
-  return Promise.reject(new Error(`Tauri IPC not available for ${cmd}`));
-}
 
 // Fallback preview data for non-Tauri / test environments
 export const MOCK_SYSTEM_METRICS: SystemMetrics = {

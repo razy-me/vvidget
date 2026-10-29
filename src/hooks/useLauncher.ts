@@ -1,23 +1,9 @@
+import { isTauri, safeInvoke } from "@/utils/tauri";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LauncherItem } from "@/types/config";
 import { useConfig } from "@/hooks/useConfig";
 
-// Detect if running within Tauri desktop environment
-const isTauri = (): boolean => {
-  return (
-    typeof window !== "undefined" &&
-    Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__)
-  );
-};
 
-// Safe Tauri IPC invoke wrapper
-async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  if (isTauri()) {
-    const { invoke } = await import("@tauri-apps/api/core");
-    return invoke<T>(cmd, args);
-  }
-  return Promise.reject(new Error(`Tauri IPC not available for ${cmd}`));
-}
 
 export type LauncherCategory = "Alle" | "Steam" | "Epic" | "Eigene";
 

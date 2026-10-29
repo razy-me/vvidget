@@ -151,7 +151,7 @@ c:\vvidget\
   - Never suspend the settings window or active modals.
 - **Acceptance**: Fullscreen app suspends WebView2 background renderer processes in Windows Task Manager; exit restores all widgets instantly.
 
-### WP-07 Frontend Lazy Route-Splitting & Memory Reduction [ ]
+### WP-07 Frontend Lazy Route-Splitting & Memory Reduction [x]
 - **Covers**: R5
 - **Owns**: `src/App.tsx`, `vite.config.ts`, `src/utils/tauri.ts`, `src/hooks/*`
 - **Depends on**: WP-01

@@ -1,20 +1,17 @@
-import { useMemo, useCallback, Component, type FC, type ErrorInfo, type ReactNode } from "react";
+import React, {
+  Suspense,
+  useMemo,
+  useCallback,
+  Component,
+  type FC,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 import { ThemeProvider } from "@/theme";
 import { useConfig } from "@/hooks/useConfig";
-import { SettingsModal } from "@/pages/settings";
+import { isTauri, safeInvoke } from "@/utils/tauri";
 import { DockContainer } from "@/components/docking";
 import { WidgetContainer } from "@/components/layout/WidgetContainer";
-import { ResourceWidget } from "@/widgets/resources/ResourceWidget";
-import { SpotifyWidget } from "@/widgets/spotify/SpotifyWidget";
-import { WeatherWidget } from "@/widgets/weather/WeatherWidget";
-import { QuickSettingsWidget } from "@/widgets/quick-settings/QuickSettingsWidget";
-import { SpeedtestWidget } from "@/widgets/speedtest/SpeedtestWidget";
-import { GameLauncherWidget } from "@/widgets/launcher/GameLauncherWidget";
-import { BluetoothWidget } from "@/widgets/bluetooth/BluetoothWidget";
-import { BatteryWidget } from "@/widgets/battery/BatteryWidget";
-import { CalendarWidget } from "@/widgets/calendar/CalendarWidget";
-import { ClockWidget } from "@/widgets/clock/ClockWidget";
-import { SkeletonWidget } from "@/components/layout/SkeletonWidget";
 import {
   Cpu,
   Music,
@@ -34,6 +31,48 @@ import {
   AlertCircle,
   RefreshCw,
 } from "lucide-react";
+
+// Lazy-loaded widget components and views to enable per-route code-splitting
+const ResourceWidget = React.lazy(() =>
+  import("@/widgets/resources/ResourceWidget").then((m) => ({ default: m.ResourceWidget }))
+);
+const SpotifyWidget = React.lazy(() =>
+  import("@/widgets/spotify/SpotifyWidget").then((m) => ({ default: m.SpotifyWidget }))
+);
+const WeatherWidget = React.lazy(() =>
+  import("@/widgets/weather/WeatherWidget").then((m) => ({ default: m.WeatherWidget }))
+);
+const QuickSettingsWidget = React.lazy(() =>
+  import("@/widgets/quick-settings/QuickSettingsWidget").then((m) => ({
+    default: m.QuickSettingsWidget,
+  }))
+);
+const SpeedtestWidget = React.lazy(() =>
+  import("@/widgets/speedtest/SpeedtestWidget").then((m) => ({ default: m.SpeedtestWidget }))
+);
+const GameLauncherWidget = React.lazy(() =>
+  import("@/widgets/launcher/GameLauncherWidget").then((m) => ({
+    default: m.GameLauncherWidget,
+  }))
+);
+const BluetoothWidget = React.lazy(() =>
+  import("@/widgets/bluetooth/BluetoothWidget").then((m) => ({ default: m.BluetoothWidget }))
+);
+const BatteryWidget = React.lazy(() =>
+  import("@/widgets/battery/BatteryWidget").then((m) => ({ default: m.BatteryWidget }))
+);
+const CalendarWidget = React.lazy(() =>
+  import("@/widgets/calendar/CalendarWidget").then((m) => ({ default: m.CalendarWidget }))
+);
+const ClockWidget = React.lazy(() =>
+  import("@/widgets/clock/ClockWidget").then((m) => ({ default: m.ClockWidget }))
+);
+const SettingsModal = React.lazy(() =>
+  import("@/pages/settings").then((m) => ({ default: m.SettingsModal }))
+);
+const SkeletonWidget = React.lazy(() =>
+  import("@/components/layout/SkeletonWidget").then((m) => ({ default: m.SkeletonWidget }))
+);
 
 export const AppContent: FC = () => {
   const { config, setWidgetsLocked, setLayoutMode } = useConfig();
@@ -56,8 +95,7 @@ export const AppContent: FC = () => {
 
   const handleOpenSettings = useCallback(async () => {
     try {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("open_settings");
+      await safeInvoke("open_settings");
     } catch {
       window.location.search = "?view=settings";
     }
@@ -76,12 +114,20 @@ export const AppContent: FC = () => {
 
   // 1. Settings Window View
   if (isSettingsView) {
-    return <SettingsModal />;
+    return (
+      <Suspense fallback={null}>
+        <SettingsModal />
+      </Suspense>
+    );
   }
 
   // 1b. Translucent Grid Skeleton Preview View (shown while dragging on desktop)
   if (isSkeletonView) {
-    return <SkeletonWidget />;
+    return (
+      <Suspense fallback={null}>
+        <SkeletonWidget />
+      </Suspense>
+    );
   }
 
   // 2. Dedicated Single-Widget Window Views (Independent Multi-Window Mode)
@@ -99,7 +145,9 @@ export const AppContent: FC = () => {
           onOpenSettings={handleOpenSettings}
           className="w-full h-full"
         >
-          <ResourceWidget className="border-0 shadow-none bg-transparent p-0 max-w-none" />
+          <Suspense fallback={null}>
+            <ResourceWidget className="border-0 shadow-none bg-transparent p-0 max-w-none" />
+          </Suspense>
         </WidgetContainer>
       </div>
     );
@@ -118,7 +166,9 @@ export const AppContent: FC = () => {
           onOpenSettings={handleOpenSettings}
           className="w-full h-full"
         >
-          <SpotifyWidget className="border-0 shadow-none bg-transparent p-0 max-w-none" />
+          <Suspense fallback={null}>
+            <SpotifyWidget className="border-0 shadow-none bg-transparent p-0 max-w-none" />
+          </Suspense>
         </WidgetContainer>
       </div>
     );
@@ -137,7 +187,9 @@ export const AppContent: FC = () => {
           onOpenSettings={handleOpenSettings}
           className="w-full h-full"
         >
-          <WeatherWidget className="border-0 shadow-none bg-transparent p-0 max-w-none" />
+          <Suspense fallback={null}>
+            <WeatherWidget className="border-0 shadow-none bg-transparent p-0 max-w-none" />
+          </Suspense>
         </WidgetContainer>
       </div>
     );
@@ -156,7 +208,9 @@ export const AppContent: FC = () => {
           onOpenSettings={handleOpenSettings}
           className="w-full h-full"
         >
-          <SpeedtestWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+          <Suspense fallback={null}>
+            <SpeedtestWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+          </Suspense>
         </WidgetContainer>
       </div>
     );
@@ -175,7 +229,9 @@ export const AppContent: FC = () => {
           onOpenSettings={handleOpenSettings}
           className="w-full h-full"
         >
-          <GameLauncherWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+          <Suspense fallback={null}>
+            <GameLauncherWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+          </Suspense>
         </WidgetContainer>
       </div>
     );
@@ -194,7 +250,9 @@ export const AppContent: FC = () => {
           onOpenSettings={handleOpenSettings}
           className="w-full h-full"
         >
-          <BluetoothWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+          <Suspense fallback={null}>
+            <BluetoothWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+          </Suspense>
         </WidgetContainer>
       </div>
     );
@@ -213,7 +271,9 @@ export const AppContent: FC = () => {
           onOpenSettings={handleOpenSettings}
           className="w-full h-full"
         >
-          <BatteryWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+          <Suspense fallback={null}>
+            <BatteryWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+          </Suspense>
         </WidgetContainer>
       </div>
     );
@@ -232,7 +292,9 @@ export const AppContent: FC = () => {
           onOpenSettings={handleOpenSettings}
           className="w-full h-full"
         >
-          <CalendarWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+          <Suspense fallback={null}>
+            <CalendarWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+          </Suspense>
         </WidgetContainer>
       </div>
     );
@@ -251,7 +313,9 @@ export const AppContent: FC = () => {
           onOpenSettings={handleOpenSettings}
           className="w-full h-full"
         >
-          <ClockWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+          <Suspense fallback={null}>
+            <ClockWidget className="border-0 shadow-none bg-transparent p-0 max-w-none w-full h-full" />
+          </Suspense>
         </WidgetContainer>
       </div>
     );
@@ -272,10 +336,12 @@ export const AppContent: FC = () => {
           onOpenSettings={handleOpenSettings}
           className="w-full h-full"
         >
-          <QuickSettingsWidget
-            instanceId={widgetId}
-            className="border-0 shadow-none bg-transparent p-0 max-w-none"
-          />
+          <Suspense fallback={null}>
+            <QuickSettingsWidget
+              instanceId={widgetId}
+              className="border-0 shadow-none bg-transparent p-0 max-w-none"
+            />
+          </Suspense>
         </WidgetContainer>
       </div>
     );
@@ -293,7 +359,7 @@ export const AppContent: FC = () => {
   // In Tauri runtime when in independent multi-window mode, the main window is hidden via Win32 SW_HIDE.
   // Rendering the entire 10-widget grid inside the hidden window creates duplicate listeners,
   // timers, and GPU compositing load. Return null to keep the hidden main window at 0% CPU/GPU.
-  if (typeof window !== "undefined" && Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__)) {
+  if (isTauri()) {
     return null;
   }
 
@@ -373,7 +439,9 @@ export const AppContent: FC = () => {
             onOpenSettings={handleOpenSettings}
             className="w-full"
           >
-            <ResourceWidget className="border-0 shadow-none bg-transparent p-0" />
+            <Suspense fallback={null}>
+              <ResourceWidget className="border-0 shadow-none bg-transparent p-0" />
+            </Suspense>
           </WidgetContainer>
         )}
 
@@ -388,7 +456,9 @@ export const AppContent: FC = () => {
             onOpenSettings={handleOpenSettings}
             className="w-full"
           >
-            <SpotifyWidget className="border-0 shadow-none bg-transparent p-0" />
+            <Suspense fallback={null}>
+              <SpotifyWidget className="border-0 shadow-none bg-transparent p-0" />
+            </Suspense>
           </WidgetContainer>
         )}
 
@@ -403,7 +473,9 @@ export const AppContent: FC = () => {
             onOpenSettings={handleOpenSettings}
             className="w-full"
           >
-            <WeatherWidget className="border-0 shadow-none bg-transparent p-0" />
+            <Suspense fallback={null}>
+              <WeatherWidget className="border-0 shadow-none bg-transparent p-0" />
+            </Suspense>
           </WidgetContainer>
         )}
 
@@ -418,7 +490,9 @@ export const AppContent: FC = () => {
             onOpenSettings={handleOpenSettings}
             className="w-full"
           >
-            <SpeedtestWidget className="border-0 shadow-none bg-transparent p-0" />
+            <Suspense fallback={null}>
+              <SpeedtestWidget className="border-0 shadow-none bg-transparent p-0" />
+            </Suspense>
           </WidgetContainer>
         )}
 
@@ -433,7 +507,9 @@ export const AppContent: FC = () => {
             onOpenSettings={handleOpenSettings}
             className="w-full"
           >
-            <GameLauncherWidget className="border-0 shadow-none bg-transparent p-0" />
+            <Suspense fallback={null}>
+              <GameLauncherWidget className="border-0 shadow-none bg-transparent p-0" />
+            </Suspense>
           </WidgetContainer>
         )}
 
@@ -448,10 +524,12 @@ export const AppContent: FC = () => {
             onOpenSettings={handleOpenSettings}
             className="w-full"
           >
-            <QuickSettingsWidget
-              instanceId="quick_settings"
-              className="border-0 shadow-none bg-transparent p-0"
-            />
+            <Suspense fallback={null}>
+              <QuickSettingsWidget
+                instanceId="quick_settings"
+                className="border-0 shadow-none bg-transparent p-0"
+              />
+            </Suspense>
           </WidgetContainer>
         )}
 
@@ -470,10 +548,12 @@ export const AppContent: FC = () => {
             onOpenSettings={handleOpenSettings}
             className="w-full"
           >
-            <QuickSettingsWidget
-              instanceId={id}
-              className="border-0 shadow-none bg-transparent p-0"
-            />
+            <Suspense fallback={null}>
+              <QuickSettingsWidget
+                instanceId={id}
+                className="border-0 shadow-none bg-transparent p-0"
+              />
+            </Suspense>
           </WidgetContainer>
         ))}
 
@@ -488,7 +568,9 @@ export const AppContent: FC = () => {
             onOpenSettings={handleOpenSettings}
             className="w-full"
           >
-            <BluetoothWidget className="border-0 shadow-none bg-transparent p-0" />
+            <Suspense fallback={null}>
+              <BluetoothWidget className="border-0 shadow-none bg-transparent p-0" />
+            </Suspense>
           </WidgetContainer>
         )}
 
@@ -503,7 +585,9 @@ export const AppContent: FC = () => {
             onOpenSettings={handleOpenSettings}
             className="w-full"
           >
-            <BatteryWidget className="border-0 shadow-none bg-transparent p-0" />
+            <Suspense fallback={null}>
+              <BatteryWidget className="border-0 shadow-none bg-transparent p-0" />
+            </Suspense>
           </WidgetContainer>
         )}
 
@@ -518,7 +602,9 @@ export const AppContent: FC = () => {
             onOpenSettings={handleOpenSettings}
             className="w-full"
           >
-            <CalendarWidget className="border-0 shadow-none bg-transparent p-0" />
+            <Suspense fallback={null}>
+              <CalendarWidget className="border-0 shadow-none bg-transparent p-0" />
+            </Suspense>
           </WidgetContainer>
         )}
 
@@ -533,7 +619,9 @@ export const AppContent: FC = () => {
             onOpenSettings={handleOpenSettings}
             className="w-full"
           >
-            <ClockWidget className="border-0 shadow-none bg-transparent p-0" />
+            <Suspense fallback={null}>
+              <ClockWidget className="border-0 shadow-none bg-transparent p-0" />
+            </Suspense>
           </WidgetContainer>
         )}
       </div>

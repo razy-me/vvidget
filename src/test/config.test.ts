@@ -103,8 +103,7 @@ describe("AppConfig data contracts and defaults", () => {
               weather: expect.objectContaining({ logical_x: 100, logical_y: 200 }),
             }),
           }),
-        }),
-        undefined,
+        })
       );
     });
 

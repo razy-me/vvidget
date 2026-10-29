@@ -189,3 +189,9 @@ c:\vvidget\
 - **Gotchas**: Never suspend the "settings" window. `SetIsVisible(false)` avoids touching parent HWND styles or triggering Win+D subclass vetoes.
 
 
+
+## Module: Frontend Lazy Route-Splitting & Centralized IPC (`src/utils/tauri.ts`, `src/App.tsx`, `vite.config.ts`)
+- `isTauri() -> boolean`: Centralized detection of Tauri desktop runtime environment via `window.__TAURI_INTERNALS__`.
+- `safeInvoke<T>(cmd: string, args?: Record<string, unknown>) -> Promise<T>`: Unified safe IPC wrapper using static `invoke` from `@tauri-apps/api/core`, replacing duplicated dynamic import promises in hooks.
+- `App.tsx`: Dynamic `React.lazy` route splitting for all widgets, `SettingsModal`, and `SkeletonWidget` wrapped in `<Suspense fallback={null}>`.
+- `vite.config.ts`: `rollupOptions.output.manualChunks` splits `widget-*`, `view-settings`, and vendor libraries into isolated bundles, ensuring each webview only parses and executes minimal bytecode.
