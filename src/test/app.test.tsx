@@ -223,12 +223,12 @@ describe("App & AppContent Routing", () => {
     expect(await screen.findByTestId("skeleton-widget-view")).toBeInTheDocument();
   });
 
-  it("renders DockContainer when layout_mode is 'docked'", () => {
+  it("renders DockContainer when layout_mode is 'docked'", async () => {
     window.location.search = "";
     mockConfig.layout_mode = "docked";
 
     render(<AppContent />);
-    expect(screen.getByTestId("dock-container-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("dock-container-view")).toBeInTheDocument();
   });
 
   it("renders multi-widget desktop surface when layout_mode is 'independent'", async () => {

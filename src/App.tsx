@@ -10,7 +10,6 @@ import React, {
 import { ThemeProvider } from "@/theme";
 import { useConfig } from "@/hooks/useConfig";
 import { isTauri, safeInvoke } from "@/utils/tauri";
-import { DockContainer } from "@/components/docking";
 import { WidgetContainer } from "@/components/layout/WidgetContainer";
 import {
   Cpu,
@@ -72,6 +71,9 @@ const SettingsModal = React.lazy(() =>
 );
 const SkeletonWidget = React.lazy(() =>
   import("@/components/layout/SkeletonWidget").then((m) => ({ default: m.SkeletonWidget }))
+);
+const DockContainer = React.lazy(() =>
+  import("@/components/docking").then((m) => ({ default: m.DockContainer }))
 );
 
 export const AppContent: FC = () => {
@@ -351,7 +353,9 @@ export const AppContent: FC = () => {
   if (config.layout_mode === "docked") {
     return (
       <main className="min-h-screen p-3 flex flex-col items-center justify-start bg-transparent">
-        <DockContainer onOpenSettings={handleOpenSettings} />
+        <Suspense fallback={null}>
+          <DockContainer onOpenSettings={handleOpenSettings} />
+        </Suspense>
       </main>
     );
   }

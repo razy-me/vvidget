@@ -34,6 +34,7 @@ export default defineConfig({
             }
             return "vendor";
           }
+          if (normalized.includes("src/widgets/registry")) return "widget-registry";
           if (normalized.includes("src/widgets/resources/")) return "widget-resources";
           if (normalized.includes("src/widgets/spotify/")) return "widget-spotify";
           if (normalized.includes("src/widgets/weather/")) return "widget-weather";
