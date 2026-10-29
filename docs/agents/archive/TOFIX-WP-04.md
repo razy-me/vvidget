@@ -1,19 +1,42 @@
-# TOFIX WP-04 — Round 2
-Diff: 19c13f03acc267c01ce9d9908d211ca19910b1b8..f8a7c6eb959bc32590f4c4b54a68511ef9402b3c   Verdict: APPROVED
+# Code Review Report: WP-04 (Native Push Telemetry: Audio & Battery)
 
-| # | Sev | File:Line | Finding | Suggested fix | Status |
-|---|-----|-----------|---------|---------------|--------|
-| 1 | MAJOR | src-tauri/src/media/gsmtc.rs:150-167 | Redundant thumbnail stream reading and memory allocation on every 500ms background poll. `read_session_data` re-reads the thumbnail stream via WinRT COM and allocates a new `Vec<u8>` every tick without checking if `track_id` is already cached. | Check `if get_cached_album_art(&track_id).is_some()` before opening `media_props.Thumbnail()`, assigning `album_art_url = Some(format!("widgetz://album-art?t={}", track_id));` directly if present. | fixed |
-| 2 | MAJOR | src/widgets/spotify/SpotifyWidget.tsx:24,94-106 | `imgError` state is permanently sticky across track changes. Once any track triggers `onError`, `imgError` remains `true` indefinitely because it is never reset when `session.album_art_url` or `session.track_id` changes, permanently breaking artwork for all future tracks. | Add `useEffect(() => { setImgError(false); }, [session.album_art_url, session.track_id])` or attach `key={session.album_art_url ?? "fallback"}` to reset image error state on track transition. | fixed |
-| 3 | MINOR | src/hooks/useMediaPlayback.ts:60-81 | Event unlisten race condition and subscription leak on rapid unmount. `setupListener` is an async function that imports and awaits `listen()`. If unmounted before completion, cleanup runs while `unlisten` is undefined. | Track an `isMounted` boolean inside the effect and immediately invoke `unlisten()` if the promise resolves after unmount. | fixed |
-| 4 | MINOR | src/widgets/spotify/TrackProgress.tsx:38-40 | Uninitialized `last_updated_system_time_ms <= 0` causes `elapsed` to calculate against epoch zero (~1.7e12 ms), instantly clamping interpolated progress to 100% (`duration_ms`). | Guard timestamp calculation: `const elapsed = last_updated_system_time_ms > 0 ? Math.max(0, now - last_updated_system_time_ms) : 0;`. | fixed |
-| 5 | ENHANCEMENT | src-tauri/src/media/protocol.rs:18-20 | Cache eviction flushes all entries (`cache.clear()`) when reaching 30 items, instantly evicting the active track's cover art if re-requested. | Evict the oldest entry or implement FIFO/LRU rather than clearing the entire HashMap. | fixed |
-| 6 | ENHANCEMENT | src/widgets/spotify/TrackProgress.tsx:62 | Progress bar element has `cursor-pointer` class despite seeking not being supported by GSMTC. | Replace `cursor-pointer` with `cursor-default` to reflect non-seekable playback display. | fixed |
-| 7 | ENHANCEMENT | src/hooks/useMediaPlayback.ts:90-97 | Optimistic `playPause` toggling to paused state retains the original `position_ms` rather than advancing it by elapsed playback time, causing progress to visibly jump backward until the next backend sync. | Advance `position_ms` by elapsed time when optimistically setting `is_playing: false`. | fixed |
-| 8 | ENHANCEMENT | src-tauri/src/media/protocol.rs:65-69 | Custom URI scheme protocol response builder omits CORS header `Access-Control-Allow-Origin: *`. | Add `.header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")` to support canvas/palette extraction and cross-origin resource requests. | fixed |
+**Status**: APPROVED  
+**Commit**: `d9d8e67f3615d5de8f005ad54eab8d03229d9077`  
+**Review Level**: Tier 1 Change Review  
 
-## Questioned Decisions
-- **D-026**: Verified. Cache pre-check avoids redundant COM allocations; FIFO eviction retains current track art; CORS and lifecycle race conditions are resolved.
+---
 
-## Previously rejected items — judgement
-None. All 8 items from Round 1 were accepted and successfully fixed.
+## Summary
+Work Package 04 implements native OS push telemetry for audio and battery, eliminating high-frequency frontend polling:
+1. **CoreAudio Volume Push Callback (`src-tauri/src/audio/notify.rs`)**: Implements `IAudioEndpointVolumeCallback` via `windows::core::implement`. Dispatches `audio-volume-update` without mutex locks or MTA thread contention. Unregisters safely on drop via `VolumeNotifierGuard` with RAII `ComGuard`.
+2. **WinRT Battery Push Notifier (`src-tauri/src/battery/mod.rs`)**: Registers `TypedEventHandler` on WinRT `Battery::AggregateBattery().ReportUpdated`. Wakes background EcoQoS thread via condvar and pushes `battery-update` on delta with backoff timeouts.
+3. **Frontend Event-Driven Hooks (`src/hooks/useMasterVolume.ts`, `src/hooks/useBattery.ts`)**: Replaces 2.5s/3.0s polling with push event listeners, pauses timers when `document.hidden` is true, resyncs immediately on `visibilitychange`, and retains a 60s fallback heartbeat.
+4. **Verification**: 288 vitest tests and 183 cargo tests pass cleanly with 0 failures.
+
+---
+
+## Checklist Audit
+- [x] Correct COM implementation of `IAudioEndpointVolumeCallback` in `audio/notify.rs` without deadlock risks or lock contention on MTA threads.
+- [x] WinRT `ReportUpdated` registration in `battery/mod.rs` on EcoQoS thread.
+- [x] `useMasterVolume` and `useBattery` converted to event-driven listeners with 60s fallback sync.
+- [x] `document.hidden` handling and pause on background tab/window.
+- [x] Unit tests pass cleanly (vitest + cargo test).
+
+---
+
+## Findings Log
+
+### [MINOR] [OPEN] F-WP04-01 Dual Global and Targeted IPC Emission
+- **Status**: OPEN
+- **Where**: `src-tauri/src/audio/notify.rs:91-93`, `src-tauri/src/battery/mod.rs:645-647`
+- **Source**: `r-review` (WP-04 Change Review)
+- **Confidence**: HIGH
+- **Category**: performance
+- **Scenario**: Backend emits both via `app.emit(...)` and `app.emit_to("main", ...)`, causing dual event dispatch to windows listening globally.
+- **Why**: React state setters are idempotent so this produces no UI defect, but sending redundant IPC frames across the WebView2 bridge adds unnecessary IPC deserialization.
+- **Fix**: In docked layout or when using targeted emission, emit either globally or target specific windows rather than both.
+
+---
+
+## Conclusion
+Zero CRITICAL and zero MAJOR issues. Status is **APPROVED**.
