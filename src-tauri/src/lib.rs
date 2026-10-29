@@ -786,4 +786,81 @@ mod tests {
         assert!(!crate::window::is_suspendable_widget_window("settings"));
         assert!(!crate::window::is_suspendable_widget_window("about"));
     }
+
+    #[test]
+    fn test_cross_module_power_state_worker_scaling_and_suspension() {
+        use std::time::Duration;
+
+        let power_state = power::PowerState::new();
+
+        // Phase 1: AC power (Multiplier = 1x)
+        assert_eq!(power_state.interval_multiplier(), 1);
+        assert!(power_state.should_sample());
+
+        let sys_cpu_ram_ac = Duration::from_millis((1500 * power_state.interval_multiplier() as u64).max(1000));
+        let sys_proc_ac = Duration::from_millis(4500 * power_state.interval_multiplier() as u64);
+        let media_active_ac = media::calculate_media_poll_interval(true, true, power_state.interval_multiplier());
+        let media_idle_ac = media::calculate_media_poll_interval(true, false, power_state.interval_multiplier());
+
+        assert_eq!(sys_cpu_ram_ac, Duration::from_millis(1500));
+        assert_eq!(sys_proc_ac, Duration::from_millis(4500));
+        assert_eq!(media_active_ac, Duration::from_millis(500));
+        assert_eq!(media_idle_ac, Duration::from_millis(2000));
+
+        // Phase 2: Transition to Battery power (Multiplier = 2x)
+        assert!(power_state.set_on_battery(true));
+        assert_eq!(power_state.interval_multiplier(), 2);
+        assert!(power_state.should_sample());
+
+        let sys_cpu_ram_bat = Duration::from_millis((1500 * power_state.interval_multiplier() as u64).max(1000));
+        let sys_proc_bat = Duration::from_millis(4500 * power_state.interval_multiplier() as u64);
+        let media_active_bat = media::calculate_media_poll_interval(true, true, power_state.interval_multiplier());
+        let media_idle_bat = media::calculate_media_poll_interval(true, false, power_state.interval_multiplier());
+
+        assert_eq!(sys_cpu_ram_bat, Duration::from_millis(3000));
+        assert_eq!(sys_proc_bat, Duration::from_millis(9000));
+        assert_eq!(media_active_bat, Duration::from_millis(1000));
+        assert_eq!(media_idle_bat, Duration::from_millis(4000));
+
+        // Phase 3: Transition to Windows Energy Saver (Multiplier = 3x)
+        assert!(power_state.set_energy_saver(true));
+        assert_eq!(power_state.interval_multiplier(), 3);
+        assert!(power_state.should_sample());
+
+        let sys_cpu_ram_saver = Duration::from_millis((1500 * power_state.interval_multiplier() as u64).max(1000));
+        let sys_proc_saver = Duration::from_millis(4500 * power_state.interval_multiplier() as u64);
+        let media_active_saver = media::calculate_media_poll_interval(true, true, power_state.interval_multiplier());
+        let media_idle_saver = media::calculate_media_poll_interval(true, false, power_state.interval_multiplier());
+
+        assert_eq!(sys_cpu_ram_saver, Duration::from_millis(4500));
+        assert_eq!(sys_proc_saver, Duration::from_millis(13500));
+        assert_eq!(media_active_saver, Duration::from_millis(1500));
+        assert_eq!(media_idle_saver, Duration::from_millis(6000));
+
+        // Phase 4: Fullscreen app / game activation suppresses sampling
+        assert!(power_state.set_fullscreen_active(true));
+        assert!(!power_state.should_sample());
+
+        // Snapshot serialization verification across IPC
+        let snapshot = power_state.snapshot();
+        assert!(!snapshot.should_sample);
+        assert!(snapshot.fullscreen_active);
+        let serialized = serde_json::to_string(&snapshot).expect("Serialize PowerStateSnapshot");
+        let deserialized: power::PowerStateSnapshot = serde_json::from_str(&serialized).expect("Deserialize PowerStateSnapshot");
+        assert_eq!(deserialized.should_sample, false);
+        assert_eq!(deserialized.fullscreen_active, true);
+        assert_eq!(deserialized.interval_multiplier, 3);
+
+        // Suspension contract: All widget windows are suspendable, settings is not
+        let windows = vec!["main", "widget_resources", "widget_spotify", "widget_battery", "settings"];
+        let suspendable: Vec<&str> = windows.into_iter().filter(|&w| crate::window::is_suspendable_widget_window(w)).collect();
+        assert_eq!(suspendable, vec!["main", "widget_resources", "widget_spotify", "widget_battery"]);
+
+        // Phase 5: Return to AC, display on, session unlocked, fullscreen exited
+        power_state.set_fullscreen_active(false);
+        power_state.set_energy_saver(false);
+        power_state.set_on_battery(false);
+        assert!(power_state.should_sample());
+        assert_eq!(power_state.interval_multiplier(), 1);
+    }
 }
