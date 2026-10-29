@@ -28,6 +28,7 @@ pub fn open_settings_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String
     .center()
     .focused(true)
     .decorations(true)
+    .additional_browser_args(crate::window::WEBVIEW_ARGS)
     .build()
     .map_err(|e| format!("Failed to create settings window: {}", e))?;
 

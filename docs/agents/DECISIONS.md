@@ -249,3 +249,12 @@
 
 
 
+
+
+## D-034 Build, Profile and WebView Flags Hardening (WP-01)
+- **Decision**: Remove `devtools` from default dependencies in `src-tauri/Cargo.toml` and gate it under `[features] debug = ["tauri/devtools"]`. Trim `tokio` features to `["rt-multi-thread", "macros", "time", "sync"]`. Add Win32 features (`Win32_System_Threading`, `Win32_System_RemoteDesktop`). Set `codegen-units = 1` under `[profile.release]`. Export `pub const WEBVIEW_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,TranslateUI"` in `src-tauri/src/window/mod.rs` and apply consistently across all `WebviewWindowBuilder` instances and `tauri.conf.json`. Synchronize manager test execution mutating global positions lock using RAII `TEST_MUTEX`.
+- **Alternatives considered**:
+  1. *Keeping devtools always enabled*: Leaves Chromium devtools server and inspection overhead in production release binaries.
+  2. *Leaving tokio with "full"*: Compiles unnecessary subsystems into the binary.
+  3. *Per-window differing browser arguments*: Causes WebView2 process creation failure if windows sharing the same user data folder disagree on browser arguments.
+- **Reason / trade-offs**: Substantially reduces release binary footprint, compile times, and WebView2 background memory consumption while ensuring robust multi-window stability.

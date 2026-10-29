@@ -109,6 +109,7 @@ c:\vvidget\
   - Clamps initial coordinates against active displays via `available_monitors()`.
 - `apply_magnetic_snapping(moving: &mut Rect, work_area: &Rect, other_widgets: &[Rect], config: &SnapConfig) -> SnapResult`: Pure magnetic snapping calculation modifying RECT in OS memory.
 - `clamp_to_monitors(target: PhysicalRect, monitors: &[MonitorBounds]) -> PhysicalRect`: Multi-monitor DPI aware position clamping preventing off-screen widgets.
+- `WEBVIEW_ARGS`: Uniform WebView2 browser flags (`--disable-features=msWebOOUI,msPdfOOUI,TranslateUI`) applied across all window builders to reduce background memory.
 - `HeaderBar`: Fluent header with `data-tauri-drag-region` when unlocked, lock/unlock toggle button, and action controls.
 - `WidgetContainer`: Fluent container wrapping widgets with Acrylic material, HeaderBar, and docked/independent layout styling.
 - **Gotchas**: Common Controls v6 manifest must be linked via `cargo:rustc-link-arg` in `build.rs` to satisfy `TaskDialogIndirect` symbol requirement in MinGW test harness.

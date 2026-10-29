@@ -18,3 +18,6 @@ pub use win32::{
     get_desktop_grid_metrics, DesktopGridMetrics, invalidate_screen_rect,
     WIDGET_SUBCLASS_ID,
 };
+
+/// Uniform WebView2 browser flags to minimize background memory and disable unused Edge UI features.
+pub const WEBVIEW_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,TranslateUI";

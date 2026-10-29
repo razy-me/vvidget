@@ -417,9 +417,12 @@ impl WindowManager {
 mod tests {
     use super::*;
     use crate::window::win32;
+    use std::sync::Mutex;
+    static TEST_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_window_manager_lock_state() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         let wm = WindowManager::new();
         assert!(!wm.is_locked());
 
@@ -432,6 +435,7 @@ mod tests {
 
     #[test]
     fn test_window_manager_snapping_settings() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         let wm = WindowManager::new();
         wm.set_snapping(false, 32);
 
@@ -484,6 +488,7 @@ mod tests {
 
     #[test]
     fn test_window_manager_concurrent_thread_safety() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         let wm = WindowManager::new();
         let mut handles = Vec::new();
 
@@ -612,6 +617,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_m1_05_lock_state_prevents_drag_and_persistence() {
+        let _guard = TEST_MUTEX.lock().unwrap();
         let temp_dir = std::env::temp_dir().join(format!("wm_test_m105_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         let config_path = temp_dir.join("config.json");
         let cm = crate::config::ConfigManager::new(config_path.clone());

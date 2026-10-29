@@ -19,7 +19,8 @@
         "resizable": false,
         "decorations": false,
         "transparent": true,
-        "shadow": false
+        "shadow": false,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,TranslateUI"
       }
     ],
     "security": {

@@ -95,6 +95,7 @@ pub mod integration {
         .decorations(false)
         .transparent(true)
         .shadow(false)
+        .additional_browser_args(crate::window::WEBVIEW_ARGS)
         .build()
         .map_err(|e| format!("Failed to create widget window {}: {}", widget_id, e))?;
 
@@ -308,6 +309,7 @@ pub mod integration {
         .transparent(true)
         .shadow(false)
         .skip_taskbar(true)
+        .additional_browser_args(crate::window::WEBVIEW_ARGS)
         .build()
         .map_err(|e| format!("Failed to create skeleton window: {}", e))?;
 
@@ -581,6 +583,7 @@ pub fn run() {
             .transparent(true)
             .shadow(false)
             .skip_taskbar(true)
+            .additional_browser_args(crate::window::WEBVIEW_ARGS)
             .build()
             .map(|w| {
                 #[cfg(windows)]

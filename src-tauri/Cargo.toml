@@ -13,7 +13,7 @@ crate-type = ["rlib"]
 tauri-build = { version = "2.0", features = [] }
 
 [dependencies]
-tauri = { version = "2.0", features = ["protocol-asset", "devtools", "tray-icon"] }
+tauri = { version = "2.0", features = ["protocol-asset", "tray-icon"] }
 tauri-plugin-log = "2.0"
 tauri-plugin-autostart = "2.0"
 log = "0.4"
@@ -22,10 +22,14 @@ sysinfo = "0.33"
 base64 = "0.22"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.0", features = ["full"] }
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "time", "sync"] }
 specta = { version = "=2.0.0-rc.20", features = ["derive"] }
 tauri-specta = { version = "=2.0.0-rc.20", features = ["javascript", "typescript"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "stream"] }
+
+[features]
+default = []
+debug = ["tauri/devtools"]
 
 [target.'cfg(windows)'.dependencies.windows]
 version = "0.58"
@@ -35,6 +39,8 @@ features = [
     "Win32_Graphics_Dwm",
     "Win32_Foundation",
     "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+    "Win32_System_RemoteDesktop",
     "Win32_UI_Shell",
     "Win32_System_Com",
     "Win32_Media_Audio",
@@ -53,5 +59,6 @@ features = [
 [profile.release]
 opt-level = "z"
 lto = true
+codegen-units = 1
 panic = "abort"
 strip = true

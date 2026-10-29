@@ -78,7 +78,7 @@ c:\vvidget\
 
 ## Work Packages
 
-### WP-01 Build, Profile & WebView Flags Hardening [ ]
+### WP-01 Build, Profile & WebView Flags Hardening [x]
 - **Covers**: R5, R7
 - **Owns**: `src-tauri/Cargo.toml`, `src-tauri/src/window/mod.rs`
 - **Depends on**: —
