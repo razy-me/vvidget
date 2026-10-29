@@ -263,7 +263,7 @@ unsafe extern "system" fn power_wnd_proc(
                             let pbs = &*(lparam.0 as *const POWERBROADCAST_SETTING);
                             if pbs.PowerSetting == GUID_CONSOLE_DISPLAY_STATE {
                                 if pbs.DataLength >= 4 {
-                                    let val = *(pbs.Data.as_ptr() as *const u32);
+                                    let val = std::ptr::read_unaligned(pbs.Data.as_ptr() as *const u32);
                                     // 0 = Display Off, 1 = Display On, 2 = Display Dimmed
                                     let display_on = val != 0;
                                     if ctx.state.set_display_on(display_on) {
@@ -272,7 +272,7 @@ unsafe extern "system" fn power_wnd_proc(
                                 }
                             } else if pbs.PowerSetting == GUID_ACDC_POWER_SOURCE {
                                 if pbs.DataLength >= 4 {
-                                    let val = *(pbs.Data.as_ptr() as *const u32);
+                                    let val = std::ptr::read_unaligned(pbs.Data.as_ptr() as *const u32);
                                     // 0 = AC power, 1 = Battery (DC), 2 = Hot (Short term battery)
                                     let on_battery = val != 0;
                                     if ctx.state.set_on_battery(on_battery) {
@@ -281,7 +281,7 @@ unsafe extern "system" fn power_wnd_proc(
                                 }
                             } else if pbs.PowerSetting == GUID_ENERGY_SAVER_STATUS {
                                 if pbs.DataLength >= 4 {
-                                    let val = *(pbs.Data.as_ptr() as *const u32);
+                                    let val = std::ptr::read_unaligned(pbs.Data.as_ptr() as *const u32);
                                     // 0 = Off, 1 = Energy Saver On
                                     let energy_saver = val != 0;
                                     if ctx.state.set_energy_saver(energy_saver) {
@@ -399,6 +399,7 @@ fn start_power_monitor_inner(sink: Option<Box<dyn PowerEventSink>>, state: Arc<P
     std::thread::Builder::new()
         .name("vvidget-power-monitor".into())
         .spawn(move || {
+            let _com_guard = crate::geo::winrt::ComGuard::new();
             // Force this monitoring thread onto Efficiency (E) cores via Win32 EcoQoS
             let _ = crate::window::win32::enable_current_thread_eco_qos();
 

@@ -451,6 +451,7 @@ pub fn run() {
     let window_manager = WindowManager::new();
     let metrics_collector = MetricsCollector::new();
     let shared_metrics = metrics_collector.cached_handle();
+    let power_manager = power::PowerManager::new();
 
     let builder = tauri::Builder::default()
         .register_uri_scheme_protocol("vvidget", handle_album_art_protocol)
@@ -485,6 +486,7 @@ pub fn run() {
         .manage(config_manager.clone())
         .manage(window_manager)
         .manage(shared_metrics)
+        .manage(power_manager.clone())
         .invoke_handler(tauri::generate_handler![
             load_config,
             save_config,
@@ -532,8 +534,10 @@ pub fn run() {
             get_bluetooth_devices,
             open_bluetooth_settings,
             toggle_bluetooth_device,
+            power::get_power_state,
         ])
         .setup(move |app| {
+            power::start_power_monitor(app.handle().clone(), power_manager.state());
             start_metrics_worker(
                 app.handle().clone(),
                 config_manager_setup,
@@ -735,6 +739,7 @@ mod tests {
             let _ = serde_json::from_str::<battery::BatteryStatus>(bad);
             let _ = serde_json::from_str::<window::Rect>(bad);
             let _ = serde_json::from_str::<window::DesktopGridMetrics>(bad);
+            let _ = serde_json::from_str::<power::PowerStateSnapshot>(bad);
         }
     }
 }
