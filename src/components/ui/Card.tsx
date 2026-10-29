@@ -24,7 +24,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={cn(
-          "rounded-xl transition-all duration-150 ease-out",
+          "rounded-xl transition-[color,background-color,border-color,box-shadow,transform] duration-150 ease-out",
           padded && "p-3.5",
           // Variants
           variant === "acrylic" &&

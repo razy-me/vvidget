@@ -174,7 +174,7 @@ export const ResourceWidget: FC<ResourceWidgetProps> = ({
                           type="button"
                           onClick={() => setUserSelectedDiskIndex(idx)}
                           className={cn(
-                            "text-[10px] px-2 py-0.5 rounded-[5px] transition-all font-medium leading-none",
+                            "text-[10px] px-2 py-0.5 rounded-[5px] transition-colors duration-150 font-medium leading-none",
                             isActive
                               ? "bg-[var(--fluent-accent)] text-white shadow-sm"
                               : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-subtle-hover)]"

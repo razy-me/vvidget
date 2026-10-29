@@ -69,7 +69,7 @@ export const Tooltip: FC<TooltipProps> = ({
           className={cn(
             "absolute z-50 px-2.5 py-1 text-xs rounded-md pointer-events-none whitespace-nowrap",
             "bg-[var(--fluent-acrylic-bg)] text-[var(--fluent-text-primary)] border border-[var(--fluent-stroke)]",
-            "shadow-[var(--fluent-shadow-flyout)] backdrop-blur-md animate-in fade-in zoom-in-95 duration-100",
+            "shadow-[var(--fluent-shadow-flyout)] animate-in fade-in zoom-in-95 duration-100",
             positionClasses,
             className
           )}

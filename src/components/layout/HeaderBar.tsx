@@ -56,8 +56,8 @@ export const HeaderBar: FC<HeaderBarProps> = ({
         "relative w-full flex-shrink-0 flex items-center justify-between px-3 py-1.5 select-none border-b",
         isGridDragging
           ? "border-b-[var(--fluent-accent)]/50 bg-[var(--fluent-card-subtle)] shadow-inner"
-          : "border-b-[var(--fluent-stroke)]/40 bg-[var(--fluent-card-bg)]/30 backdrop-blur-sm",
-        "transition-all duration-150 touch-none",
+          : "border-b-[var(--fluent-stroke)]/40 bg-[var(--fluent-card-bg)]/30",
+        "transition-[color,background-color,border-color,opacity,box-shadow] duration-150 touch-none",
         !isLocked
           ? isGridDragging
             ? "cursor-grabbing"
@@ -118,7 +118,7 @@ export const HeaderBar: FC<HeaderBarProps> = ({
                   onClick={onToggleLock}
                   className={cn(
                     "p-1 rounded-md text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)]",
-                    "hover:bg-[var(--fluent-card-hover)] active:scale-95 transition-all duration-150",
+                    "hover:bg-[var(--fluent-card-hover)] active:scale-95 transition-[color,background-color,border-color,opacity,transform] duration-150",
                     "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--fluent-accent)]",
                     isLocked && "text-[var(--fluent-accent)]"
                   )}
@@ -141,7 +141,7 @@ export const HeaderBar: FC<HeaderBarProps> = ({
                   onClick={onOpenSettings}
                   className={cn(
                     "p-1 rounded-md text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)]",
-                    "hover:bg-[var(--fluent-card-hover)] active:scale-95 transition-all duration-150",
+                    "hover:bg-[var(--fluent-card-hover)] active:scale-95 transition-[color,background-color,border-color,opacity,transform] duration-150",
                     "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--fluent-accent)]"
                   )}
                   aria-label={`Open settings for ${title}`}
@@ -158,7 +158,7 @@ export const HeaderBar: FC<HeaderBarProps> = ({
                   onClick={onClose}
                   className={cn(
                     "p-1 rounded-md text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-error)]",
-                    "hover:bg-red-500/10 active:scale-95 transition-all duration-150",
+                    "hover:bg-red-500/10 active:scale-95 transition-[color,background-color,border-color,opacity,transform] duration-150",
                     "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-red-500"
                   )}
                   aria-label={`Close ${title} widget`}

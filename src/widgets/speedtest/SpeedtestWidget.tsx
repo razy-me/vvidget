@@ -124,7 +124,7 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
           disabled={isRunning}
           data-testid="speedtest-gauge-button"
           title={isRunning ? "Test läuft..." : "Test starten"}
-          className={`group relative w-22 h-22 flex items-center justify-center rounded-full transition-all duration-200 outline-none select-none ${
+          className={`group relative w-22 h-22 flex items-center justify-center rounded-full transition-transform duration-200 outline-none select-none ${
             isRunning
               ? "cursor-default"
               : "cursor-pointer hover:scale-105 active:scale-95 focus-visible:ring-2 focus-visible:ring-[var(--fluent-accent)]"
@@ -144,7 +144,7 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
               cx="40"
               cy="40"
               r={radius}
-              className={`fill-none transition-all duration-200 ${
+              className={`fill-none transition-[stroke] duration-200 ${
                 isRunning ? "stroke-[var(--fluent-accent)]" : "stroke-[var(--fluent-accent)]/60 group-hover:stroke-[var(--fluent-accent)]"
               }`}
               strokeWidth="5"
@@ -274,7 +274,7 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
           type="button"
           disabled={isRunning}
           onClick={() => void startTest()}
-          className="h-7 px-3 rounded-md text-xs font-medium flex items-center justify-center gap-1.5 bg-[var(--fluent-accent)] text-black hover:opacity-90 active:scale-95 disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer shadow-sm"
+          className="h-7 px-3 rounded-md text-xs font-medium flex items-center justify-center gap-1.5 bg-[var(--fluent-accent)] text-black hover:opacity-90 active:scale-95 disabled:opacity-50 disabled:pointer-events-none transition-[color,background-color,opacity,transform] duration-150 cursor-pointer shadow-sm"
           data-testid="speedtest-start-button"
         >
           {isRunning ? (
@@ -317,7 +317,7 @@ export const SpeedtestWidget: FC<SpeedtestWidgetProps> = ({
                       hour: "2-digit",
                       minute: "2-digit",
                     })}: ${item.download_mbps.toFixed(1)} Mbps`}
-                    className="w-1.5 bg-[var(--fluent-accent)]/80 hover:bg-[var(--fluent-accent)] rounded-t-sm transition-all"
+                    className="w-1.5 bg-[var(--fluent-accent)]/80 hover:bg-[var(--fluent-accent)] rounded-t-sm transition-colors duration-150"
                     style={{ height: `${heightPct}%` }}
                     data-testid={`history-bar-${idx}`}
                   />

@@ -161,7 +161,7 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Suchen nach Spiel oder App..."
-            className="w-full pl-8 pr-7 py-1.5 text-xs rounded-lg bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] text-[var(--fluent-text-primary)] placeholder-[var(--fluent-text-tertiary)] focus:outline-none focus:border-[var(--fluent-accent)] transition-all"
+            className="w-full pl-8 pr-7 py-1.5 text-xs rounded-lg bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] text-[var(--fluent-text-primary)] placeholder-[var(--fluent-text-tertiary)] focus:outline-none focus:border-[var(--fluent-accent)] transition-colors duration-150"
             aria-label="Spiele durchsuchen"
           />
           {searchQuery && (
@@ -177,7 +177,7 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
 
         <button
           onClick={handleOpenAddModal}
-          className="h-8 px-2.5 rounded-lg bg-[var(--fluent-accent)] text-black hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-1 font-semibold text-xs shrink-0 shadow-sm"
+          className="h-8 px-2.5 rounded-lg bg-[var(--fluent-accent)] text-black hover:opacity-90 active:scale-95 transition-[color,background-color,opacity,transform] duration-150 flex items-center justify-center gap-1 font-semibold text-xs shrink-0 shadow-sm"
           title="Spiel oder App hinzufügen"
           aria-label="Spiel oder App hinzufügen"
         >
@@ -207,7 +207,7 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
               aria-selected={isActive}
               onClick={() => setSelectedCategory(cat)}
               className={cn(
-                "px-2.5 py-0.5 text-[11px] rounded-full transition-all font-medium whitespace-nowrap",
+                "px-2.5 py-0.5 text-[11px] rounded-full transition-[color,background-color,box-shadow] duration-150 font-medium whitespace-nowrap",
                 isActive
                   ? "bg-[var(--fluent-accent)] text-black font-semibold shadow-sm"
                   : "bg-[var(--fluent-card-bg)] text-[var(--fluent-text-secondary)] hover:bg-[var(--fluent-card-hover)] hover:text-[var(--fluent-text-primary)]"
@@ -254,7 +254,7 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
               <div
                 key={item.id}
                 data-testid={`launcher-item-${item.id}`}
-                className="group relative flex items-center justify-between p-2 rounded-lg bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] transition-all duration-150"
+                className="group relative flex items-center justify-between p-2 rounded-lg bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] transition-colors duration-150"
               >
                 {/* Left: Icon / Avatar + Title + Badge */}
                 <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
@@ -310,7 +310,7 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
                     onClick={() => void handleLaunch(item)}
                     disabled={isLaunching}
                     className={cn(
-                      "px-2.5 py-1 text-xs font-medium rounded-md flex items-center gap-1 transition-all shadow-sm active:scale-95",
+                      "px-2.5 py-1 text-xs font-medium rounded-md flex items-center gap-1 transition-[color,background-color,transform] duration-150 shadow-sm active:scale-95",
                       isLaunching
                         ? "bg-[var(--fluent-success)] text-black"
                         : "bg-[var(--fluent-accent-subtle)] text-[var(--fluent-accent)] group-hover:bg-[var(--fluent-accent)] group-hover:text-black"
@@ -343,7 +343,7 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
           role="dialog"
           aria-modal="true"
           aria-labelledby="add-game-modal-title"
-          className="absolute inset-0 z-50 p-4 bg-black/60 backdrop-blur-md flex flex-col justify-center animate-in fade-in duration-150"
+          className="absolute inset-0 z-50 p-4 bg-black/60 flex flex-col justify-center animate-in fade-in duration-150"
         >
           <div className="w-full bg-[var(--fluent-acrylic-bg)] border border-[var(--fluent-stroke)] rounded-xl p-4 shadow-2xl flex flex-col gap-3">
             <div className="flex items-center justify-between">
@@ -405,7 +405,7 @@ export const GameLauncherWidget: FC<GameLauncherWidgetProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-3 py-1.5 text-xs rounded-md bg-[var(--fluent-accent)] text-black font-semibold hover:brightness-110 transition-all shadow-sm"
+                  className="px-3 py-1.5 text-xs rounded-md bg-[var(--fluent-accent)] text-black font-semibold hover:brightness-110 transition-[color,background-color,filter] duration-150 shadow-sm"
                 >
                   Hinzufügen
                 </button>

@@ -88,7 +88,7 @@ export const MiniGraph: FC<MiniGraphProps> = ({
           strokeWidth="1.5"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="transition-all duration-300 ease-linear"
+          className="transition-colors duration-300 ease-linear"
         />
 
         {/* Latest Value Dot */}

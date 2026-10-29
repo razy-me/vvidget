@@ -9,15 +9,12 @@ import {
   Pause,
   RotateCcw,
   Flag,
-  Globe,
   CheckCircle2,
   AlertTriangle,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { ClockFace } from "./ClockFace";
 import {
-  TIMEZONE_OPTIONS,
-  formatDigitalTime,
-  formatDateWithWeekdayGerman,
   formatTimerSeconds,
   formatStopwatchMs,
 } from "./clockUtils";
@@ -45,42 +42,8 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
   const [activeTab, setActiveTab] = useState<ClockTab>(initialTab);
 
   // ----------------------------------------------------
-  // 1. Clock Tab State
+  // 1. Clock Tab State (Ticking logic isolated in ClockFace)
   // ----------------------------------------------------
-  const [currentTime, setCurrentTime] = useState<Date>(() => initialTime ?? new Date());
-  const [selectedTzId, setSelectedTzId] = useState<string>("local");
-  const [clockViewMode, setClockViewMode] = useState<"digital" | "analog">("digital");
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const selectedTz = useMemo(() => {
-    return TIMEZONE_OPTIONS.find((t) => t.id === selectedTzId) ?? TIMEZONE_OPTIONS[0];
-  }, [selectedTzId]);
-
-  const digitalTime = useMemo(() => {
-    return formatDigitalTime(currentTime, selectedTz.timeZone);
-  }, [currentTime, selectedTz.timeZone]);
-
-  const germanDate = useMemo(() => {
-    return formatDateWithWeekdayGerman(currentTime, selectedTz.timeZone);
-  }, [currentTime, selectedTz.timeZone]);
-
-  // Analog calculations
-  const analogAngles = useMemo(() => {
-    const h = parseInt(digitalTime.hours, 10);
-    const m = parseInt(digitalTime.minutes, 10);
-    const s = parseInt(digitalTime.seconds, 10);
-    return {
-      hourAngle: ((h % 12) + m / 60) * 30,
-      minuteAngle: (m + s / 60) * 6,
-      secondAngle: s * 6,
-    };
-  }, [digitalTime]);
 
   // ----------------------------------------------------
   // 2. Timer Tab State
@@ -100,6 +63,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
     return () => clearInterval(interval);
   }, [isTimerRunning]);
 
+  // Auto stop when timer hits 0
   useEffect(() => {
     if (timerRemaining === 0 && isTimerRunning) {
       setIsTimerRunning(false);
@@ -107,12 +71,12 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
   }, [timerRemaining, isTimerRunning]);
 
   const handleStartPauseTimer = () => {
-    if (isTimerCompleted) {
+    if (timerRemaining === 0) {
       setTimerRemaining(timerTotalSeconds);
       setIsTimerRunning(true);
-      return;
+    } else {
+      setIsTimerRunning(!isTimerRunning);
     }
-    setIsTimerRunning(!isTimerRunning);
   };
 
   const handleResetTimer = () => {
@@ -127,81 +91,90 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
   };
 
   const handleApplyCustomTimer = () => {
-    const m = Math.max(0, parseInt(customMinutes, 10) || 0);
-    const s = Math.max(0, parseInt(customSeconds, 10) || 0);
+    const m = parseInt(customMinutes, 10) || 0;
+    const s = parseInt(customSeconds, 10) || 0;
     const total = m * 60 + s;
     if (total > 0) {
-      setIsTimerRunning(false);
-      setTimerTotalSeconds(total);
-      setTimerRemaining(total);
+      handleSetPreset(total);
     }
   };
 
   const timerProgress = useMemo(() => {
-    if (timerTotalSeconds <= 0) return 0;
-    return Math.max(0, Math.min(100, (timerRemaining / timerTotalSeconds) * 100));
-  }, [timerRemaining, timerTotalSeconds]);
+    if (timerTotalSeconds === 0) return 0;
+    return Math.min(100, Math.max(0, ((timerTotalSeconds - timerRemaining) / timerTotalSeconds) * 100));
+  }, [timerTotalSeconds, timerRemaining]);
 
   // ----------------------------------------------------
   // 3. Stopwatch Tab State
   // ----------------------------------------------------
-  const [stopwatchMs, setStopwatchMs] = useState<number>(0);
+  const [stopwatchElapsedMs, setStopwatchElapsedMs] = useState<number>(0);
   const [isStopwatchRunning, setIsStopwatchRunning] = useState<boolean>(false);
   const [laps, setLaps] = useState<LapRecord[]>([]);
-  const stopwatchStartTimeRef = useRef<number>(0);
-  const stopwatchAccumulatedRef = useRef<number>(0);
-  const lastLapMsRef = useRef<number>(0);
-  const isResettingStopwatchRef = useRef<boolean>(false);
+
+  // High precision reference timestamps
+  const startTimeRef = useRef<number>(0);
+  const accumulatedMsRef = useRef<number>(0);
+  const lastLapTotalMsRef = useRef<number>(0);
+  const animFrameIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!isStopwatchRunning) return;
-    stopwatchStartTimeRef.current = performance.now();
+    if (!isStopwatchRunning) {
+      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
+      return;
+    }
 
-    const interval = setInterval(() => {
+    startTimeRef.current = performance.now();
+
+    const loop = () => {
       const now = performance.now();
-      const elapsed = stopwatchAccumulatedRef.current + (now - stopwatchStartTimeRef.current);
-      setStopwatchMs(elapsed);
-    }, 25);
+      const currentSessionMs = now - startTimeRef.current;
+      setStopwatchElapsedMs(accumulatedMsRef.current + currentSessionMs);
+      animFrameIdRef.current = requestAnimationFrame(loop);
+    };
+
+    animFrameIdRef.current = requestAnimationFrame(loop);
 
     return () => {
-      clearInterval(interval);
-      if (!isResettingStopwatchRef.current) {
-        stopwatchAccumulatedRef.current += performance.now() - stopwatchStartTimeRef.current;
-      }
-      isResettingStopwatchRef.current = false;
+      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
   }, [isStopwatchRunning]);
 
   const handleStartStopStopwatch = () => {
-    setIsStopwatchRunning(!isStopwatchRunning);
+    if (isStopwatchRunning) {
+      // Pause
+      accumulatedMsRef.current += performance.now() - startTimeRef.current;
+      setIsStopwatchRunning(false);
+    } else {
+      // Resume / Start
+      setIsStopwatchRunning(true);
+    }
   };
 
   const handleLapStopwatch = () => {
     if (!isStopwatchRunning) return;
-    const currentTotal = stopwatchMs;
-    const lapTime = currentTotal - lastLapMsRef.current;
-    lastLapMsRef.current = currentTotal;
+    const currentTotal = stopwatchElapsedMs;
+    const lapTime = currentTotal - lastLapTotalMsRef.current;
+    lastLapTotalMsRef.current = currentTotal;
 
     const newRecord: LapRecord = {
       lapIndex: laps.length + 1,
-      lapTimeMs: lapTime,
+      lapTimeMs: Math.max(0, lapTime),
       totalTimeMs: currentTotal,
     };
     setLaps((prev) => [newRecord, ...prev]);
   };
 
   const handleResetStopwatch = () => {
-    isResettingStopwatchRef.current = true;
     setIsStopwatchRunning(false);
-    stopwatchAccumulatedRef.current = 0;
-    lastLapMsRef.current = 0;
-    setStopwatchMs(0);
+    accumulatedMsRef.current = 0;
+    lastLapTotalMsRef.current = 0;
+    setStopwatchElapsedMs(0);
     setLaps([]);
   };
 
   const formattedStopwatch = useMemo(() => {
-    return formatStopwatchMs(stopwatchMs);
-  }, [stopwatchMs]);
+    return formatStopwatchMs(stopwatchElapsedMs);
+  }, [stopwatchElapsedMs]);
 
   // ----------------------------------------------------
   // 4. Alarm Tab State
@@ -217,17 +190,39 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
     if (alarmTriggered) setAlarmTriggered(false);
   };
 
+  // Dedicated background alarm monitor aligned with clean second boundaries
   useEffect(() => {
     if (!isAlarmEnabled || alarmTriggered) return;
-    const localHours = String(currentTime.getHours()).padStart(2, "0");
-    const localMinutes = String(currentTime.getMinutes()).padStart(2, "0");
-    const localNowStr = `${localHours}:${localMinutes}`;
-    const todayKey = `${currentTime.toDateString()}_${localNowStr}`;
-    if (localNowStr === alarmTime && lastTriggeredMinuteRef.current !== todayKey) {
-      lastTriggeredMinuteRef.current = todayKey;
-      setAlarmTriggered(true);
-    }
-  }, [currentTime, alarmTime, isAlarmEnabled, alarmTriggered]);
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+    let isMounted = true;
+
+    const checkAlarm = () => {
+      if (!isMounted) return;
+      const now = new Date();
+      const localHours = String(now.getHours()).padStart(2, "0");
+      const localMinutes = String(now.getMinutes()).padStart(2, "0");
+      const localNowStr = `${localHours}:${localMinutes}`;
+      const todayKey = `${now.toDateString()}_${localNowStr}`;
+      if (localNowStr === alarmTime && lastTriggeredMinuteRef.current !== todayKey) {
+        lastTriggeredMinuteRef.current = todayKey;
+        setAlarmTriggered(true);
+      }
+      scheduleNext();
+    };
+
+    const scheduleNext = () => {
+      const nowMs = Date.now();
+      const delay = 1000 - (nowMs % 1000);
+      timerId = setTimeout(checkAlarm, delay);
+    };
+
+    checkAlarm();
+
+    return () => {
+      isMounted = false;
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [isAlarmEnabled, alarmTriggered, alarmTime]);
 
   return (
     <Card
@@ -239,12 +234,12 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
         className
       )}
     >
-      {/* Windows 11 Segmented Pill Switcher */}
-      <div className="p-2 border-b border-[var(--fluent-stroke-subtle)] bg-[var(--fluent-card-bg)]/30 shrink-0">
+      {/* Segmented Top Navigation Tabs */}
+      <div className="p-2 border-b border-[var(--fluent-stroke)] bg-[var(--fluent-card-bg)]/40 shrink-0">
         <div
           role="tablist"
-          aria-label="Uhr Navigation"
-          className="grid grid-cols-4 gap-1 p-0.5 rounded-lg bg-[var(--fluent-card-bg)]/80 border border-[var(--fluent-stroke-subtle)]"
+          aria-label="Uhrwerk Funktionen"
+          className="grid grid-cols-4 gap-1 p-0.5 rounded-lg border border-[var(--fluent-stroke-subtle)] bg-[var(--fluent-card-bg)]"
         >
           <button
             type="button"
@@ -254,7 +249,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
             aria-selected={activeTab === "uhr"}
             onClick={() => setActiveTab("uhr")}
             className={cn(
-              "flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-md text-[11px] font-medium transition-all overflow-hidden",
+              "flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-md text-[11px] font-medium transition-[color,background-color] duration-150 overflow-hidden",
               activeTab === "uhr"
                 ? "bg-[var(--fluent-accent)] text-black font-semibold shadow-sm"
                 : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-hover)]"
@@ -272,7 +267,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
             aria-selected={activeTab === "timer"}
             onClick={() => setActiveTab("timer")}
             className={cn(
-              "flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-md text-[11px] font-medium transition-all overflow-hidden",
+              "flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-md text-[11px] font-medium transition-[color,background-color] duration-150 overflow-hidden",
               activeTab === "timer"
                 ? "bg-[var(--fluent-accent)] text-black font-semibold shadow-sm"
                 : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-hover)]"
@@ -290,7 +285,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
             aria-selected={activeTab === "stoppuhr"}
             onClick={() => setActiveTab("stoppuhr")}
             className={cn(
-              "flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-md text-[11px] font-medium transition-all overflow-hidden",
+              "flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-md text-[11px] font-medium transition-[color,background-color] duration-150 overflow-hidden",
               activeTab === "stoppuhr"
                 ? "bg-[var(--fluent-accent)] text-black font-semibold shadow-sm"
                 : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-hover)]"
@@ -308,7 +303,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
             aria-selected={activeTab === "wecker"}
             onClick={() => setActiveTab("wecker")}
             className={cn(
-              "flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-md text-[11px] font-medium transition-all overflow-hidden",
+              "flex items-center justify-center gap-1.5 py-1 px-1.5 rounded-md text-[11px] font-medium transition-[color,background-color] duration-150 overflow-hidden",
               activeTab === "wecker"
                 ? "bg-[var(--fluent-accent)] text-black font-semibold shadow-sm"
                 : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-hover)]"
@@ -323,157 +318,10 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
       {/* Tab Panels */}
       <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-3 flex flex-col justify-between">
         {/* ==================================================== */}
-        {/* TAB 1: UHR                                           */}
+        {/* TAB 1: UHR (Render Isolated Subcomponent)            */}
         {/* ==================================================== */}
         {activeTab === "uhr" && (
-          <div data-testid="uhr-tab-content" className="h-full flex flex-col justify-between space-y-2">
-            {/* View Mode & Timezone Bar */}
-            <div className="flex items-center justify-between gap-2 shrink-0">
-              <div className="flex items-center gap-1 text-[11px] text-[var(--fluent-text-secondary)]">
-                <Globe className="w-3 h-3 text-[var(--fluent-accent)] shrink-0" />
-                <select
-                  aria-label="Zeitzone auswählen"
-                  value={selectedTzId}
-                  onChange={(e) => setSelectedTzId(e.target.value)}
-                  className="bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] text-[var(--fluent-text-primary)] rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:border-[var(--fluent-accent)] transition-colors"
-                >
-                  {TIMEZONE_OPTIONS.map((tz) => (
-                    <option key={tz.id} value={tz.id} className="bg-neutral-900 text-white">
-                      {tz.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Digital / Analog Switcher */}
-              <div className="flex items-center p-0.5 rounded-md border border-[var(--fluent-stroke-subtle)] bg-[var(--fluent-card-bg)]">
-                <button
-                  type="button"
-                  onClick={() => setClockViewMode("digital")}
-                  className={cn(
-                    "px-2 py-0.5 rounded text-[10px] font-medium transition-all",
-                    clockViewMode === "digital"
-                      ? "bg-[var(--fluent-accent)] text-black font-semibold"
-                      : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)]"
-                  )}
-                >
-                  Digital
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setClockViewMode("analog")}
-                  className={cn(
-                    "px-2 py-0.5 rounded text-[10px] font-medium transition-all",
-                    clockViewMode === "analog"
-                      ? "bg-[var(--fluent-accent)] text-black font-semibold"
-                      : "text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)]"
-                  )}
-                >
-                  Analog
-                </button>
-              </div>
-            </div>
-
-            {/* Main Clock Face Display */}
-            <div className="flex-1 flex flex-col items-center justify-center py-2">
-              {clockViewMode === "analog" ? (
-                /* Analog Clock Face */
-                <div className="relative w-36 h-36 flex items-center justify-center">
-                  <svg className="w-full h-full" viewBox="0 0 100 100">
-                    {/* Dial Background */}
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="46"
-                      className="fill-[var(--fluent-card-bg)] stroke-[var(--fluent-stroke)]"
-                      strokeWidth="2"
-                    />
-                    {/* Hour ticks */}
-                    {Array.from({ length: 12 }).map((_, i) => {
-                      const angle = (i * 30 * Math.PI) / 180;
-                      const x1 = 50 + 38 * Math.sin(angle);
-                      const y1 = 50 - 38 * Math.cos(angle);
-                      const x2 = 50 + 43 * Math.sin(angle);
-                      const y2 = 50 - 43 * Math.cos(angle);
-                      return (
-                        <line
-                          key={i}
-                          x1={x1}
-                          y1={y1}
-                          x2={x2}
-                          y2={y2}
-                          stroke="currentColor"
-                          strokeWidth={i % 3 === 0 ? "2" : "1"}
-                          className={i % 3 === 0 ? "text-[var(--fluent-text-primary)]" : "text-[var(--fluent-text-tertiary)]"}
-                        />
-                      );
-                    })}
-
-                    {/* Hour hand */}
-                    <line
-                      x1="50"
-                      y1="50"
-                      x2={50 + 26 * Math.sin((analogAngles.hourAngle * Math.PI) / 180)}
-                      y2={50 - 26 * Math.cos((analogAngles.hourAngle * Math.PI) / 180)}
-                      stroke="currentColor"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                      className="text-[var(--fluent-text-primary)]"
-                    />
-
-                    {/* Minute hand */}
-                    <line
-                      x1="50"
-                      y1="50"
-                      x2={50 + 36 * Math.sin((analogAngles.minuteAngle * Math.PI) / 180)}
-                      y2={50 - 36 * Math.cos((analogAngles.minuteAngle * Math.PI) / 180)}
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      className="text-[var(--fluent-text-primary)]"
-                    />
-
-                    {/* Second hand */}
-                    <line
-                      x1="50"
-                      y1="50"
-                      x2={50 + 39 * Math.sin((analogAngles.secondAngle * Math.PI) / 180)}
-                      y2={50 - 39 * Math.cos((analogAngles.secondAngle * Math.PI) / 180)}
-                      stroke="var(--fluent-accent)"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    />
-
-                    {/* Center Cap */}
-                    <circle cx="50" cy="50" r="3" fill="var(--fluent-accent)" />
-                  </svg>
-                </div>
-              ) : (
-                /* Digital Clock Display */
-                <div className="flex flex-col items-center justify-center my-auto">
-                  <div
-                    data-testid="digital-time-display"
-                    className="font-mono text-4xl sm:text-5xl font-extrabold tracking-tight text-[var(--fluent-text-primary)] tabular-nums drop-shadow-sm"
-                  >
-                    <span>{digitalTime.hours}</span>
-                    <span className="text-[var(--fluent-accent)]">:</span>
-                    <span>{digitalTime.minutes}</span>
-                    <span className="text-xl sm:text-2xl font-semibold text-[var(--fluent-text-secondary)] ml-1">
-                      :{digitalTime.seconds}
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* Date & Weekday in German */}
-              <div
-                data-testid="german-date-display"
-                className="mt-2 text-xs font-medium text-[var(--fluent-text-secondary)] text-center tracking-wide"
-              >
-                {germanDate}
-              </div>
-            </div>
-          </div>
+          <ClockFace initialTime={initialTime} />
         )}
 
         {/* ==================================================== */}
@@ -495,7 +343,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
                   type="button"
                   onClick={() => handleSetPreset(p.secs)}
                   className={cn(
-                    "flex-1 py-1 px-1 rounded-md text-[11px] font-medium border border-[var(--fluent-stroke-subtle)] transition-all",
+                    "flex-1 py-1 px-1 rounded-md text-[11px] font-medium border border-[var(--fluent-stroke-subtle)] transition-[color,background-color,border-color] duration-150",
                     timerTotalSeconds === p.secs && !isTimerRunning
                       ? "bg-[var(--fluent-card-hover)] border-[var(--fluent-accent)] text-[var(--fluent-accent)] font-semibold"
                       : "bg-[var(--fluent-card-bg)] text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-hover)]"
@@ -524,7 +372,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
                     cy="50"
                     r="42"
                     className={cn(
-                      "fill-none transition-all duration-300",
+                      "fill-none transition-[stroke] duration-300",
                       isTimerCompleted ? "stroke-[var(--fluent-error)]" : "stroke-[var(--fluent-accent)]"
                     )}
                     strokeWidth="6"
@@ -596,7 +444,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
                 data-testid="timer-start-pause"
                 aria-label={isTimerRunning ? "Timer pausieren" : "Timer starten"}
                 onClick={handleStartPauseTimer}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[var(--fluent-accent)] text-black font-semibold text-xs hover:opacity-90 active:scale-95 transition-all shadow-sm"
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[var(--fluent-accent)] text-black font-semibold text-xs hover:opacity-90 active:scale-95 transition-[background-color,opacity,transform] duration-150 shadow-sm"
               >
                 {isTimerRunning ? (
                   <>
@@ -616,7 +464,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
                 data-testid="timer-reset"
                 aria-label="Timer zurücksetzen"
                 onClick={handleResetTimer}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--fluent-stroke)] bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] text-[var(--fluent-text-primary)] text-xs font-medium active:scale-95 transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--fluent-stroke)] bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] text-[var(--fluent-text-primary)] text-xs font-medium active:scale-95 transition-[color,background-color,transform] duration-150"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Reset</span>
@@ -653,7 +501,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
                 aria-label={isStopwatchRunning ? "Stoppuhr anhalten" : "Stoppuhr starten"}
                 onClick={handleStartStopStopwatch}
                 className={cn(
-                  "flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-semibold text-xs active:scale-95 transition-all shadow-sm",
+                  "flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-semibold text-xs active:scale-95 transition-[color,background-color,opacity,transform] duration-150 shadow-sm",
                   isStopwatchRunning
                     ? "bg-[var(--fluent-error)] text-white hover:opacity-90"
                     : "bg-[var(--fluent-accent)] text-black hover:opacity-90"
@@ -678,7 +526,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
                 aria-label="Runde erfassen"
                 disabled={!isStopwatchRunning}
                 onClick={handleLapStopwatch}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--fluent-stroke)] bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] disabled:opacity-40 disabled:cursor-not-allowed text-[var(--fluent-text-primary)] text-xs font-medium active:scale-95 transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--fluent-stroke)] bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] disabled:opacity-40 disabled:cursor-not-allowed text-[var(--fluent-text-primary)] text-xs font-medium active:scale-95 transition-[color,background-color,opacity,transform] duration-150"
               >
                 <Flag className="w-3.5 h-3.5 text-[var(--fluent-accent)]" />
                 <span>Runde</span>
@@ -689,7 +537,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
                 data-testid="stopwatch-reset"
                 aria-label="Stoppuhr zurücksetzen"
                 onClick={handleResetStopwatch}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--fluent-stroke)] bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] text-[var(--fluent-text-primary)] text-xs font-medium active:scale-95 transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--fluent-stroke)] bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] text-[var(--fluent-text-primary)] text-xs font-medium active:scale-95 transition-[color,background-color,opacity,transform] duration-150"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Reset</span>
@@ -741,7 +589,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
             <div
               data-testid="alarm-status"
               className={cn(
-                "p-2.5 rounded-lg border flex items-center justify-between gap-2 transition-all",
+                "p-2.5 rounded-lg border flex items-center justify-between gap-2 transition-[color,background-color,border-color] duration-150",
                 isAlarmEnabled
                   ? "border-[var(--fluent-accent)] bg-[var(--fluent-accent)]/10 text-[var(--fluent-text-primary)]"
                   : "border-[var(--fluent-stroke-subtle)] bg-[var(--fluent-card-bg)] text-[var(--fluent-text-secondary)] opacity-80"
@@ -778,7 +626,7 @@ export const ClockWidget: FC<ClockWidgetProps> = ({
               >
                 <span
                   className={cn(
-                    "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out",
+                    "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition-transform duration-200 ease-in-out",
                     isAlarmEnabled ? "translate-x-4 bg-black" : "translate-x-0"
                   )}
                 />

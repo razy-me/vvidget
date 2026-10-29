@@ -15,7 +15,7 @@ export const SkeletonWidget: FC<SkeletonWidgetProps> = ({ className, title }) =>
         className
       )}
     >
-      <div className="w-full h-full rounded-2xl border-2 border-dashed border-[var(--fluent-accent)] bg-[var(--fluent-acrylic-bg)]/90 shadow-[0_12px_32px_rgba(0,0,0,0.6),0_0_24px_rgba(56,189,248,0.35)] flex flex-col p-4 transition-all duration-150 overflow-hidden box-border">
+      <div className="w-full h-full rounded-2xl border-2 border-dashed border-[var(--fluent-accent)] bg-[var(--fluent-acrylic-bg)]/90 shadow-[0_12px_32px_rgba(0,0,0,0.6),0_0_24px_rgba(56,189,248,0.35)] flex flex-col p-4 transition-[opacity,transform] duration-150 overflow-hidden box-border">
         {/* Skeleton Header Bar */}
         <div className="shrink-0 flex items-center justify-between pb-3 border-b border-[var(--fluent-accent)]/20 mb-2">
           <div className="flex items-center gap-2.5">

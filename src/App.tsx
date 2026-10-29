@@ -382,7 +382,7 @@ export const AppContent: FC = () => {
   return (
     <main className="min-h-screen p-4 flex flex-col items-center justify-start text-[var(--fluent-text-primary)] bg-transparent">
       {/* Top Workspace Controls Bar */}
-      <header className="w-full max-w-5xl mb-4 flex items-center justify-between px-3 py-2 rounded-xl border border-[var(--fluent-stroke)] bg-[var(--fluent-acrylic-bg)] backdrop-blur-xl shadow-lg">
+      <header className="w-full max-w-5xl mb-4 flex items-center justify-between px-3 py-2 rounded-xl border border-[var(--fluent-stroke)] bg-[var(--fluent-acrylic-bg)] shadow-lg">
         <div className="flex items-center gap-2">
           <Layers className="w-4 h-4 text-[var(--fluent-accent)]" />
           <h1 className="text-xs font-bold tracking-wide">vvidget Desktop Surface</h1>
@@ -674,7 +674,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
           className="min-h-screen p-4 flex flex-col items-center justify-center text-center bg-[var(--fluent-acrylic-bg)] text-[var(--fluent-text-primary)] select-none"
           data-testid="error-boundary-fallback"
         >
-          <div className="p-6 rounded-2xl border border-[var(--fluent-stroke)] bg-[var(--fluent-card-bg)] backdrop-blur-xl max-w-sm w-full flex flex-col items-center gap-3 shadow-xl">
+          <div className="p-6 rounded-2xl border border-[var(--fluent-stroke)] bg-[var(--fluent-card-bg)] max-w-sm w-full flex flex-col items-center gap-3 shadow-xl">
             <AlertCircle className="w-8 h-8 text-[var(--fluent-error)]" />
             <div className="space-y-1">
               <h2 className="text-sm font-semibold">Something went wrong</h2>

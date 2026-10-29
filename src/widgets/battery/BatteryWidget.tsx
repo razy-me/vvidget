@@ -134,7 +134,7 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
           <button
             type="button"
             onClick={handleOpenPower}
-            className="w-full py-2 px-3 rounded-xl bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] active:scale-[0.99] border border-[var(--fluent-stroke)] text-xs font-medium text-[var(--fluent-text-primary)] flex items-center justify-center gap-2 transition-all shadow-sm"
+            className="w-full py-2 px-3 rounded-xl bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] active:scale-[0.99] border border-[var(--fluent-stroke)] text-xs font-medium text-[var(--fluent-text-primary)] flex items-center justify-center gap-2 transition-[color,background-color,border-color,transform] duration-150 shadow-sm"
           >
             <Sliders className="w-3.5 h-3.5 text-sky-400" />
             <span>Energieeinstellungen</span>
@@ -350,7 +350,7 @@ export const BatteryWidget: FC<BatteryWidgetProps> = ({
         <button
           type="button"
           onClick={handleOpenPower}
-          className="w-full py-2 px-3 rounded-xl bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] active:scale-[0.99] border border-[var(--fluent-stroke)] text-xs font-medium text-[var(--fluent-text-primary)] flex items-center justify-center gap-2 transition-all shadow-sm"
+          className="w-full py-2 px-3 rounded-xl bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] active:scale-[0.99] border border-[var(--fluent-stroke)] text-xs font-medium text-[var(--fluent-text-primary)] flex items-center justify-center gap-2 transition-[color,background-color,border-color,transform] duration-150 shadow-sm"
           data-testid="open-power-settings-btn"
         >
           <Sliders className="w-3.5 h-3.5 text-sky-400" />

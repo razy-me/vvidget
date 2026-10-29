@@ -37,7 +37,7 @@ export const MediaControls: FC<MediaControlsProps> = ({
         onClick={onPrevious}
         disabled={!canSkipPrevious}
         aria-label="Previous track"
-        className={`p-1.5 rounded-full text-[var(--fluent-text-secondary)] transition-all duration-150 hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-bg)] hover:scale-105 active:scale-95 disabled:opacity-30 disabled:pointer-events-none ${
+        className={`p-1.5 rounded-full text-[var(--fluent-text-secondary)] transition-[color,background-color,opacity,transform] duration-150 hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-bg)] hover:scale-105 active:scale-95 disabled:opacity-30 disabled:pointer-events-none ${
           isSm ? "w-7 h-7" : "w-8 h-8"
         } flex items-center justify-center`}
       >
@@ -50,7 +50,7 @@ export const MediaControls: FC<MediaControlsProps> = ({
         onClick={onPlayPause}
         disabled={!canPlayPause}
         aria-label={isPlaying ? "Pause" : "Play"}
-        className={`rounded-full bg-[var(--fluent-accent)] text-white shadow-md ring-1 ring-white/10 transition-all duration-150 hover:scale-105 hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center ${
+        className={`rounded-full bg-[var(--fluent-accent)] text-white shadow-md ring-1 ring-white/10 transition-[transform,filter,opacity] duration-150 hover:scale-105 hover:brightness-110 active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center ${
           isSm ? "w-8 h-8 p-1.5" : "w-10 h-10 p-2"
         }`}
       >
@@ -67,7 +67,7 @@ export const MediaControls: FC<MediaControlsProps> = ({
         onClick={onNext}
         disabled={!canSkipNext}
         aria-label="Next track"
-        className={`p-1.5 rounded-full text-[var(--fluent-text-secondary)] transition-all duration-150 hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-bg)] hover:scale-105 active:scale-95 disabled:opacity-30 disabled:pointer-events-none ${
+        className={`p-1.5 rounded-full text-[var(--fluent-text-secondary)] transition-[color,background-color,opacity,transform] duration-150 hover:text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-bg)] hover:scale-105 active:scale-95 disabled:opacity-30 disabled:pointer-events-none ${
           isSm ? "w-7 h-7" : "w-8 h-8"
         } flex items-center justify-center`}
       >

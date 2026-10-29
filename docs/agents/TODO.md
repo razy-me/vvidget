@@ -162,7 +162,7 @@ c:\vvidget\
   - Configure Vite `manualChunks` in `vite.config.ts` so each widget is compiled into an isolated chunk.
 - **Acceptance**: `npm.cmd run build` emits separate JS bundles for each widget; `npm.cmd run test` passes without suspense regressions.
 
-### WP-08 CSS Compositor, Render & Timer Hygiene [ ]
+### WP-08 CSS Compositor, Render & Timer Hygiene [x]
 - **Covers**: R6
 - **Owns**: `src/components/**`, `src/widgets/**`, `src/hooks/useWeather.ts`, `src-tauri/src/geo/mod.rs`
 - **Depends on**: —
@@ -178,7 +178,7 @@ c:\vvidget\
 
 ## Phase Status
 - [x] Phase 1 Plan
-- [ ] Phase 2 Build (WP-01 to WP-08)
+- [x] Phase 2 Build (WP-01 to WP-08)
 - [ ] Phase 3 Test (Coverage & Integration)
 - [ ] Phase 4 Review (Tier 1 & Tier 3 Audit)
 - [ ] Phase 5 Handover

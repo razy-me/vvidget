@@ -34,7 +34,7 @@ export const DockItem: FC<DockItemProps> = ({
       variant="subtle"
       padded={false}
       className={cn(
-        "w-full overflow-hidden transition-all duration-200 border border-[var(--fluent-stroke)]",
+        "w-full overflow-hidden transition-[opacity,transform] duration-200 border border-[var(--fluent-stroke)]",
         "rounded-xl bg-[var(--fluent-card-bg)] shadow-md",
         className
       )}
@@ -97,7 +97,7 @@ export const DockItem: FC<DockItemProps> = ({
       {/* Item Body with smooth collapsible state */}
       <div
         className={cn(
-          "p-2.5 transition-all duration-200 overflow-hidden",
+          "p-2.5 transition-opacity duration-200 overflow-hidden",
           isCollapsed && "hidden"
         )}
         data-testid={`dock-item-content-${id}`}

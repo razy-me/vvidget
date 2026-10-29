@@ -295,7 +295,7 @@ export const SettingsModal: FC = () => {
                         onChange={(e) => void setAutostart(e.target.checked)}
                         aria-label="Toggle Start with Windows"
                       />
-                      <div className="w-11 h-6 bg-[var(--fluent-control-bg)] border border-[var(--fluent-stroke)] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--fluent-accent)]"></div>
+                      <div className="w-11 h-6 bg-[var(--fluent-control-bg)] border border-[var(--fluent-stroke)] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-transform transition-colors peer-checked:bg-[var(--fluent-accent)]"></div>
                     </label>
                   </Card>
 
@@ -318,7 +318,7 @@ export const SettingsModal: FC = () => {
                         onChange={(e) => void setWidgetsLocked(e.target.checked)}
                         aria-label="Toggle Lock Widget Positions"
                       />
-                      <div className="w-11 h-6 bg-[var(--fluent-control-bg)] border border-[var(--fluent-stroke)] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--fluent-accent)]"></div>
+                      <div className="w-11 h-6 bg-[var(--fluent-control-bg)] border border-[var(--fluent-stroke)] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-transform transition-colors peer-checked:bg-[var(--fluent-accent)]"></div>
                     </label>
                   </Card>
 
@@ -346,7 +346,7 @@ export const SettingsModal: FC = () => {
                         }
                         aria-label="Toggle Magnetic Snapping"
                       />
-                      <div className="w-11 h-6 bg-[var(--fluent-control-bg)] border border-[var(--fluent-stroke)] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--fluent-accent)]"></div>
+                      <div className="w-11 h-6 bg-[var(--fluent-control-bg)] border border-[var(--fluent-stroke)] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-transform transition-colors peer-checked:bg-[var(--fluent-accent)]"></div>
                     </label>
                   </Card>
 
@@ -525,7 +525,7 @@ export const SettingsModal: FC = () => {
                         }}
                         aria-label="Toggle Windows Location"
                       />
-                      <div className="w-11 h-6 bg-[var(--fluent-control-bg)] border border-[var(--fluent-stroke)] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--fluent-accent)]"></div>
+                      <div className="w-11 h-6 bg-[var(--fluent-control-bg)] border border-[var(--fluent-stroke)] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-transform transition-colors peer-checked:bg-[var(--fluent-accent)]"></div>
                     </label>
                   </Card>
 

@@ -392,7 +392,7 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
           <button
             type="button"
             onClick={() => void handleDuplicate()}
-            className="px-2 py-0.5 rounded-md bg-[var(--fluent-card-bg)]/80 hover:bg-[var(--fluent-card-hover)] border border-[var(--fluent-stroke)] text-[11px] font-medium flex items-center gap-1 transition-all active:scale-95"
+            className="px-2 py-0.5 rounded-md bg-[var(--fluent-card-bg)]/80 hover:bg-[var(--fluent-card-hover)] border border-[var(--fluent-stroke)] text-[11px] font-medium flex items-center gap-1 transition-[color,background-color,border-color,transform] duration-150 active:scale-95"
             aria-label="Duplicate quick settings widget"
             data-testid="duplicate-widget-btn"
           >
@@ -527,7 +527,7 @@ export const QuickSettingsWidget: FC<QuickSettingsWidgetProps> = ({
                 type="button"
                 onClick={() => void handleActionClick(actionId)}
                 className={cn(
-                  "flex items-center gap-2 p-2 rounded-xl border border-[var(--fluent-stroke)]/70 transition-all duration-150 text-left group overflow-hidden select-none active:scale-[0.97]",
+                  "flex items-center gap-2 p-2 rounded-xl border border-[var(--fluent-stroke)]/70 transition-[color,background-color,border-color,transform] duration-150 text-left group overflow-hidden select-none active:scale-[0.97]",
                   isActive
                     ? "bg-[var(--fluent-accent)]/20 border-[var(--fluent-accent)] shadow-sm"
                     : "bg-[var(--fluent-card-bg)]/60 hover:bg-[var(--fluent-card-hover)]",

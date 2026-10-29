@@ -154,4 +154,87 @@ describe("useWeather Hook", () => {
     expect(result.current.error).toBe("Unable to connect to Open-Meteo");
     expect(result.current.loading).toBe(false);
   });
+
+  it("reuses cached coordinates within 24h TTL without invoking native geolocation", async () => {
+    mockConfig.weather_settings.use_windows_location = true;
+
+    const mockInvoke = vi.fn();
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
+
+    localStorage.setItem(
+      "vvidget_geo_coords_cache",
+      JSON.stringify({ lat: 45.0, lon: 9.0, timestamp: Date.now() - 3600 * 1000 })
+    );
+
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        latitude: 45.0,
+        longitude: 9.0,
+        current: {
+          time: "2026-10-25T12:00",
+          temperature_2m: 16,
+          apparent_temperature: 15,
+          weather_code: 0,
+          relative_humidity_2m: 60,
+          wind_speed_10m: 5,
+        },
+      }),
+    } as unknown as Response);
+
+    const { result } = renderHook(() => useWeather());
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+
+    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(result.current.weather?.latitude).toBe(45.0);
+    expect(result.current.weather?.longitude).toBe(9.0);
+  });
+
+  it("pauses interval polling when document is hidden", async () => {
+    vi.useFakeTimers();
+    mockConfig.weather_settings.use_windows_location = false;
+    mockConfig.weather_settings.latitude = 50.0;
+    mockConfig.weather_settings.longitude = 10.0;
+
+    let fetchCount = 0;
+    global.fetch = vi.fn().mockImplementation(() => {
+      fetchCount++;
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          latitude: 50.0,
+          longitude: 10.0,
+          current: {
+            time: "2026-10-25T12:00",
+            temperature_2m: 10,
+            apparent_temperature: 9,
+            weather_code: 0,
+            relative_humidity_2m: 70,
+            wind_speed_10m: 4,
+          },
+        }),
+      } as unknown as Response);
+    });
+
+    await act(async () => {
+      renderHook(() => useWeather());
+    });
+    expect(fetchCount).toBe(1);
+
+    Object.defineProperty(document, "hidden", { value: true, configurable: true });
+
+    await act(async () => {
+      vi.advanceTimersByTime(30 * 60 * 1000);
+    });
+
+    expect(fetchCount).toBe(1);
+
+    Object.defineProperty(document, "hidden", { value: false, configurable: true });
+    vi.useRealTimers();
+  });
 });

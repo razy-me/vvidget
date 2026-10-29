@@ -195,3 +195,8 @@ c:\vvidget\
 - `safeInvoke<T>(cmd: string, args?: Record<string, unknown>) -> Promise<T>`: Unified safe IPC wrapper using static `invoke` from `@tauri-apps/api/core`, replacing duplicated dynamic import promises in hooks.
 - `App.tsx`: Dynamic `React.lazy` route splitting for all widgets, `SettingsModal`, and `SkeletonWidget` wrapped in `<Suspense fallback={null}>`.
 - `vite.config.ts`: `rollupOptions.output.manualChunks` splits `widget-*`, `view-settings`, and vendor libraries into isolated bundles, ensuring each webview only parses and executes minimal bytecode.
+
+## Module: CSS Compositor, Render & Timer Hygiene (`src/widgets/clock`, `src/hooks/useWeather.ts`, `src/components/ui/ProgressBar.tsx`)
+- `ClockFace`: Memoized ticking clock face subcomponent (`ClockFace.tsx`) isolating 1s `currentTime` ticks from `ClockWidget`, preventing re-rendering of timer, stopwatch, and presets state trees. Updates synchronized to second boundaries via `setTimeout(1000 - now % 1000)` and paused when `document.hidden`.
+- `useWeather`: Caches resolved geographic coordinates in `localStorage` with 24h TTL (`GEO_COORDS_CACHE_TTL_MS`), bypassing repeated native Windows geolocation queries on 30m polling cycles; pauses polling when `document.hidden` or `!navigator.onLine`.
+- Compositor Hygiene: Zero `backdrop-blur*` classes (frosted acrylic backdrop natively supplied by DWM) and zero generic `transition-all` across all components/widgets; `ProgressBar` uses `transition-[width]`.

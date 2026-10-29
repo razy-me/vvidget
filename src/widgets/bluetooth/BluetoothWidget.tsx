@@ -319,7 +319,7 @@ export const BluetoothWidget: FC<BluetoothWidgetProps> = ({
                     data-testid={`device-toggle-btn-${device.id}`}
                     title={device.connected ? "Trennen" : "Verbinden"}
                     className={cn(
-                      "px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer flex items-center justify-center border",
+                      "px-2 py-0.5 rounded text-[10px] font-medium transition-[color,background-color,border-color] duration-150 cursor-pointer flex items-center justify-center border",
                       device.connected
                         ? "bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20 hover:border-red-500/40"
                         : "bg-[var(--fluent-accent-subtle)] text-[var(--fluent-accent)] border-[var(--fluent-accent)]/30 hover:bg-[var(--fluent-accent)]/20 hover:border-[var(--fluent-accent)]",

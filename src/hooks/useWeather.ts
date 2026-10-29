@@ -3,6 +3,7 @@ import type { WeatherData } from "@/types/weather";
 import { fetchWeather, getCachedWeather } from "@/services/weather/openMeteo";
 import { searchCity } from "@/services/weather/geocoding";
 import { useConfig } from "./useConfig";
+import { isTauri, safeInvoke } from "@/utils/tauri";
 
 export interface UseWeatherReturn {
   weather: WeatherData | null;
@@ -19,6 +20,15 @@ const DEFAULT_FALLBACK_LOCATION = {
   latitude: 52.52,
   longitude: 13.405,
 };
+
+const GEO_COORDS_CACHE_KEY = "vvidget_geo_coords_cache";
+const GEO_COORDS_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+interface CachedGeoCoords {
+  lat: number;
+  lon: number;
+  timestamp: number;
+}
 
 /**
  * React hook orchestrating Windows Geolocation / Open-Meteo Geocoding resolution,
@@ -46,8 +56,46 @@ export function useWeather(): UseWeatherReturn {
       // 1. Native Windows Geolocation API
       if (weather_settings.use_windows_location) {
         try {
-          const { invoke } = await import("@tauri-apps/api/core");
-          const [lat, lon] = await invoke<[number, number]>("get_windows_location");
+          if (typeof localStorage !== "undefined") {
+            const raw = localStorage.getItem(GEO_COORDS_CACHE_KEY);
+            if (raw) {
+              try {
+                const parsed: CachedGeoCoords = JSON.parse(raw);
+                if (
+                  typeof parsed.lat === "number" &&
+                  typeof parsed.lon === "number" &&
+                  typeof parsed.timestamp === "number" &&
+                  Date.now() - parsed.timestamp < GEO_COORDS_CACHE_TTL_MS
+                ) {
+                  return {
+                    lat: parsed.lat,
+                    lon: parsed.lon,
+                    city: "Local Area",
+                    country: "",
+                  };
+                }
+              } catch {
+                localStorage.removeItem(GEO_COORDS_CACHE_KEY);
+              }
+            }
+          }
+
+          let coords: [number, number];
+          if (isTauri()) {
+            coords = await safeInvoke<[number, number]>("get_windows_location");
+          } else {
+            const { invoke } = await import("@tauri-apps/api/core");
+            coords = await invoke<[number, number]>("get_windows_location");
+          }
+          const [lat, lon] = coords;
+
+          if (typeof localStorage !== "undefined") {
+            localStorage.setItem(
+              GEO_COORDS_CACHE_KEY,
+              JSON.stringify({ lat, lon, timestamp: Date.now() })
+            );
+          }
+
           return {
             lat,
             lon,
@@ -154,11 +202,36 @@ export function useWeather(): UseWeatherReturn {
     const intervalMs = intervalMinutes * 60 * 1000;
 
     const timer = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) {
+        return;
+      }
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        return;
+      }
       void loadWeather();
     }, intervalMs);
 
+    const handleResume = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      if (typeof navigator !== "undefined" && !navigator.onLine) return;
+      void loadWeather();
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleResume);
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", handleResume);
+    }
+
     return () => {
       clearInterval(timer);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleResume);
+      }
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", handleResume);
+      }
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }

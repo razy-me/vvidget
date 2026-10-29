@@ -90,9 +90,9 @@ export const TrackProgress: FC<TrackProgressProps> = ({
         aria-valuemax={100}
         aria-label="Playback progress"
       >
-        <div className="w-full h-1 group-hover:h-1.5 bg-[var(--fluent-stroke)] rounded-full overflow-hidden relative cursor-pointer transition-all duration-150">
+        <div className="w-full h-1 group-hover:h-1.5 bg-[var(--fluent-stroke)] rounded-full overflow-hidden relative cursor-pointer transition-[height] duration-150">
           <div
-            className="h-full bg-[var(--fluent-accent)] transition-all duration-300 ease-linear rounded-full group-hover:brightness-110"
+            className="h-full bg-[var(--fluent-accent)] transition-[width,filter] duration-300 ease-linear rounded-full group-hover:brightness-110"
             style={{ width: `${percent}%` }}
           />
         </div>

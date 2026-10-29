@@ -176,7 +176,7 @@ export const WidgetToggleList: FC<WidgetToggleListProps> = ({
                     onChange={(e) => onToggleVisibility(meta.id, e.target.checked)}
                     aria-label={`Toggle visibility of ${meta.name}`}
                   />
-                  <div className="w-11 h-6 bg-[var(--fluent-control-bg)] border border-[var(--fluent-stroke)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[var(--fluent-accent)]"></div>
+                  <div className="w-11 h-6 bg-[var(--fluent-control-bg)] border border-[var(--fluent-stroke)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-transform transition-colors peer-checked:bg-[var(--fluent-accent)]"></div>
                 </label>
               </div>
             </div>
@@ -240,7 +240,7 @@ export const WidgetToggleList: FC<WidgetToggleListProps> = ({
                           onChange={(e) => onToggleVisibility(inst.id, e.target.checked)}
                           aria-label={`Toggle visibility of ${inst.title}`}
                         />
-                        <div className="w-9 h-5 bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--fluent-accent)]"></div>
+                        <div className="w-9 h-5 bg-[var(--fluent-card-bg)] border border-[var(--fluent-stroke)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-transform transition-colors peer-checked:bg-[var(--fluent-accent)]"></div>
                       </label>
 
                       <button

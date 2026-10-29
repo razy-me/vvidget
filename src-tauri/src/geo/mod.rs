@@ -62,10 +62,10 @@ mod tests {
     async fn test_geolocation_timeout_wrapper() {
         let timeout_res = tokio::time::timeout(
             std::time::Duration::from_millis(50),
-            tokio::task::spawn_blocking(|| {
-                std::thread::sleep(std::time::Duration::from_millis(300));
+            async {
+                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
                 (0.0f64, 0.0f64)
-            }),
+            },
         )
         .await;
 

@@ -232,7 +232,7 @@ export const DockContainer: FC<DockContainerProps> = ({
       data-testid="dock-container"
       data-locked={isLocked}
       className={cn(
-        "w-full max-w-[360px] flex flex-col transition-all duration-200 select-none",
+        "w-full max-w-[360px] flex flex-col transition-[opacity,transform] duration-200 select-none",
         className
       )}
     >
@@ -298,7 +298,7 @@ export const DockContainer: FC<DockContainerProps> = ({
                 onClick={handleToggleLock}
                 className={cn(
                   "p-1.5 rounded-lg text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)]",
-                  "hover:bg-[var(--fluent-card-hover)] active:scale-95 transition-all duration-150",
+                  "hover:bg-[var(--fluent-card-hover)] active:scale-95 transition-[color,background-color,border-color,opacity,transform] duration-150",
                   "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--fluent-accent)]",
                   isLocked && "text-[var(--fluent-accent)] bg-[var(--fluent-accent-subtle)]"
                 )}
@@ -323,7 +323,7 @@ export const DockContainer: FC<DockContainerProps> = ({
                 onClick={handleSwitchToIndependent}
                 className={cn(
                   "p-1.5 rounded-lg text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)]",
-                  "hover:bg-[var(--fluent-card-hover)] active:scale-95 transition-all duration-150",
+                  "hover:bg-[var(--fluent-card-hover)] active:scale-95 transition-[color,background-color,border-color,opacity,transform] duration-150",
                   "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--fluent-accent)]"
                 )}
                 aria-label="Switch to independent windows mode"
@@ -342,7 +342,7 @@ export const DockContainer: FC<DockContainerProps> = ({
                 onClick={() => setAllCollapsed(!allCollapsed)}
                 className={cn(
                   "p-1.5 rounded-lg text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)]",
-                  "hover:bg-[var(--fluent-card-hover)] active:scale-95 transition-all duration-150",
+                  "hover:bg-[var(--fluent-card-hover)] active:scale-95 transition-[color,background-color,border-color,opacity,transform] duration-150",
                   "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--fluent-accent)]"
                 )}
                 aria-label={allCollapsed ? "Expand all widgets" : "Collapse all widgets"}
@@ -361,7 +361,7 @@ export const DockContainer: FC<DockContainerProps> = ({
                 onClick={handleOpenSettings}
                 className={cn(
                   "p-1.5 rounded-lg text-[var(--fluent-text-secondary)] hover:text-[var(--fluent-text-primary)]",
-                  "hover:bg-[var(--fluent-card-hover)] active:scale-95 transition-all duration-150",
+                  "hover:bg-[var(--fluent-card-hover)] active:scale-95 transition-[color,background-color,border-color,opacity,transform] duration-150",
                   "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--fluent-accent)]"
                 )}
                 aria-label="Open settings"

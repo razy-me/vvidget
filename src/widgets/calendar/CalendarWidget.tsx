@@ -95,7 +95,7 @@ export const CalendarWidget: FC<CalendarWidgetProps> = ({
             data-testid="today-btn"
             aria-label="Zu heute wechseln"
             onClick={goToToday}
-            className="px-2 py-0.5 rounded-md text-[11px] font-medium border border-[var(--fluent-stroke-subtle)] bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] active:scale-95 transition-all"
+            className="px-2 py-0.5 rounded-md text-[11px] font-medium border border-[var(--fluent-stroke-subtle)] bg-[var(--fluent-card-bg)] hover:bg-[var(--fluent-card-hover)] active:scale-95 transition-[color,background-color,border-color,transform] duration-150"
           >
             Heute
           </button>
@@ -148,7 +148,7 @@ export const CalendarWidget: FC<CalendarWidgetProps> = ({
                     aria-label={`${day.day}. ${GERMAN_MONTHS[day.month]} ${day.year}`}
                     onClick={() => selectDate(day.dateKey)}
                     className={cn(
-                      "relative h-6 flex flex-col items-center justify-center rounded-md text-[11px] font-medium transition-all group",
+                      "relative h-6 flex flex-col items-center justify-center rounded-md text-[11px] font-medium transition-[color,background-color,border-color,opacity] duration-150 group",
                       !day.isCurrentMonth && "text-[var(--fluent-text-tertiary)] opacity-40",
                       day.isCurrentMonth && !isSelected && "text-[var(--fluent-text-primary)] hover:bg-[var(--fluent-card-hover)]",
                       day.isToday && !isSelected && "border border-[var(--fluent-accent)] font-bold text-[var(--fluent-accent)]",
@@ -201,7 +201,7 @@ export const CalendarWidget: FC<CalendarWidgetProps> = ({
             type="submit"
             aria-label="Notiz hinzufügen"
             disabled={!inputText.trim()}
-            className="absolute right-1 top-[3px] p-1 rounded bg-[var(--fluent-accent)] text-black hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-all active:scale-95 flex items-center justify-center shadow-xs"
+            className="absolute right-1 top-[3px] p-1 rounded bg-[var(--fluent-accent)] text-black hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-[opacity,transform] duration-150 active:scale-95 flex items-center justify-center shadow-xs"
           >
             <Plus className="w-3 h-3 stroke-[2.5]" />
           </button>
@@ -252,7 +252,7 @@ export const CalendarWidget: FC<CalendarWidgetProps> = ({
                   type="button"
                   aria-label={`Notiz löschen: ${note.text}`}
                   onClick={() => removeNote(note.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-[var(--fluent-text-tertiary)] hover:text-[var(--fluent-error)] transition-all shrink-0"
+                  className="opacity-0 group-hover:opacity-100 p-1 text-[var(--fluent-text-tertiary)] hover:text-[var(--fluent-error)] transition-[opacity,color] duration-150 shrink-0"
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>

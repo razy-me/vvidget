@@ -57,7 +57,7 @@ export const SpotifyWidget: FC<SpotifyWidgetProps> = ({
   return (
     <Card
       variant="acrylic"
-      className={`relative w-full p-3 text-[var(--fluent-text-primary)] transition-all select-none overflow-hidden ${className}`}
+      className={`relative w-full p-3 text-[var(--fluent-text-primary)] transition-opacity duration-200 select-none overflow-hidden ${className}`}
       data-testid="spotify-widget"
     >
       {/* Dynamic Ambient Blur Background Layer */}

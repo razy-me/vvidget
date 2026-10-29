@@ -399,4 +399,34 @@ describe("ClockWidget Component", () => {
       expect(startPauseBtn).toHaveTextContent("Start");
     });
   });
+
+  describe("Render Isolation & Timer Hygiene", () => {
+    it("pauses ClockFace ticks when document is hidden", async () => {
+      vi.useFakeTimers();
+      const testTime = new Date(2026, 9, 26, 12, 0, 0);
+      vi.setSystemTime(testTime);
+
+      await act(async () => {
+        render(<ClockWidget initialTab="uhr" initialTime={testTime} />);
+      });
+
+      expect(screen.getByTestId("digital-time-display")).toHaveTextContent("12:00:00");
+
+      Object.defineProperty(document, "hidden", { value: true, configurable: true });
+
+      await act(async () => {
+        vi.advanceTimersByTime(5000);
+      });
+
+      expect(screen.getByTestId("digital-time-display")).toHaveTextContent("12:00:00");
+
+      Object.defineProperty(document, "hidden", { value: false, configurable: true });
+
+      await act(async () => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+
+      expect(screen.getByTestId("digital-time-display")).toHaveTextContent("12:00:05");
+    });
+  });
 });

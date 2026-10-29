@@ -68,7 +68,7 @@ export const ProgressBar = forwardRef<HTMLDivElement, ProgressBarProps>(
         >
           <div
             className={cn(
-              "h-full rounded-full transition-all duration-300 ease-out",
+              "h-full rounded-full transition-[width] duration-300 ease-out",
               fillVariants
             )}
             style={{ width: `${percentage}%` }}

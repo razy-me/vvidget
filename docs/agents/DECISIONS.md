@@ -306,3 +306,16 @@
   1. *Keeping monolithic single frontend bundle*: Every independent WebView window loads and compiles JavaScript bytecode for all 10 widgets simultaneously, wasting ~40–60 MB RAM per window.
   2. *Retaining dynamic imports inside every individual hook*: Duplicates promise allocation and runtime resolution across multiple hooks without type or mock isolation.
 - **Reason / trade-offs**: Independent widget windows only load, parse, and evaluate the minimal JavaScript bytecode required for that specific widget, significantly reducing initial memory working set per window while standardizing IPC invocation across all hooks.
+
+## D-041 CSS Compositor, Render & Timer Hygiene (WP-08)
+- **Decision**:
+  1. Eliminate all leftover `backdrop-blur*` classes from `HeaderBar`, `Tooltip`, `GameLauncherWidget`, and `App.tsx` (frosted blur effect is natively handled by Windows DWM Acrylic material and CSS variable opacity, eliminating compositor pixel shader repaints).
+  2. Replace all occurrences of generic `transition-all` across `src/components`, `src/widgets`, and settings pages with discrete compositor-friendly CSS properties (`transition-colors`, `transition-opacity`, `transition-transform`, or `transition-[color,background-color,border-color,opacity,transform]`), and optimize `ProgressBar` to `transition-[width]` rather than full layout `transition-all`.
+  3. Extract the 1-second ticking clock face into an isolated `React.memo`'d `ClockFace` subcomponent in `src/widgets/clock/ClockFace.tsx`, keeping 1-second `currentTime` state local to `ClockFace` so that timer, stopwatch, and presets state trees in `ClockWidget` do not re-render every second; align tick updates with `setTimeout(1000 - now % 1000)` on second boundaries; pause ticks when `document.hidden` is true.
+  4. In `src-tauri/src/geo/mod.rs`, ensure geolocation queries use asynchronous WinRT `get()` without thread sleep loops. In `src/hooks/useWeather.ts`, cache resolved coordinates in `localStorage` with a 24-hour TTL (`GEO_COORDS_CACHE_TTL_MS`), and pause weather polling when `document.hidden` is true or `navigator.onLine` is false.
+- **Alternatives considered**:
+  1. *Keeping transition-all*: Causes browser engine to calculate transitions across all CSS properties on every DOM state change, triggering layout recalculations and GPU compositor thrashing.
+  2. *Leaving currentTime in top-level ClockWidget*: Forces entire timer/stopwatch/presets tree to reconcile and re-render every 1,000ms.
+  3. *Querying Windows geolocation on every 30-minute weather poll*: Wakes native OS GPS/Wi-Fi positioning service repeatedly for a static desktop/notebook location.
+- **Reason / trade-offs**: Minimizes GPU and CPU compositor repaints, isolates clock render frequency strictly to `ClockFace`, eliminates unnecessary native geolocation battery drain on stationary devices, and pauses all periodic polling when windows or displays are hidden.
+
