@@ -128,7 +128,7 @@ c:\vvidget\
   - In `useMasterVolume` and `useBattery`, convert to event listener pattern with 60s fallback sync, eliminating 2.5s and 3s active `setInterval` loops.
 - **Acceptance**: Adjusting system volume updates widget in <100ms without timer tick; `vitest run src/test/battery.test.tsx` passes.
 
-### WP-05 Media Monitor Eco-Backoff & Event Gating [ ]
+### WP-05 Media Monitor Eco-Backoff & Event Gating [x]
 - **Covers**: R1, R3
 - **Owns**: `src-tauri/src/media/gsmtc.rs`, `src-tauri/src/media/mod.rs`
 - **Depends on**: WP-02

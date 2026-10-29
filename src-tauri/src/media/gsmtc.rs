@@ -47,7 +47,12 @@ mod win {
         manager: &GlobalSystemMediaTransportControlsSessionManager,
     ) -> Option<GlobalSystemMediaTransportControlsSession> {
         if let Ok(sessions) = manager.GetSessions() {
-            let mut all_sessions: Vec<GlobalSystemMediaTransportControlsSession> = Vec::new();
+            let count = sessions.Size().unwrap_or(0);
+            if count == 0 {
+                return None;
+            }
+
+            let mut all_sessions: Vec<GlobalSystemMediaTransportControlsSession> = Vec::with_capacity(count as usize);
             for session in sessions {
                 all_sessions.push(session);
             }
@@ -137,12 +142,6 @@ mod win {
     pub fn read_session_data(
         session: &GlobalSystemMediaTransportControlsSession,
     ) -> Result<MediaSession, String> {
-        let raw_app_id = session
-            .SourceAppUserModelId()
-            .map(|s| s.to_string())
-            .unwrap_or_else(|_| "Unknown".to_string());
-        let app_id = clean_app_id(&raw_app_id);
-
         let playback_info = session
             .GetPlaybackInfo()
             .map_err(|e| format!("GetPlaybackInfo error: {}", e))?;
@@ -151,6 +150,34 @@ mod win {
             .PlaybackStatus()
             .map(|s| s == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing)
             .unwrap_or(false);
+
+        // Fetch media properties before allocating strings or checking controls
+        let media_props = session
+            .TryGetMediaPropertiesAsync()
+            .map_err(|e| format!("TryGetMediaPropertiesAsync request failed: {}", e))?
+            .get()
+            .map_err(|e| format!("TryGetMediaPropertiesAsync await failed: {}", e))?;
+
+        let title_hstring = media_props.Title().unwrap_or_default();
+        let artist_hstring = media_props.Artist().unwrap_or_default();
+
+        if title_hstring.is_empty() && artist_hstring.is_empty() {
+            return Ok(MediaSession {
+                is_active: false,
+                is_playing: false,
+                ..Default::default()
+            });
+        }
+
+        let raw_app_id = session
+            .SourceAppUserModelId()
+            .map(|s| s.to_string())
+            .unwrap_or_else(|_| "Unknown".to_string());
+        let app_id = clean_app_id(&raw_app_id);
+
+        let title = title_hstring.to_string();
+        let artist = artist_hstring.to_string();
+        let album = media_props.AlbumTitle().map(|s| s.to_string()).unwrap_or_default();
 
         let (can_play_pause, can_skip_next, can_skip_previous) = if let Ok(controls) = playback_info.Controls() {
             (
@@ -161,25 +188,6 @@ mod win {
         } else {
             (true, true, true)
         };
-
-        let media_props = session
-            .TryGetMediaPropertiesAsync()
-            .map_err(|e| format!("TryGetMediaPropertiesAsync request failed: {}", e))?
-            .get()
-            .map_err(|e| format!("TryGetMediaPropertiesAsync await failed: {}", e))?;
-
-        let title = media_props.Title().map(|s| s.to_string()).unwrap_or_default();
-        let artist = media_props.Artist().map(|s| s.to_string()).unwrap_or_default();
-        let album = media_props.AlbumTitle().map(|s| s.to_string()).unwrap_or_default();
-
-        if title.is_empty() && artist.is_empty() {
-            return Ok(MediaSession {
-                is_active: false,
-                is_playing: false,
-                source_app: app_id,
-                ..Default::default()
-            });
-        }
 
         let track_hash = calculate_hash(&(title.clone(), artist.clone(), album.clone(), app_id.clone()));
         let track_id = format!("{:016x}", track_hash);

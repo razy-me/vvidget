@@ -128,7 +128,8 @@ c:\vvidget\
 - `get_media_state() -> Result<MediaSession, String>`: Returns current active GSMTC media session with priority filtering for Spotify (`SourceAppUserModelId`).
 - `media_play_pause() -> Result<(), String>`: Asynchronous toggle for playback state via GSMTC `TryTogglePlayPauseAsync`.
 - `media_next_track() -> Result<(), String>` & `media_previous_track() -> Result<(), String>`: Skip controls via GSMTC async APIs.
-- `start_media_monitor(app_handle)`: Background worker monitoring GSMTC session changes and emitting `"media-metadata-update"` events only when metadata/state changes.
+- `start_media_monitor(app_handle)`: Background worker on EcoQoS E-cores monitoring GSMTC session changes. Gates sampling on `power_state.should_sample()` and Spotify visibility (3.0s sleep when inactive/hidden), scales active playback polling by `500ms * multiplier`, backs off idle/paused polling to `2000ms * multiplier`, and routes events via targeted `emit_to` (`main` in docked mode, `widget_spotify` in independent mode). Inactive session checks return cleanly with zero heap allocations.
+- `calculate_media_poll_interval(is_active, is_playing, multiplier) -> Duration` & `resolve_media_target_window(layout_mode) -> &'static str`: Pure helper functions for sleep timing and window routing.
 - `handle_album_art_protocol`: Custom URI scheme `vvidget://album-art?t=<track_id>` serving binary album artwork streams from in-memory cache, bypassing Base64 JSON overhead.
 - `useMediaPlayback()`: React hook with optimistic playback state toggling and `"media-metadata-update"` event listener.
 - `TrackProgress`: Decoupled 60fps client-side timeline interpolating current position from `last_updated_system_time_ms` + `position_ms` without IPC spam.

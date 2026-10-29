@@ -274,3 +274,11 @@
   2. *Broadcasting metrics-update globally to all 10 WebView windows*: Forces deserialization and JS event loops in inactive/hidden widget processes.
   3. *Stopping metrics worker completely when hidden*: Requires complex lifecycle thread restart synchronization when widgets toggle visibility; a 3.0s idle sleep loop achieves identical zero CPU overhead without thread management complexity.
 - **Reason / trade-offs**: Eliminates 100% of telemetry wakeups when screen is off, session is locked, or widgets are hidden, reduces background process scanning CPU footprint by >70%, and prevents IPC spam across isolated WebView2 processes.
+
+## D-037 Media Monitor Eco-Backoff & Event Gating (WP-05)
+- **Decision**: Configure `media-monitor` background worker thread with `enable_current_thread_eco_qos()` to pin polling to Efficiency (E) cores. In the monitor loop, gate sampling on `power_state.should_sample()` and Spotify widget visibility (`config.widgets.get("spotify")`), sleeping for 3.0s and continuing when suppressed. During active playback, poll at `500ms * power_state.interval_multiplier()`; when media is paused or inactive, back off polling to `2000ms * power_state.interval_multiplier()` to minimize idle COM wakeups. Route `media-metadata-update` events via targeted `emit_to` (`main` in docked mode, `widget_spotify` in independent mode) rather than global broadcast. In `gsmtc.rs`, check session count and inspect `Title()` / `Artist()` HSTRING emptiness before string allocations or controls queries, returning `MediaSession::default()` cleanly with zero heap allocations when inactive.
+- **Alternatives considered**:
+  1. *Continuous 500ms polling when paused or idle*: Unnecessary COM cross-process wakeups and C-state interruptions when no audio is playing.
+  2. *Global IPC broadcast of media updates*: Awakens all widget WebViews (weather, clock, resources, etc.) to deserialize media payloads they don't consume.
+  3. *Unconditionally allocating strings for empty media properties*: Heap thrashing on every poll cycle when no media is active.
+- **Reason / trade-offs**: Eliminates 100% of GSMTC COM queries when display is off, session is locked, or Spotify widget is hidden; backs off idle polling by 4x-12x when inactive; restricts IPC events strictly to consuming windows; and eliminates redundant string allocations during idle states.

@@ -1,3 +1,4 @@
+pub use crate::window::win32::enable_current_thread_eco_qos;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use serde::{Deserialize, Serialize};
