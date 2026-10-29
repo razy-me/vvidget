@@ -636,6 +636,21 @@ pub fn start_battery_monitor<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
             let mut last_status: Option<BatteryStatus> = None;
 
             loop {
+                let should_sample = if let Some(pm) = app.try_state::<crate::power::PowerManager>() {
+                    pm.should_sample()
+                } else if let Some(state) = app.try_state::<crate::power::PowerState>() {
+                    state.should_sample()
+                } else if let Some(state) = app.try_state::<std::sync::Arc<crate::power::PowerState>>() {
+                    state.should_sample()
+                } else {
+                    true
+                };
+
+                if !should_sample {
+                    std::thread::sleep(std::time::Duration::from_millis(3000));
+                    continue;
+                }
+
                 match get_battery_status(app.clone()) {
                     Ok(current) => {
                         let should_emit = match &last_status {
@@ -644,7 +659,6 @@ pub fn start_battery_monitor<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
                         };
 
                         if should_emit {
-                            let _ = app.emit("battery-update", &current);
                             let _ = app.emit_to("main", "battery-update", &current);
                             let _ = app.emit_to("widget_battery", "battery-update", &current);
                             last_status = Some(current.clone());

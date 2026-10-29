@@ -346,6 +346,9 @@ unsafe extern "system" fn power_wnd_proc(
                 let ctx_ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut PowerListenerContext;
                 if !ctx_ptr.is_null() {
                     let ctx = &mut *ctx_ptr;
+                    if !ctx.state.is_display_on() || ctx.state.is_session_locked() {
+                        return LRESULT(0);
+                    }
                     if let Ok(qstate) = SHQueryUserNotificationState() {
                         let is_fullscreen = matches!(
                             qstate,

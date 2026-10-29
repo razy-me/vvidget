@@ -88,7 +88,6 @@ mod win {
             let app_handle = app.clone();
             let callback_impl = AudioEndpointVolumeCallback {
                 handler: Box::new(move |payload: AudioVolumeUpdate| {
-                    let _ = app_handle.emit("audio-volume-update", &payload);
                     let _ = app_handle.emit_to("main", "audio-volume-update", &payload);
                     let _ = app_handle.emit_to("widget_quick_settings", "audio-volume-update", &payload);
                 }),

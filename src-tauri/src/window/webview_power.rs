@@ -88,7 +88,6 @@ pub fn trigger_resume_refresh<R: Runtime>(app: &AppHandle<R>) {
         if let Ok(guard) = state.read() {
             if guard.timestamp_ms > 0 {
                 let metrics = guard.clone();
-                let _ = app.emit("metrics-update", &metrics);
                 let _ = app.emit_to("main", "metrics-update", &metrics);
                 let _ = app.emit_to("widget_resources", "metrics-update", &metrics);
                 let _ = app.emit_to("widget_battery", "metrics-update", &metrics);
@@ -98,7 +97,6 @@ pub fn trigger_resume_refresh<R: Runtime>(app: &AppHandle<R>) {
 
     // 2. Emit BatteryStatus
     if let Ok(battery_status) = crate::battery::get_battery_status(app.clone()) {
-        let _ = app.emit("battery-update", &battery_status);
         let _ = app.emit_to("main", "battery-update", &battery_status);
         let _ = app.emit_to("widget_battery", "battery-update", &battery_status);
     }
@@ -107,7 +105,6 @@ pub fn trigger_resume_refresh<R: Runtime>(app: &AppHandle<R>) {
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
         if let Ok(media_session) = crate::media::get_media_state().await {
-            let _ = app_clone.emit("media-metadata-update", &media_session);
             let _ = app_clone.emit_to("main", "media-metadata-update", &media_session);
             let _ = app_clone.emit_to("widget_spotify", "media-metadata-update", &media_session);
         }
