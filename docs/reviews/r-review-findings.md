@@ -2367,3 +2367,178 @@
 ### Coverage / Not Reviewed
 - **Reviewed**: Entire repository (145 files across `src-tauri/src/**`, `src/**`, `src/styles/fluent.css`, `index.css`, UI layout & widgets against Windows 11 Fluent Design System guidelines).
 - **Excluded / Not Reviewed**: Auto-generated ACL capability schemas (`src-tauri/gen/**`), third-party packages in `node_modules`, compiled binaries in `dist` and `target`.
+
+
+---
+
+### [MAJOR] [OPEN] P4-BACKEND-01 Battery Monitor Telemetry Polling Continues During Display Off / Session Lock (R2 Non-Compliance)
+- **Status**: OPEN
+- **Where**: `src-tauri/src/battery/mod.rs:638-682`
+- **Source**: `r-review` (Phase 4 After-Review: Backend) (2026-10-29)
+- **Confidence**: HIGH
+- **Category**: spec / perf
+- **Scenario**: The system enters display sleep, session lock, or starts a fullscreen 3D game. `sysinfo` and `media` workers suspend telemetry polling, but `vvidget-battery-monitor` continues querying native battery metrics and emitting IPC events.
+- **Why**: `start_battery_monitor` omitted checking `PowerState.should_sample()`. Unlike `start_metrics_worker` and `start_media_monitor`, it continues its timer loop (10s/15s/30s) and processes `ReportUpdated` callbacks, running `query_native_power_status()` and emitting events to suspended WebViews, violating requirement R2.
+- **Fix**:
+```diff
+--- a/src-tauri/src/battery/mod.rs
++++ b/src-tauri/src/battery/mod.rs
+@@ -638,4 +638,15 @@ pub fn start_battery_monitor<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
+             loop {
++                let should_sample = if let Some(pm) = app.try_state::<crate::power::PowerManager>() {
++                    pm.should_sample()
++                } else if let Some(ps) = app.try_state::<crate::power::PowerState>() {
++                    ps.should_sample()
++                } else {
++                    true
++                };
++
++                if !should_sample {
++                    std::thread::sleep(std::time::Duration::from_millis(3000));
++                    continue;
++                }
+                 match get_battery_status(app.clone()) {
+```
+
+---
+
+### [MINOR] [OPEN] P4-BACKEND-02 Redundant Global IPC Broadcast (`emit` + `emit_to`) Across Push Notifiers (R3 Deviation)
+- **Status**: OPEN
+- **Where**: `src-tauri/src/audio/notify.rs:91-93`, `src-tauri/src/battery/mod.rs:647-649`, `src-tauri/src/window/webview_power.rs:91-95`
+- **Source**: `r-review` (Phase 4 After-Review: Backend) (2026-10-29)
+- **Confidence**: HIGH
+- **Category**: spec / perf
+- **Scenario**: Audio volume changes, battery status updates, or windows resume from suspension.
+- **Why**: Native push handlers execute both `app.emit(...)` (global broadcast to all 10 WebViews) and targeted `app.emit_to(...)`. Broadcasting forces JSON serialization and JavaScript event loops in inactive widgets that do not consume the event, violating R3 ("route IPC events via emit_to to specific windows instead of broadcasting to all 10 WebViews"). Additionally, target windows receive duplicate events.
+- **Fix**: Remove redundant `app.emit(...)` calls and restrict event emission strictly to targeted windows.
+
+---
+
+### [MINOR] [OPEN] P4-BACKEND-03 Static Default Audio Endpoint Binding Without Device Change Re-registration
+- **Status**: OPEN
+- **Where**: `src-tauri/src/audio/notify.rs:75-108`
+- **Source**: `r-review` (Phase 4 After-Review: Backend) (2026-10-29)
+- **Confidence**: HIGH
+- **Category**: maint / robustness
+- **Scenario**: A user unplugs headphones or switches output devices in Windows Sound settings.
+- **Why**: `IAudioEndpointVolumeCallback` is bound once at application startup to the default endpoint at that instant. When the physical endpoint changes, the callback remains attached to the inactive device and ceases receiving hardware volume push events.
+- **Fix**: Implement `IMMNotificationClient::OnDefaultDeviceChanged` to rebind the COM callback on device change, or document the 60s fallback heartbeat as the deliberate mitigating design choice.
+
+---
+
+### [MINOR] [OPEN] P4-BACKEND-04 Fullscreen Polling Timer Active During Display Sleep
+- **Status**: OPEN
+- **Where**: `src-tauri/src/power/mod.rs:344-362`
+- **Source**: `r-review` (Phase 4 After-Review: Backend) (2026-10-29)
+- **Confidence**: HIGH
+- **Category**: perf
+- **Scenario**: A notebook enters display sleep or screen timeout.
+- **Why**: The 5-second `WM_TIMER` on the `HWND_MESSAGE` window calls `SHQueryUserNotificationState()` continuously even when `!is_display_on()` or `is_session_locked()`. Fullscreen detection is redundant while the screen is off and introduces avoidable CPU wakeups.
+- **Fix**: Guard the timer handler: `if !ctx.state.is_display_on() || ctx.state.is_session_locked() { return LRESULT(0); }`.
+
+---
+
+### [MAJOR] [OPEN] P4-FRONTEND-01 Rollup manualChunks configuration causes shared UI primitives and hooks to be bundled into widget chunks, leaking static imports into the entry bundle and preloading starter widgets across all windows (R5 Non-Compliance)
+- **Status**: OPEN
+- **Where**: `vite.config.ts:22-50`, `dist/index.html:8-12`, `dist/assets/index-C6DOqtxb.js:2-4`
+- **Source**: `r-review` (Phase 4 After-Review: Frontend & Compositor) (2026-10-29)
+- **Confidence**: HIGH
+- **Category**: spec / perf
+- **Scenario**: An independent single-widget window (e.g., Battery, Calendar, Clock, or Settings) is launched in multi-window mode.
+- **Why**: `vite.config.ts` defines `manualChunks` exclusively for `src/widgets/*` and `src/pages/settings/`, omitting `src/components/ui/`, `src/components/layout/`, `src/hooks/`, and `src/theme/`. Rollup bundles shared components into the first widget chunks that reference them: `Card` into `widget-resources`, `Badge` into `widget-spotify`, and `useConfig` into `widget-weather`. Because `App.tsx` statically imports `WidgetContainer` (which imports `Card`), the entry chunk (`index-*.js`) acquires top-level static imports of `widget-resources`, `widget-spotify`, and `widget-weather`. Consequently, Vite injects `<link rel="modulepreload">` tags for all three starter widgets into `dist/index.html`. Every independent window unconditionally downloads, parses, and compiles JS bytecode for all three starter widgets at startup, defeating the ~60–80% JS heap reduction requirement of R5 and D-040.
+- **Fix**:
+```diff
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -36,6 +36,8 @@ export default defineConfig({
+             }
+             return "vendor";
+           }
++          if (normalized.includes("src/components/ui/")) return "ui-primitives";
++          if (normalized.includes("src/hooks/") || normalized.includes("src/theme/") || normalized.includes("src/components/layout/")) return "ui-core";
+           if (normalized.includes("src/widgets/registry")) return "widget-registry";
+           if (normalized.includes("src/widgets/resources/")) return "widget-resources";
+           if (normalized.includes("src/widgets/spotify/")) return "widget-spotify";
+```
+
+---
+
+### [MAJOR] [OPEN] P4-FRONTEND-02 Redundant dynamic import and invoke fallback in `useWeather.ts` crashes with unhandled TypeError in non-Tauri and test environments
+- **Status**: OPEN
+- **Where**: `src/hooks/useWeather.ts:84-89`
+- **Source**: `r-review` (Phase 4 After-Review: Frontend & Compositor) (2026-10-29)
+- **Confidence**: HIGH
+- **Category**: bug / maint
+- **Scenario**: Running vitest tests or rendering the weather widget / dock container in browser previews or test environments.
+- **Why**: `useWeather.ts` contains `if (isTauri()) { coords = await safeInvoke(...) } else { const { invoke } = await import("@tauri-apps/api/core"); coords = await invoke(...) }`. In non-Tauri and test environments, `isTauri()` is `false`, so execution enters the `else` branch. Invoking `@tauri-apps/api/core` without `window.__TAURI_INTERNALS__` throws `TypeError: Cannot read properties of undefined (reading 'invoke')`, polluting test logs and violating D-040's mandate to replace dynamic import promises with centralized `safeInvoke`.
+- **Fix**:
+```diff
+--- a/src/hooks/useWeather.ts
++++ b/src/hooks/useWeather.ts
+@@ -83,10 +83,7 @@ export function useWeather(): UseWeatherReturn {
+           let coords: [number, number];
+           if (isTauri()) {
+             coords = await safeInvoke<[number, number]>("get_windows_location");
+-          } else {
+-            const { invoke } = await import("@tauri-apps/api/core");
+-            coords = await invoke<[number, number]>("get_windows_location");
+-          }
++          }
+           const [lat, lon] = coords;
+```
+
+---
+
+### [MINOR] [OPEN] P4-FRONTEND-03 `ClockFace` recursive `setTimeout` tick loop continues firing every 1 second when `document.hidden` is true
+- **Status**: OPEN
+- **Where**: `src/widgets/clock/ClockFace.tsx:28-35`
+- **Source**: `r-review` (Phase 4 After-Review: Frontend & Compositor) (2026-10-29)
+- **Confidence**: HIGH
+- **Category**: perf
+- **Scenario**: vvidget desktop widgets remain loaded while the display turns off, session is locked, or windows are hidden.
+- **Why**: In `ClockFace.tsx`, lines 28-34 check `if (!document.hidden) setCurrentTime(...)`, but unconditionally invoke `scheduleNextTick()` on line 33. The timer continues scheduling a 1-second timeout indefinitely while hidden, waking the JavaScript event loop every second and preventing CPU C-states from settling.
+- **Fix**:
+```diff
+--- a/src/widgets/clock/ClockFace.tsx
++++ b/src/widgets/clock/ClockFace.tsx
+@@ -25,6 +25,9 @@ const ClockFaceComponent: FC<ClockFaceProps> = ({ initialTime, className }) =>
+     const scheduleNextTick = () => {
++      if (typeof document !== "undefined" && document.hidden) {
++        return;
++      }
+       const now = Date.now();
+       const delay = 1000 - (now % 1000);
+       timerId = setTimeout(() => {
+         if (!isMounted) return;
+         if (typeof document === "undefined" || !document.hidden) {
+           setCurrentTime(new Date());
+           scheduleNextTick();
+         }
+-        scheduleNextTick();
+       }, delay);
+     };
+```
+
+---
+
+### [MINOR] [OPEN] P4-FRONTEND-04 `useMediaPlayback.ts` and UI components omitted from centralized `src/utils/tauri.ts` migration
+- **Status**: OPEN
+- **Where**: `src/hooks/useMediaPlayback.ts:5-20`, `src/components/docking/DockContainer.tsx:60`, `src/widgets/bluetooth/BluetoothWidget.tsx:99, 119, 144`, `src/widgets/quick-settings/QuickSettingsWidget.tsx:158, 202, 226`
+- **Source**: `r-review` (Phase 4 After-Review: Frontend & Compositor) (2026-10-29)
+- **Confidence**: HIGH
+- **Category**: maint / spec
+- **Scenario**: Application startup and hook invocation during media playback, Bluetooth management, or quick actions.
+- **Why**: `useMediaPlayback.ts` defines duplicate local implementations of `isTauri()` and `safeInvoke()` using dynamic `import("@tauri-apps/api/core")` instead of importing from `@/utils/tauri`. In addition, `DockContainer.tsx`, `BluetoothWidget.tsx`, and `QuickSettingsWidget.tsx` make direct calls to `const { invoke } = await import("@tauri-apps/api/core")`, creating redundant dynamic module promises and bypassing centralized IPC handling.
+- **Fix**: Import `isTauri` and `safeInvoke` from `@/utils/tauri` across all affected components.
+
+---
+
+### [MINOR] [OPEN] P4-FRONTEND-05 `TrackProgress.tsx` runs unthrottled 250ms `setInterval` during media playback without `document.hidden` suspension
+- **Status**: OPEN
+- **Where**: `src/widgets/spotify/TrackProgress.tsx:46-50`
+- **Source**: `r-review` (Phase 4 After-Review: Frontend & Compositor) (2026-10-29)
+- **Confidence**: HIGH
+- **Category**: perf
+- **Scenario**: Media playback is active in Spotify while the vvidget window is hidden, minimized, or display is off.
+- **Why**: `TrackProgress` sets up a 250ms interval to interpolate playback position. It contains no check for `document.hidden` and attaches no `visibilitychange` listener, continuously firing 4 state updates and component re-renders per second even when the widget is entirely invisible.
+- **Fix**: Add a `document.hidden` check in `updatePosition` or suspend/resume the interval on `visibilitychange`.
