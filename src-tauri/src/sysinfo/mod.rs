@@ -34,7 +34,8 @@ pub async fn get_system_metrics<R: Runtime>(app: AppHandle<R>) -> Result<SystemM
 }
 
 /// Spawns background worker thread periodically polling CPU, RAM, and Disk metrics.
-/// Emits `metrics-update` events to all active Tauri webview windows.
+/// Emits `metrics-update` events targeted to active windows (main in docked mode,
+/// widget_resources and widget_battery in independent mode).
 pub fn start_metrics_worker<R: Runtime>(
     app: AppHandle<R>,
     config_manager: ConfigManager,
@@ -43,7 +44,9 @@ pub fn start_metrics_worker<R: Runtime>(
     std::thread::Builder::new()
         .name("vvidget-sysinfo-worker".to_string())
         .spawn(move || {
+            let _ = crate::window::win32::enable_current_thread_eco_qos();
             let mut last_disk_check = std::time::Instant::now();
+            let mut last_process_scan: Option<std::time::Instant> = None;
 
             log::info!("System metrics background worker started");
             let mut config = tauri::async_runtime::block_on(config_manager.get_config());
@@ -55,11 +58,37 @@ pub fn start_metrics_worker<R: Runtime>(
                     last_config_check = std::time::Instant::now();
                 }
 
+                let resources_visible = config
+                    .widgets
+                    .get("resources")
+                    .map_or(false, |w| w.visible);
+                let battery_visible = config
+                    .widgets
+                    .get("battery")
+                    .map_or(false, |w| w.visible);
+                let any_visible = resources_visible || battery_visible;
+
+                let (should_sample, multiplier) = if let Some(pm) = app.try_state::<crate::power::PowerManager>() {
+                    (pm.should_sample(), pm.interval_multiplier())
+                } else if let Some(state) = app.try_state::<crate::power::PowerState>() {
+                    (state.should_sample(), state.interval_multiplier())
+                } else if let Some(state) = app.try_state::<std::sync::Arc<crate::power::PowerState>>() {
+                    (state.should_sample(), state.interval_multiplier())
+                } else {
+                    (true, 1)
+                };
+
+                if !should_sample || !any_visible {
+                    std::thread::sleep(Duration::from_millis(3000));
+                    continue;
+                }
+
+                let base_cpu_ram = config.polling_rates.resources_cpu_ram_ms.max(500);
                 let cpu_ram_interval = Duration::from_millis(
-                    config.polling_rates.resources_cpu_ram_ms.max(500),
+                    (base_cpu_ram * multiplier as u64).max(1000),
                 );
                 let disk_interval = Duration::from_millis(
-                    config.polling_rates.resources_disk_ms.max(1000),
+                    config.polling_rates.resources_disk_ms.max(1000) * multiplier as u64,
                 );
 
                 let should_refresh_disks = last_disk_check.elapsed() >= disk_interval;
@@ -67,10 +96,27 @@ pub fn start_metrics_worker<R: Runtime>(
                     last_disk_check = std::time::Instant::now();
                 }
 
-                let metrics = collector.collect_metrics(should_refresh_disks);
+                let process_interval = Duration::from_millis(4500 * multiplier as u64);
+                let should_refresh_processes = any_visible
+                    && last_process_scan.map_or(true, |t| t.elapsed() >= process_interval);
+                if should_refresh_processes {
+                    last_process_scan = Some(std::time::Instant::now());
+                }
 
-                if let Err(err) = app.emit("metrics-update", &metrics) {
-                    log::trace!("Could not emit metrics-update event: {}", err);
+                let metrics = collector.collect_metrics_with_options(
+                    should_refresh_disks,
+                    should_refresh_processes,
+                );
+
+                if config.layout_mode == "docked" {
+                    let _ = app.emit_to("main", "metrics-update", &metrics);
+                } else if config.layout_mode == "independent" {
+                    if resources_visible {
+                        let _ = app.emit_to("widget_resources", "metrics-update", &metrics);
+                    }
+                    if battery_visible {
+                        let _ = app.emit_to("widget_battery", "metrics-update", &metrics);
+                    }
                 }
 
                 std::thread::sleep(cpu_ram_interval);
@@ -141,6 +187,16 @@ mod tests {
         let elapsed = start.elapsed();
         // CPU, RAM, Network & Process refresh should remain well within polling interval (< 150ms)
         assert!(elapsed < Duration::from_millis(150), "Metrics refresh too slow: {:?}", elapsed);
+    }
+
+    #[test]
+    fn test_collector_decoupled_process_refresh() {
+        let mut collector = MetricsCollector::new();
+        let m1 = collector.collect_metrics(true);
+        let p1 = (m1.top_process_name.clone(), m1.top_process_cpu);
+
+        let m2 = collector.collect_metrics_with_options(false, false);
+        assert_eq!((m2.top_process_name, m2.top_process_cpu), p1);
     }
 
     #[test]

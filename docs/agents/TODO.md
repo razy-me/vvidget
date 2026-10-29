@@ -103,7 +103,7 @@ c:\vvidget\
   - Manage and expose `PowerState` in Tauri state; emit `power-state-changed` on delta.
 - **Acceptance**: Unit tests pass for `PowerState`; manual display-off / lock emits state change.
 
-### WP-03 Demand-Driven Sysinfo Telemetry [ ]
+### WP-03 Demand-Driven Sysinfo Telemetry [x]
 - **Covers**: R1, R3
 - **Owns**: `src-tauri/src/sysinfo/collector.rs`, `src-tauri/src/sysinfo/mod.rs`
 - **Depends on**: WP-02

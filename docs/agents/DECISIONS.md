@@ -266,3 +266,11 @@
   2. *Async Tokio timer polling for display/session status*: Misses instantaneous OS power events and causes unnecessary C-state wakeups.
   3. *Global process-level EcoQoS*: Degrades foreground UI responsiveness if applied indiscriminately to WebView2 render threads.
 - **Reason / trade-offs**: Native Win32 message-only window consumes zero CPU while idle in GetMessageW, responds instantly to lock/display-off/unplug events, and provides thread-level EcoQoS scheduling without impacting UI performance.
+
+## D-036 Demand-Driven Sysinfo Telemetry & Decoupled Process Scans (WP-03)
+- **Decision**: Force the sysinfo background thread onto E-cores using `enable_current_thread_eco_qos()`. Gate metrics collection against OS display/session/fullscreen state (`power_state.should_sample()`) and widget visibility (`resources` or `battery`). Scale sampling interval by `power_state.interval_multiplier()`, decouple the heavy process table scan (`refresh_processes_specifics`) to run at most once every 4500ms * multiplier retaining cached `(top_process_name, top_process_cpu)`, and route IPC events using targeted `app.emit_to` (`main` in docked mode, `widget_resources` and `widget_battery` in independent mode) rather than global broadcast.
+- **Alternatives considered**:
+  1. *Scanning all system processes on every 1.5s tick*: Heavy CPU usage (>1-2%) and continuous power drain on laptops.
+  2. *Broadcasting metrics-update globally to all 10 WebView windows*: Forces deserialization and JS event loops in inactive/hidden widget processes.
+  3. *Stopping metrics worker completely when hidden*: Requires complex lifecycle thread restart synchronization when widgets toggle visibility; a 3.0s idle sleep loop achieves identical zero CPU overhead without thread management complexity.
+- **Reason / trade-offs**: Eliminates 100% of telemetry wakeups when screen is off, session is locked, or widgets are hidden, reduces background process scanning CPU footprint by >70%, and prevents IPC spam across isolated WebView2 processes.

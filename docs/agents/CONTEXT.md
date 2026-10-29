@@ -116,9 +116,10 @@ c:\vvidget\
 
 ## Module: System Resources Monitor (`src-tauri/src/sysinfo`, `src/widgets/resources`, `src/types/resources.ts`, `src/hooks/useSystemMetrics.ts`)
 - `MetricsCollector::new() -> MetricsCollector`: Initializes `System::new_with_specifics` refreshing only CPU and Memory with an initial 200ms sleep to eliminate 0.0% CPU artifacts, and initializes `Disks::new_with_refreshed_list()`.
-- `collect_metrics(refresh_disks: bool) -> SystemMetrics`: Refreshes CPU/RAM on every interval (default 1.5s) and Disks on disk interval (default 15s).
+- `collect_metrics(refresh_disks: bool) -> SystemMetrics`: Refreshes CPU/RAM on every interval and Disks on disk interval; delegates to `collect_metrics_with_options(refresh_disks, true)`.
+- `collect_metrics_with_options(refresh_disks: bool, refresh_processes: bool) -> SystemMetrics`: Decoupled metrics collector that retains cached `(top_process_name, top_process_cpu)` and cached disk metrics when options are false.
 - `get_system_metrics() -> Result<SystemMetrics, String>`: Tauri IPC command returning cached system resource snapshot.
-- `start_metrics_worker(app, config_manager, shared_metrics)`: Spawns dedicated background worker emitting `metrics-update` events.
+- `start_metrics_worker(app, config_manager, collector)`: Spawns dedicated EcoQoS background worker on E-cores (`enable_current_thread_eco_qos`). Skips sampling when display is off, session locked, fullscreen active, or neither `resources` nor `battery` widget is visible. Scales intervals via `PowerState.interval_multiplier()`, decouples process scan (>=4.5s * multiplier), and routes `metrics-update` via targeted `emit_to` (`main` in docked mode, `widget_resources` and `widget_battery` in independent mode).
 - `useSystemMetrics()`: Hook providing real-time metrics, 20-sample CPU history, and error recovery.
 - `ResourceWidget`: Windows 11 Fluent widget with CPU sparkline trend (`MiniGraph`), memory utilization ring/bar (`MetricBar`), and primary storage drive stats.
 - **Gotchas**: Disks refresh is decoupled from CPU/RAM to maintain <0.2% CPU overhead. Disks in `sysinfo` v0.33 use `disks.refresh(true)` instead of legacy `refresh_list()`.

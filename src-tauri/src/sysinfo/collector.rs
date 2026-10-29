@@ -15,6 +15,8 @@ pub struct MetricsCollector {
     last_network_sample: Instant,
     last_disks_sample: Instant,
     cached_metrics: Arc<RwLock<SystemMetrics>>,
+    cached_disks: Vec<DiskMetric>,
+    cached_top_process: (Option<String>, Option<f32>),
 }
 
 impl MetricsCollector {
@@ -42,6 +44,8 @@ impl MetricsCollector {
             last_network_sample: Instant::now(),
             last_disks_sample: Instant::now(),
             cached_metrics: Arc::new(RwLock::new(SystemMetrics::default())),
+            cached_disks: Vec::new(),
+            cached_top_process: (None, None),
         };
 
         let initial = collector.collect_metrics(true);
@@ -66,7 +70,19 @@ impl MetricsCollector {
     }
 
     /// Collects fresh CPU, RAM, Network, and Process metrics, and optionally refreshes Disks.
+    /// Preserved for backwards compatibility with existing callers and tests.
     pub fn collect_metrics(&mut self, refresh_disks: bool) -> SystemMetrics {
+        self.collect_metrics_with_options(refresh_disks, true)
+    }
+
+    /// Collects fresh metrics with decoupled options for disk and process table refreshes.
+    /// When `refresh_processes` is false, retains previously cached top process metrics.
+    /// Disks and network adapter lists are only re-enumerated when `refresh_disks` is requested.
+    pub fn collect_metrics_with_options(
+        &mut self,
+        refresh_disks: bool,
+        refresh_processes: bool,
+    ) -> SystemMetrics {
         // 1. Refresh CPU and Memory
         self.system.refresh_cpu_usage();
         self.system.refresh_memory();
@@ -75,7 +91,28 @@ impl MetricsCollector {
         if refresh_disks {
             self.disks.refresh(true);
             self.last_disks_sample = Instant::now();
+
+            let mut disk_metrics = Vec::new();
+            for disk in self.disks.list() {
+                let name = disk.name().to_string_lossy().to_string();
+                let mount_point = disk.mount_point().to_string_lossy().to_string();
+                let total_space = disk.total_space();
+                let available_space = disk.available_space();
+
+                disk_metrics.push(DiskMetric::new(
+                    if name.is_empty() { mount_point.clone() } else { name },
+                    mount_point,
+                    total_space,
+                    available_space,
+                ));
+            }
+
+            // Sort disks alphabetically by mount point (e.g. C:\ before D:\)
+            disk_metrics.sort_by(|a, b| a.mount_point.cmp(&b.mount_point));
+            self.cached_disks = disk_metrics;
         }
+
+        let disk_metrics = self.cached_disks.clone();
 
         // CPU Usage
         let cpu_usage_raw = self.system.global_cpu_usage();
@@ -87,28 +124,9 @@ impl MetricsCollector {
         let used_mem = self.system.used_memory();
         let memory = MemoryMetric::new(total_mem, used_mem);
 
-        // Disk Usage
-        let mut disk_metrics = Vec::new();
-        for disk in self.disks.list() {
-            let name = disk.name().to_string_lossy().to_string();
-            let mount_point = disk.mount_point().to_string_lossy().to_string();
-            let total_space = disk.total_space();
-            let available_space = disk.available_space();
-
-            disk_metrics.push(DiskMetric::new(
-                if name.is_empty() { mount_point.clone() } else { name },
-                mount_point,
-                total_space,
-                available_space,
-            ));
-        }
-
-        // Sort disks alphabetically by mount point (e.g. C:\ before D:\)
-        disk_metrics.sort_by(|a, b| a.mount_point.cmp(&b.mount_point));
-
         // 3. Network Throughput
         let elapsed_secs = self.last_network_sample.elapsed().as_secs_f64();
-        self.networks.refresh(true);
+        self.networks.refresh(refresh_disks);
         self.last_network_sample = Instant::now();
 
         let mut rx_bytes: u64 = 0;
@@ -142,37 +160,43 @@ impl MetricsCollector {
             tx_bytes_per_sec,
         };
 
-        // 4. Top CPU Process Detection
-        self.system.refresh_processes_specifics(
-            ProcessesToUpdate::All,
-            true,
-            ProcessRefreshKind::nothing().with_cpu(),
-        );
+        // 4. Top CPU Process Detection (Decoupled)
+        if refresh_processes {
+            self.system.refresh_processes_specifics(
+                ProcessesToUpdate::All,
+                true,
+                ProcessRefreshKind::nothing().with_cpu(),
+            );
 
-        let mut best_proc_name: Option<String> = None;
-        let mut best_proc_cpu: f32 = 0.0;
+            let mut best_proc_name: Option<String> = None;
+            let mut best_proc_cpu: f32 = 0.0;
 
-        for (_pid, proc) in self.system.processes() {
-            let cpu = proc.cpu_usage();
-            if cpu > best_proc_cpu {
-                let name = proc.name().to_string_lossy();
-                if name.eq_ignore_ascii_case("System Idle Process")
-                    || name.eq_ignore_ascii_case("idle")
-                {
-                    continue;
+            for (_pid, proc) in self.system.processes() {
+                let cpu = proc.cpu_usage();
+                if cpu > best_proc_cpu {
+                    let name = proc.name().to_string_lossy();
+                    if name.eq_ignore_ascii_case("System Idle Process")
+                        || name.eq_ignore_ascii_case("idle")
+                    {
+                        continue;
+                    }
+                    best_proc_cpu = cpu;
+                    best_proc_name = Some(name.to_string());
                 }
-                best_proc_cpu = cpu;
-                best_proc_name = Some(name.to_string());
             }
+
+            let (top_name, top_cpu) = if let Some(name) = best_proc_name {
+                let normalized = (best_proc_cpu / cpu_cores as f32).min(100.0);
+                let rounded = (normalized * 10.0).round() / 10.0;
+                (Some(name), Some(rounded))
+            } else {
+                (None, None)
+            };
+
+            self.cached_top_process = (top_name, top_cpu);
         }
 
-        let (top_process_name, top_process_cpu) = if let Some(name) = best_proc_name {
-            let normalized = (best_proc_cpu / cpu_cores as f32).min(100.0);
-            let rounded = (normalized * 10.0).round() / 10.0;
-            (Some(name), Some(rounded))
-        } else {
-            (None, None)
-        };
+        let (top_process_name, top_process_cpu) = self.cached_top_process.clone();
 
         let timestamp_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -222,5 +246,19 @@ mod tests {
                 assert!((0.0..=100.0).contains(&cpu));
             }
         }
+    }
+
+    #[test]
+    fn test_collect_metrics_with_options_cached_process() {
+        let mut collector = MetricsCollector::new();
+        let m1 = collector.collect_metrics_with_options(true, true);
+        let cached_name = m1.top_process_name.clone();
+        let cached_cpu = m1.top_process_cpu;
+
+        // Second call with refresh_processes = false retains cached values
+        let m2 = collector.collect_metrics_with_options(false, false);
+        assert_eq!(m2.top_process_name, cached_name);
+        assert_eq!(m2.top_process_cpu, cached_cpu);
+        assert_eq!(m2.disks, m1.disks);
     }
 }
