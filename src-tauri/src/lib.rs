@@ -538,6 +538,30 @@ pub fn run() {
         ])
         .setup(move |app| {
             power::start_power_monitor(app.handle().clone(), power_manager.state());
+
+            // Listen to PowerState transitions for WebView2 suspension / resume (WP-06)
+            let app_handle_power = app.handle().clone();
+            let power_state_tracker = power_manager.state();
+            let init_should_sample = power_state_tracker.should_sample();
+            if !init_should_sample {
+                crate::window::webview_power::set_widgets_suspended(&app_handle_power, true);
+            }
+            let prev_should_sample = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(init_should_sample));
+            let tracker_clone = prev_should_sample.clone();
+            app.listen("power-state-changed", move |event| {
+                if let Ok(snapshot) = serde_json::from_str::<power::PowerStateSnapshot>(event.payload()) {
+                    let prev = tracker_clone.swap(snapshot.should_sample, std::sync::atomic::Ordering::SeqCst);
+                    if prev != snapshot.should_sample {
+                        let suspended = !snapshot.should_sample;
+                        log::info!(
+                            "PowerState should_sample changed to {}. Setting widgets suspended = {}",
+                            snapshot.should_sample,
+                            suspended
+                        );
+                        crate::window::webview_power::set_widgets_suspended(&app_handle_power, suspended);
+                    }
+                }
+            });
             start_metrics_worker(
                 app.handle().clone(),
                 config_manager_setup,
@@ -747,5 +771,19 @@ mod tests {
             let _ = serde_json::from_str::<window::DesktopGridMetrics>(bad);
             let _ = serde_json::from_str::<power::PowerStateSnapshot>(bad);
         }
+    }
+
+    #[test]
+    fn test_webview_power_suspension_filtering() {
+        assert!(crate::window::is_suspendable_widget_window("main"));
+        assert!(crate::window::is_suspendable_widget_window("widget_resources"));
+        assert!(crate::window::is_suspendable_widget_window("widget_spotify"));
+        assert!(crate::window::is_suspendable_widget_window("widget_weather"));
+        assert!(crate::window::is_suspendable_widget_window("widget_clock"));
+        assert!(crate::window::is_suspendable_widget_window("widget_battery"));
+
+        // Settings window must NEVER be suspended
+        assert!(!crate::window::is_suspendable_widget_window("settings"));
+        assert!(!crate::window::is_suspendable_widget_window("about"));
     }
 }

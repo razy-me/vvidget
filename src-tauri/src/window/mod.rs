@@ -1,6 +1,7 @@
 pub mod manager;
 pub mod monitor;
 pub mod snapping;
+pub mod webview_power;
 pub mod win32;
 
 pub use manager::{ActiveWidgetRect, WidgetWindowInfo, WindowManager, WindowSetupOptions};
@@ -9,6 +10,10 @@ pub use monitor::{
     LogicalRect, MonitorBounds, PhysicalRect,
 };
 pub use snapping::{apply_magnetic_snapping, Rect, SnapConfig, SnapResult};
+pub use webview_power::{
+    is_suspendable_widget_window, is_widgets_suspended, set_widgets_suspended,
+    set_window_suspended, trigger_resume_refresh,
+};
 pub use win32::{
     apply_acrylic_effect, apply_tool_window_styles, dispatch_exit_size_move, hide_window,
     install_window_subclass, is_allow_hide, is_snap_to_edges, is_snap_to_widgets,

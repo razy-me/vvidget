@@ -140,7 +140,7 @@ c:\vvidget\
   - Route `media-metadata-update` via `emit_to` only to `widget_spotify` and `main`.
 - **Acceptance**: `cargo test media` passes; 0 COM calls when `spotify` is hidden.
 
-### WP-06 WebView2 Fullscreen & Display Suspension [ ]
+### WP-06 WebView2 Fullscreen & Display Suspension [x]
 - **Covers**: R2
 - **Owns**: `src-tauri/src/window/webview_power.rs`, `src-tauri/src/lib.rs`
 - **Depends on**: WP-02

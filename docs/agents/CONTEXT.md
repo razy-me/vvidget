@@ -182,3 +182,10 @@ c:\vvidget\
 - useMasterVolume(): React hook listening to audio-volume-update event with 60s fallback heartbeat, pausing completely when document.hidden is true.
 - useBattery(): React hook listening to battery-update event with 60s fallback heartbeat, pausing completely when document.hidden is true.
 
+## Module: WebView2 Fullscreen & Display Suspension (src-tauri/src/window/webview_power.rs, src-tauri/src/lib.rs)
+- `set_widgets_suspended<R>(app, suspended)`: Iterates `app.webview_windows()`, filtering out "settings" and non-widget windows; calls `SetIsVisible(!suspended)` on `ICoreWebView2Controller`. Stops Chromium GPU/CPU compositing entirely when display is off, session locked, or fullscreen game running.
+- `trigger_resume_refresh<R>(app)`: Emits `"metrics-update"` (cached), `"battery-update"`, and `"media-metadata-update"` upon resume.
+- `is_widgets_suspended() -> bool` & `is_suspendable_widget_window(label: &str) -> bool`: Pure helpers and atomic state check.
+- **Gotchas**: Never suspend the "settings" window. `SetIsVisible(false)` avoids touching parent HWND styles or triggering Win+D subclass vetoes.
+
+

@@ -290,3 +290,12 @@
   2. *WMI / Win32 polling loop for audio*: Generates CPU spikes and latency when volume is changed via keyboard media keys.
   3. *Eliminating fallback polling entirely*: If a device changes default audio endpoints or a driver misses an update event, UI could fall out of sync. A 60s safety heartbeat provides 100% resilience with near-zero power draw.
 - **Reason / trade-offs**: Delivers sub-100ms instant reaction to physical volume keys and power state transitions, reduces idle frontend polling timers by >95%, and pauses all background polling when widgets or displays are hidden.
+
+## D-039 WebView2 Fullscreen & Display Suspension (WP-06)
+- **Decision**: Implement `set_widgets_suspended<R>(app, suspended)` and `set_window_suspended<R>(window, suspended)` in `src-tauri/src/window/webview_power.rs`. When `suspended == true` (fullscreen game, presentation mode, display off, or session locked), iterate all active webview windows via `app.webview_windows()`, skip `"settings"` window and non-widget windows, and call `ICoreWebView2Controller::SetIsVisible(false)` via `with_webview`. This halts Chromium frame rendering, GPU compositing, and DWM presentation. When `suspended == false`, call `SetIsVisible(true)` and trigger immediate refresh via `trigger_resume_refresh(app)` emitting `"metrics-update"` (from cached `SharedMetricsState`), `"battery-update"`, and `"media-metadata-update"`. In `lib.rs`, listen to `"power-state-changed"` events and transition suspension state whenever `power_state.should_sample()` changes.
+- **Alternatives considered**:
+  1. *Win32 ShowWindow(SW_HIDE) on parent window*: Interacts with vvidget's Win+D subclass hook (`is_allow_hide`) and causes window flicker/layout recalculations.
+  2. *Destroying and recreating WebViews on fullscreen/sleep*: Extreme latency on resume (hundreds of milliseconds to reload React/DOM), losing transient UI state.
+  3. *Unconditionally polling for fullscreen state in JS frontend*: Inefficient, wastes CPU, and cannot reliably query Win32 D3D fullscreen state.
+- **Reason / trade-offs**: `ICoreWebView2Controller::SetIsVisible(false)` is the official Microsoft API to suspend WebView2 compositing without destroying DOM or state, reducing GPU/CPU compositing overhead to 0% during 3D gaming or display sleep, while resuming instantaneously with fresh telemetry snapshots upon return.
+
